@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - name: Trivy scan (vuln, secret, misconfig)
         run: |
           docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.0 \
@@ -51,7 +52,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }   # full history — the entire point of this job
+        # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
+        # in .git/config, where any later artifact upload can carry it out of
+        # the runner (zizmor's `artipacked`). Nothing here pushes.
+        with: { fetch-depth: 0, persist-credentials: false }   # full history — the entire point of this job
 
       - name: Resolve gitleaks version
         run: |
@@ -65,7 +69,8 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" \
             "ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION}" \
-            detect --source=/repo --redact --verbose --exit-code 1
+            detect --source=/repo --config=/repo/.gitleaks.toml \
+                   --redact --verbose --exit-code 1
 
   # ---------------------------------------------------------------------------
   # zizmor — static analysis of the workflow files themselves.
@@ -81,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - name: Audit workflows
@@ -113,7 +119,10 @@ jobs:
           - 9000:9000
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
+        # in .git/config, where any later artifact upload can carry it out of
+        # the runner (zizmor's `artipacked`). Nothing here pushes.
+        with: { fetch-depth: 0, persist-credentials: false }
 
       - name: Wait for SonarQube to come up
         run: |
