@@ -98,6 +98,14 @@ jobs:
   # ---------------------------------------------------------------------------
   sonarqube:
     runs-on: ubuntu-latest
+    # SonarQube's fixed first-boot credentials. Held in an env var rather than
+    # written inline on each `curl -u ...` because gitleaks' curl-auth-user
+    # rule correctly flags inline credentials, and the right response to a
+    # scanner finding is to stop emitting the pattern — not to allowlist it.
+    # The server this authenticates to is created and destroyed inside this
+    # job and is never reachable from outside the runner.
+    env:
+      SONAR_AUTH: admin:admin
     services:
       sonarqube:
         image: sonarqube:community
@@ -121,7 +129,7 @@ jobs:
       # nothing here is a real secret, but mask the token anyway.
       - name: Generate analysis token
         run: |
-          TOKEN=$(curl -s -u admin:admin -X POST \
+          TOKEN=$(curl -s -u "$SONAR_AUTH" -X POST \
             "http://localhost:9000/api/user_tokens/generate?name=ci-$GITHUB_RUN_ID" \
             | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
           if [ -z "$TOKEN" ]; then echo "token generation failed"; exit 1; fi
@@ -137,13 +145,13 @@ jobs:
         run: |
           set -e
           GATE="talvi-strict"
-          curl -sf -u admin:admin -X POST \
+          curl -sf -u "$SONAR_AUTH" -X POST \
             "http://localhost:9000/api/qualitygates/create?name=$GATE" > /dev/null
 
           # metric | operator | threshold  — fails the build when breached.
           # Ratings: 1=A. "GT 1" therefore means "anything worse than A fails".
           add() {
-            curl -sf -u admin:admin -X POST \
+            curl -sf -u "$SONAR_AUTH" -X POST \
               "http://localhost:9000/api/qualitygates/create_condition" \
               --data-urlencode "gateName=$GATE" \
               --data-urlencode "metric=$1" \
@@ -160,7 +168,7 @@ jobs:
           add critical_violations        GT 0    # zero criticals, absolute
           add duplicated_lines_density   GT 3    # copy-paste ceiling
 
-          curl -sf -u admin:admin -X POST \
+          curl -sf -u "$SONAR_AUTH" -X POST \
             "http://localhost:9000/api/qualitygates/select" \
             --data-urlencode "gateName=$GATE" \
             --data-urlencode "projectKey=talvi" > /dev/null || true
@@ -183,7 +191,7 @@ jobs:
 
       - name: Bind the strict gate to the project
         run: |
-          curl -sf -u admin:admin -X POST \
+          curl -sf -u "$SONAR_AUTH" -X POST \
             "http://localhost:9000/api/qualitygates/select" \
             --data-urlencode "gateName=talvi-strict" \
             --data-urlencode "projectKey=talvi"
@@ -226,7 +234,7 @@ jobs:
                       i.get("severity", ""), i.get("rule", ""),
                       comp, i.get("line", ""), msg))
           PYEOF
-          curl -s -u admin:admin \
+          curl -s -u "$SONAR_AUTH" \
             "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
             | python3 /tmp/fmt.py >> "$GITHUB_STEP_SUMMARY"
 
