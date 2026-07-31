@@ -10,19 +10,24 @@ permissions:
 
 jobs:
   # Filesystem + IaC + secret scan. No account, no server, free.
+  #
+  # Run through the official image rather than aquasecurity/trivy-action:
+  # the action's tag names move around (0.28.0 does not exist), and Docker
+  # is already on the runner. `:0.58.0` is pinned deliberately — `:latest`
+  # would make this job's result depend on the day it ran.
   trivy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Trivy scan (vuln, secret, misconfig)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.0 \
+            fs . \
+            --scanners vuln,secret,misconfig \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress
 
   # SonarQube Community runs as an EPHEMERAL service container on the
   # GitHub-hosted runner — zero cost, zero standing infrastructure, works on
@@ -74,23 +79,30 @@ jobs:
             -Dsonar.exclusions=node_modules/**,dist/**,src/generated/**
             -Dsonar.qualitygate.wait=true
 
+      # The formatter lives in its own file with a QUOTED heredoc delimiter.
+      # Inlining it into `python3 -c '...'` inside a YAML block scalar means
+      # three nested quoting layers, and the escaped double-quotes silently
+      # became a syntax error the first time this ran.
       - name: Publish issue summary
         if: always()
         run: |
-          {
-            echo "## SonarQube issues (ephemeral run — no history)"
-            curl -s -u admin:admin \
-              "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
-              | python3 -c '
-          import json,sys
-          d=json.load(sys.stdin)
-          issues=d.get("issues",[])
-          print(f"Total: {len(issues)}")
+          cat > /tmp/fmt.py <<'PYEOF'
+          import json, sys
+          issues = json.load(sys.stdin).get("issues", [])
+          print("## SonarQube issues (ephemeral run — no history)")
           print()
-          print("| Severity | Rule | File | Line | Message |")
-          print("|---|---|---|---|---|")
-          for i in issues:
-              comp=i.get("component","").split(":")[-1]
-              print(f"| {i.get(\"severity\")} | {i.get(\"rule\")} | {comp} | {i.get(\"line\",\"\")} | {i.get(\"message\",\"\").replace(\"|\",\"/\")} |")
-          '
-          } >> "$GITHUB_STEP_SUMMARY"
+          print("Total: %d" % len(issues))
+          print()
+          if issues:
+              print("| Severity | Rule | File | Line | Message |")
+              print("|---|---|---|---|---|")
+              for i in issues:
+                  comp = i.get("component", "").split(":")[-1]
+                  msg = i.get("message", "").replace("|", "/")
+                  print("| %s | %s | %s | %s | %s |" % (
+                      i.get("severity", ""), i.get("rule", ""),
+                      comp, i.get("line", ""), msg))
+          PYEOF
+          curl -s -u admin:admin \
+            "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
+            | python3 /tmp/fmt.py >> "$GITHUB_STEP_SUMMARY"
