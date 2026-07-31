@@ -1,0 +1,11 @@
+.secrets.env
+.wrangler/
+.venv/
+node_modules/
+dist/
+src/generated/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.DS_Store
