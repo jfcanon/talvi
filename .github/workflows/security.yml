@@ -1,0 +1,96 @@
+name: Security scans
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  # Filesystem + IaC + secret scan. No account, no server, free.
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy scan (vuln, secret, misconfig)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # SonarQube Community runs as an EPHEMERAL service container on the
+  # GitHub-hosted runner — zero cost, zero standing infrastructure, works on
+  # a private repo (SonarCloud's free tier is public-repos-only). Tradeoff:
+  # no history between runs; every analysis is a fresh baseline. The value
+  # is the issue report printed into the job summary, not trend tracking.
+  sonarqube:
+    runs-on: ubuntu-latest
+    services:
+      sonarqube:
+        image: sonarqube:community
+        ports:
+          - 9000:9000
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Wait for SonarQube to come up
+        run: |
+          for i in $(seq 1 60); do
+            if curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "SonarQube never reached UP"; exit 1
+
+      # Ephemeral server, default credentials, destroyed with the runner —
+      # nothing here is a real secret, but mask the token anyway.
+      - name: Generate analysis token
+        run: |
+          TOKEN=$(curl -s -u admin:admin -X POST \
+            "http://localhost:9000/api/user_tokens/generate?name=ci-$GITHUB_RUN_ID" \
+            | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+          if [ -z "$TOKEN" ]; then echo "token generation failed"; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          echo "SONAR_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Analyze
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: http://localhost:9000
+        with:
+          args: >
+            -Dsonar.projectKey=talvi
+            -Dsonar.projectName=talvi
+            -Dsonar.sources=.
+            -Dsonar.exclusions=node_modules/**,dist/**,src/generated/**
+            -Dsonar.qualitygate.wait=true
+
+      - name: Publish issue summary
+        if: always()
+        run: |
+          {
+            echo "## SonarQube issues (ephemeral run — no history)"
+            curl -s -u admin:admin \
+              "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
+              | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)
+          issues=d.get("issues",[])
+          print(f"Total: {len(issues)}")
+          print()
+          print("| Severity | Rule | File | Line | Message |")
+          print("|---|---|---|---|---|")
+          for i in issues:
+              comp=i.get("component","").split(":")[-1]
+              print(f"| {i.get(\"severity\")} | {i.get(\"rule\")} | {comp} | {i.get(\"line\",\"\")} | {i.get(\"message\",\"\").replace(\"|\",\"/\")} |")
+          '
+          } >> "$GITHUB_STEP_SUMMARY"
