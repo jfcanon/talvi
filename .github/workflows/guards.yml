@@ -1,0 +1,44 @@
+name: Guards
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  identity-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Enforce commit identity (pull_request)
+        if: github.event_name == 'pull_request'
+        run: |
+          RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          BAD=$(git log --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+                | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
+          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY:"; echo "$BAD"; exit 1; fi
+      - name: Enforce commit identity (push)
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: |
+          RANGE="${{ github.event.before }}..${{ github.sha }}"
+          BAD=$(git log --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+                | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
+          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY:"; echo "$BAD"; exit 1; fi
+
+  leak-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for forbidden strings
+        env:
+          FORBIDDEN_STRINGS: ${{ secrets.FORBIDDEN_STRINGS }}
+        run: |
+          printf '%s\n' "$FORBIDDEN_STRINGS" | grep -v '^$' > /tmp/forbidden.txt
+          if [ -s /tmp/forbidden.txt ] && grep -ril -f /tmp/forbidden.txt . --exclude-dir=.git > /tmp/hits.txt 2>/dev/null; then
+            echo "LEAK DETECTED in the following files:"; cat /tmp/hits.txt; exit 1
+          fi
+          echo "leak-guard: clean"
