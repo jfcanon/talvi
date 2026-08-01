@@ -1,0 +1,36 @@
+title = "talvi gitleaks config"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# One allowlist, deliberately narrow.
+#
+# WHAT IT SUPPRESSES: the literal string `admin:admin` in the SonarQube job of
+# .github/workflows/security.yml. That is SonarQube Community's fixed
+# first-boot credential, authenticating to a container that is created and
+# destroyed inside a single CI job and is never reachable from outside the
+# runner. It is not a secret in any meaningful sense.
+#
+# WHY AN ALLOWLIST AND NOT A HISTORY REWRITE: gitleaks scans every commit ever
+# made, so the string survives in this branch's earlier commits even though
+# the working tree no longer emits it. The alternative was force-pushing a
+# squashed branch, which would destroy the intermediate commits kept
+# deliberately as a record of how this project was built.
+#
+# WHY THIS IS SAFE: matchCondition = "AND" means ALL THREE conditions must
+# hold before anything is suppressed — the finding must be from the
+# curl-auth-user rule, AND in that one file, AND the matched text must be
+# literally `admin:admin`. A real credential in that same file still fails the
+# scan, because a real credential is not the string `admin:admin`. Without
+# matchCondition the conditions are OR-ed, and `paths` alone would have
+# excused the entire file — which is exactly how allowlists end up hiding real
+# leaks.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "SonarQube's ephemeral-container default credentials — see comment above"
+targetRules = ["curl-auth-user"]
+matchCondition = "AND"
+paths = ['''^\.github/workflows/security\.yml$''']
+regexTarget = "match"
+regexes = ['''admin:admin''']

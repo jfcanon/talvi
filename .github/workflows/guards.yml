@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
+        # in .git/config, where any later step (or artifact upload) can carry it
+        # out of the runner (zizmor's `artipacked`). Nothing here pushes, so the
+        # token is not needed after the clone. fetch-depth: 0 is still required:
+        # identity-guard reads full history, which the credential does not affect.
         with: { fetch-depth: 0, persist-credentials: false }
       - name: Enforce commit identity (pull_request)
         if: github.event_name == 'pull_request'
