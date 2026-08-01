@@ -104,14 +104,21 @@ async function handleUpload(request, env) {
   // put(). Never request.arrayBuffer()/formData()/text() — buffering a 25 MiB
   // body defeats the memory ceiling.
   //
-  // This replaces a counting TransformStream + FixedLengthStream rig that made
-  // every uploaded object unreadable. The reasoning behind that rig was:
-  // "R2 needs a known length, but pipeThrough(counter) destroys the length,
-  // so restore it with FixedLengthStream." The premise is wrong. put() takes a
-  // plain ReadableStream, and FixedLengthStream is documented for setting
-  // Content-Length on an OUTBOUND Request/Response — not for R2 writes. The
-  // length constraint only existed because we introduced the counter. Removing
-  // the counter removes the constraint and the machinery built to satisfy it.
+  // This replaced a counting TransformStream + FixedLengthStream rig. To be
+  // accurate about why, because the first version of this comment was not:
+  // that rig WORKED. Objects it wrote are still in the bucket and still
+  // download correctly. It was removed for being unnecessary, not for being
+  // broken. Its premise — "R2 needs a known length, pipeThrough(counter)
+  // destroys the length, so restore it with FixedLengthStream" — is wrong at
+  // the first step: put() takes a plain ReadableStream, and FixedLengthStream
+  // is documented for setting Content-Length on an OUTBOUND Request/Response.
+  // The length constraint only existed because the counter introduced it.
+  //
+  // The rig was blamed for a 404 that had a different cause entirely (the
+  // download route was not yet deployed when it was tested). Keeping this
+  // simpler version is still right, but on its own merits: fewer moving parts,
+  // the vendor's documented shape, no swallowed errors, and a size that comes
+  // from R2 rather than from a counter we maintain ourselves.
   //
   // Size enforcement without the counter, in layers:
   //   1. Content-Length > MAX_BYTES is rejected above, before a single byte
@@ -277,24 +284,6 @@ async function handleDownload(env, row, ctx) {
   });
 }
 
-// TEMPORARY (remove in the next PR). Answers one question: for a slug whose
-// D1 row is live, is the R2 object actually there?
-//
-// Gated identically to handleDownload — valid slug shape, then a live D1 row.
-// Anyone who can reach this could already download the file, so it discloses
-// strictly less than the route beside it. No listing, no enumeration: you must
-// present a slug you already hold.
-async function handleProbe(env, row) {
-  const object = await env.BUCKET.head(row.r2_key);
-  return json({
-    r2_key: row.r2_key,
-    r2_exists: object !== null,
-    r2_size: object?.size ?? null,
-    d1_size_bytes: row.size_bytes,
-    uploaded_at: row.uploaded_at,
-  });
-}
-
 // Stub assets. no-store DELIBERATELY — the immutable year-long cache header
 // must not ship until Step 5 puts real content at these URLs, or anyone who
 // loads a page during Step 4 is stuck with empty stubs for a year.
@@ -329,16 +318,21 @@ export default {
       return handleAsset(pathname);
     }
 
-    // /:slug, /:slug/d, /:slug/probe — validate shape BEFORE any lookup.
-    // (/probe is temporary; it goes away with handleProbe in the next PR.)
-    const m = pathname.match(/^\/([^/]+)(?:\/(d|probe))?$/);
+    // /:slug and /:slug/d — validate shape BEFORE any lookup.
+    //
+    // NOTE for anyone debugging a 404 here: an unmatched path falls through to
+    // the catch-all notFound() at the bottom of this function, and that 404 is
+    // BYTE-IDENTICAL to "slug expired" and to "R2 object missing" — deliberately
+    // so (B.7 item 5). The cost of that design is that a route which is simply
+    // not deployed yet is indistinguishable from broken storage. That exact
+    // confusion cost a full debugging cycle on this project; see the commit
+    // "docs: correct the record on the phantom download bug".
+    const m = pathname.match(/^\/([^/]+)(\/d)?$/);
     if (m && method === "GET") {
       if (!isValidSlug(m[1])) return notFound();
       const row = await getLiveDrop(env, m[1]);
       if (!row) return notFound();
-      if (m[2] === "d") return handleDownload(env, row, ctx);
-      if (m[2] === "probe") return handleProbe(env, row);
-      return handleView(row, m[1]);
+      return m[2] ? handleDownload(env, row, ctx) : handleView(row, m[1]);
     }
 
     return notFound();

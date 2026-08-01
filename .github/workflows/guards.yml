@@ -18,16 +18,33 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-          BAD=$(git log --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+          # Authored commits: jfcanon, nothing else. No exceptions here.
+          BAD=$(git log --no-merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
                 | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
-          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY:"; echo "$BAD"; exit 1; fi
+          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY (authored):"; echo "$BAD"; exit 1; fi
+          # Merge commits only: GitHub's merge button signs as GitHub <noreply@github.com>.
+          # That is GitHub's own bot identity, not a personal one, so it is tolerated
+          # HERE ONLY — on commits with 2+ parents. Everything a human wrote is still
+          # held to jfcanon by the check above.
+          BADM=$(git log --merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+                 | grep -v -e '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' \
+                           -e '^GitHub <noreply@github\.com>$' || true)
+          if [ -n "$BADM" ]; then echo "FORBIDDEN COMMIT IDENTITY (merge):"; echo "$BADM"; exit 1; fi
       - name: Enforce commit identity (push)
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
         run: |
           RANGE="${{ github.event.before }}..${{ github.sha }}"
-          BAD=$(git log --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+          # Authored commits: jfcanon, nothing else. No exceptions here.
+          BAD=$(git log --no-merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
                 | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
-          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY:"; echo "$BAD"; exit 1; fi
+          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY (authored):"; echo "$BAD"; exit 1; fi
+          # Merge commits only — see the pull_request step for the rationale. This is
+          # the branch that was failing: every merge to main produced a GitHub-authored
+          # merge commit, so Guards went red on main while passing on the PR.
+          BADM=$(git log --merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+                 | grep -v -e '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' \
+                           -e '^GitHub <noreply@github\.com>$' || true)
+          if [ -n "$BADM" ]; then echo "FORBIDDEN COMMIT IDENTITY (merge):"; echo "$BADM"; exit 1; fi
 
   leak-guard:
     runs-on: ubuntu-latest
