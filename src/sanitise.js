@@ -30,7 +30,11 @@ export function sanitiseFilename(raw) {
   }
 
   s = stripControls(s)
-    .replace(/[/\\"]/g, "") // strip path separators and double-quote
+    // Path separators, double-quote, and angle brackets. < > are stripped at
+    // intake as defense-in-depth (Step 3 done-when: "no raw <" in storage) —
+    // escapeHtml() at render remains the primary XSS control, but a filename
+    // containing markup has no legitimate use and is cheaper to drop here.
+    .replace(/[/\\"<>]/g, "")
     .replace(/\s+/g, " ") // collapse whitespace
     .trim()
     .slice(0, 200);
