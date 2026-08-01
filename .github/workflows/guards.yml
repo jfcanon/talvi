@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - name: Enforce commit identity (pull_request)
         if: github.event_name == 'pull_request'
         run: |
@@ -50,6 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - name: Scan for forbidden strings
         env:
           FORBIDDEN_STRINGS: ${{ secrets.FORBIDDEN_STRINGS }}
