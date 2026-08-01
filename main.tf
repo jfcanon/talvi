@@ -53,6 +53,11 @@ resource "cloudflare_r2_bucket" "talvi_drop" {
 resource "cloudflare_r2_bucket_lifecycle" "talvi_drop_expiry" {
   account_id  = var.cloudflare_account_id
   bucket_name = cloudflare_r2_bucket.talvi_drop.name
+  # Declared in the order the Cloudflare provider canonicalises to: LEXICAL by
+  # prefix (d1/, d30/, d7/, d90/), NOT numeric (d1/, d7/, d30/, d90/). The
+  # provider reads the rules back sorted lexically, so declaring them in numeric
+  # order produces a perpetual "1 to change" plan that just swaps d7 and d30 on
+  # every run — caught by Step 2's determinism check. Keep this lexical order.
   rules = [
     {
       id         = "expire-d1"
@@ -63,19 +68,19 @@ resource "cloudflare_r2_bucket_lifecycle" "talvi_drop_expiry" {
       }
     },
     {
-      id         = "expire-d7"
-      enabled    = true
-      conditions = { prefix = "d7/" }
-      delete_objects_transition = {
-        condition = { max_age = 7 * 24 * 60 * 60, type = "Age" } # 604800
-      }
-    },
-    {
       id         = "expire-d30"
       enabled    = true
       conditions = { prefix = "d30/" }
       delete_objects_transition = {
         condition = { max_age = 30 * 24 * 60 * 60, type = "Age" } # 2592000
+      }
+    },
+    {
+      id         = "expire-d7"
+      enabled    = true
+      conditions = { prefix = "d7/" }
+      delete_objects_transition = {
+        condition = { max_age = 7 * 24 * 60 * 60, type = "Age" } # 604800
       }
     },
     {
