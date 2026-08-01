@@ -12,7 +12,7 @@ jobs:
   identity-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
         # in .git/config, where any later step (or artifact upload) can carry it
         # out of the runner (zizmor's `artipacked`). Nothing here pushes, so the
@@ -54,7 +54,7 @@ jobs:
   leak-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - name: Scan for forbidden strings
         env:
