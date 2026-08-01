@@ -53,9 +53,10 @@ async function handleUpload(request, env) {
     return json({ error: "invalid ttl; allowed: 1, 7, 30, 90" }, 400);
   }
 
-  // Content-Length is mandatory: a FixedLengthStream needs a declared length,
-  // and a chunked (length-less) upload is refused outright here (B.6). This is
-  // the only place chunked is rejected — there is no separate lying-length case.
+  // Content-Length is mandatory so an oversize upload can be refused before a
+  // single byte is read — without it the only size signal arrives after the
+  // bytes are already stored. A chunked (length-less) upload is refused here
+  // (B.6); this is the only place chunked is rejected.
   //
   // Observed live (Step 3 verification): a SMALL chunked upload returns 200,
   // not 411 — Cloudflare's edge buffers it and hands this Worker a computed
@@ -98,47 +99,50 @@ async function handleUpload(request, env) {
   const slug = newSlug();
   const r2Key = "d" + ttl + "/" + slug;
 
-  // --- stream to R2 via FixedLengthStream (B.6) ---
-  // Never request.arrayBuffer()/formData()/text(): R2 put() requires a stream
-  // of KNOWN length, and buffering a 25 MiB body defeats the memory ceiling.
-  // A counting TransformStream guards against a declared length that undersells
-  // the real upload (Content-Length is still client-supplied).
-  let counted = 0;
-  let overflowed = false;
-  const counter = new TransformStream({
-    transform(chunk, controller) {
-      counted += chunk.byteLength;
-      if (counted > MAX_BYTES) {
-        overflowed = true;
-        controller.error(new Error("over MAX_BYTES"));
-        return;
-      }
-      controller.enqueue(chunk);
-    },
-  });
-
-  const fixed = new FixedLengthStream(contentLength);
-
-  // Pump body -> counter -> fixed.writable while put() drains fixed.readable.
-  // A byte-count mismatch against the declared length, or an overflow, errors
-  // the pipe; that propagates to put(), and both are caught together below.
-  const pump = request.body
-    .pipeThrough(counter)
-    .pipeTo(fixed.writable)
-    .catch(() => {});
-
+  // --- stream to R2 (B.6) ---
+  // Cloudflare's documented pattern, verbatim: hand request.body straight to
+  // put(). Never request.arrayBuffer()/formData()/text() — buffering a 25 MiB
+  // body defeats the memory ceiling.
+  //
+  // This replaces a counting TransformStream + FixedLengthStream rig that made
+  // every uploaded object unreadable. The reasoning behind that rig was:
+  // "R2 needs a known length, but pipeThrough(counter) destroys the length,
+  // so restore it with FixedLengthStream." The premise is wrong. put() takes a
+  // plain ReadableStream, and FixedLengthStream is documented for setting
+  // Content-Length on an OUTBOUND Request/Response — not for R2 writes. The
+  // length constraint only existed because we introduced the counter. Removing
+  // the counter removes the constraint and the machinery built to satisfy it.
+  //
+  // Size enforcement without the counter, in layers:
+  //   1. Content-Length > MAX_BYTES is rejected above, before a single byte
+  //      is read. This is the cheap path and catches every honest client.
+  //   2. The Cloudflare edge holds the body to its declared Content-Length,
+  //      so a client that declares 5 bytes cannot smuggle 5 GB past it. This
+  //      is the control that actually stops a lying client — it is enforced
+  //      upstream of this Worker, not by us.
+  //   3. put() returns the object's TRUE stored size. Checked below and the
+  //      object deleted if it somehow exceeds the cap. Belt to (2)'s braces,
+  //      and a better number than a self-maintained counter: it is what R2
+  //      recorded, not what we believe we passed along.
+  let stored;
   try {
-    await env.BUCKET.put(r2Key, fixed.readable);
-    await pump;
+    stored = await env.BUCKET.put(r2Key, request.body);
   } catch {
     await env.BUCKET.delete(r2Key).catch(() => {}); // no orphan object
-    if (overflowed || counted > MAX_BYTES) {
-      return json({ error: "file too large", max_bytes: MAX_BYTES }, 413);
-    }
-    return json({ error: "upload stream did not match content-length" }, 400);
+    return json({ error: "upload failed" }, 400);
   }
 
-  if (overflowed || counted > MAX_BYTES) {
+  // put() resolving with null/undefined means nothing was stored. Treat it as
+  // a failure rather than writing a D1 row pointing at an empty shelf — that
+  // exact mismatch (row present, object absent) is what produced a 404 on
+  // every download before this change.
+  if (!stored) {
+    return json({ error: "upload failed" }, 400);
+  }
+
+  const counted = stored.size;
+
+  if (counted > MAX_BYTES) {
     await env.BUCKET.delete(r2Key).catch(() => {});
     return json({ error: "file too large", max_bytes: MAX_BYTES }, 413);
   }
@@ -273,6 +277,24 @@ async function handleDownload(env, row, ctx) {
   });
 }
 
+// TEMPORARY (remove in the next PR). Answers one question: for a slug whose
+// D1 row is live, is the R2 object actually there?
+//
+// Gated identically to handleDownload — valid slug shape, then a live D1 row.
+// Anyone who can reach this could already download the file, so it discloses
+// strictly less than the route beside it. No listing, no enumeration: you must
+// present a slug you already hold.
+async function handleProbe(env, row) {
+  const object = await env.BUCKET.head(row.r2_key);
+  return json({
+    r2_key: row.r2_key,
+    r2_exists: object !== null,
+    r2_size: object?.size ?? null,
+    d1_size_bytes: row.size_bytes,
+    uploaded_at: row.uploaded_at,
+  });
+}
+
 // Stub assets. no-store DELIBERATELY — the immutable year-long cache header
 // must not ship until Step 5 puts real content at these URLs, or anyone who
 // loads a page during Step 4 is stuck with empty stubs for a year.
@@ -307,13 +329,16 @@ export default {
       return handleAsset(pathname);
     }
 
-    // /:slug and /:slug/d — validate shape BEFORE any lookup.
-    const m = pathname.match(/^\/([^/]+)(\/d)?$/);
+    // /:slug, /:slug/d, /:slug/probe — validate shape BEFORE any lookup.
+    // (/probe is temporary; it goes away with handleProbe in the next PR.)
+    const m = pathname.match(/^\/([^/]+)(?:\/(d|probe))?$/);
     if (m && method === "GET") {
       if (!isValidSlug(m[1])) return notFound();
       const row = await getLiveDrop(env, m[1]);
       if (!row) return notFound();
-      return m[2] ? handleDownload(env, row, ctx) : handleView(row, m[1]);
+      if (m[2] === "d") return handleDownload(env, row, ctx);
+      if (m[2] === "probe") return handleProbe(env, row);
+      return handleView(row, m[1]);
     }
 
     return notFound();
