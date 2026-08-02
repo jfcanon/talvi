@@ -143,6 +143,23 @@ resource "cloudflare_workers_script" "talvi_web" {
 # A fresh script's workers.dev route defaults to disabled — encoded from the
 # relay project's first deploy. The account-level workers.dev subdomain
 # itself (ygdcbtmc4u) already exists and needs no action here.
+# Nightly purge (Step 7). R2 lifecycle rules delete the OBJECTS; nothing
+# deleted the D1 ROWS, so `drops` grew forever and the daily-budget query —
+# which sums size_bytes across the last 24h on every single upload — got
+# slower every day. 03:00 UTC is chosen for being nobody's peak.
+resource "cloudflare_workers_cron_trigger" "talvi_purge" {
+  account_id  = var.cloudflare_account_id
+  script_name = cloudflare_workers_script.talvi_web.script_name
+  # `schedules`, NOT `body`. The blueprint's Step 7 snippet says `body` and
+  # marks it "confirmed"; it is wrong for cloudflare provider v5, which
+  # rejected it outright: 'An argument named "body" is not expected here' plus
+  # 'The argument "schedules" is required'. Corrected here, and the blueprint
+  # has been annotated so the next reader does not re-derive this.
+  schedules = [
+    { cron = "0 3 * * *" }
+  ]
+}
+
 resource "cloudflare_workers_script_subdomain" "talvi_web_subdomain" {
   account_id       = var.cloudflare_account_id
   script_name      = cloudflare_workers_script.talvi_web.script_name

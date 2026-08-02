@@ -378,7 +378,94 @@ async function handleSlugRoute(match, env, request, ctx) {
   return wantsDownload ? handleDownload(env, row, ctx) : handleView(row, slug);
 }
 
+// ---------------------------------------------------------------------------
+// Nightly purge (Step 7).
+// ---------------------------------------------------------------------------
+
+const PURGE_BATCH = 200; // see the comment on the SELECT below — this is a cap, not a guess
+const IDLE_DAYS = 180;
+
+// Deletes expired rows and, defensively, their objects.
+//
+// Timestamps are computed in JS and BOUND as parameters. Never
+// datetime('now') in the SQL: SQLite renders "2026-08-02 03:00:00" while this
+// app stores ISO 8601 "2026-08-02T03:00:00.000Z", and 'T' (84) sorts after
+// ' ' (32) — so every expired row would compare as still live. That is a
+// silent, total failure of this job, which is why it is written here as well
+// as in the blueprint.
+async function purge(env) {
+  await ensureSchema(env.DB);
+  const now = new Date().toISOString();
+
+  // LIMIT is required, not tidiness: a Worker invocation is capped at 50
+  // subrequests, so an unbounded backlog (say a lifecycle rule was broken for
+  // a week) would fail the run partway through and never recover. Capped, a
+  // backlog simply drains over consecutive nights.
+  const { results = [] } = await env.DB.prepare(
+    `SELECT slug, r2_key, size_bytes FROM drops
+      WHERE expires_at < ?
+      ORDER BY expires_at ASC
+      LIMIT ${PURGE_BATCH}`,
+  )
+    .bind(now)
+    .all();
+
+  if (!results.length) {
+    await logIdle(env, now, 0, 0);
+    return { removed: 0, bytes: 0 };
+  }
+
+  let bytes = 0;
+  for (const row of results) {
+    // Redundant with the R2 lifecycle rules ON PURPOSE. It costs nothing and
+    // it is the safety net if a lifecycle rule is ever mis-edited — defence in
+    // depth on the single property this app promises: things disappear.
+    await env.BUCKET.delete(row.r2_key).catch(() => {});
+    bytes += row.size_bytes || 0;
+  }
+
+  // Delete exactly the batch just handled, by slug — NOT a fresh
+  // `expires_at < ?` re-query, which could sweep up rows that arrived between
+  // the SELECT and the DELETE and delete them without touching their objects.
+  const slugs = results.map((r) => r.slug);
+  const placeholders = slugs.map(() => "?").join(",");
+  await env.DB.prepare(`DELETE FROM drops WHERE slug IN (${placeholders})`)
+    .bind(...slugs)
+    .run();
+
+  await logIdle(env, now, results.length, bytes);
+  return { removed: results.length, bytes };
+}
+
+// One log line, counts only. NEVER a slug, filename, or URL: the slug is the
+// file's only secret, and a log has a wider audience than the database does.
+// Mirrors the relay's rule that sha256_plaintext never enters logs.
+async function logIdle(env, now, removed, bytes) {
+  const remaining = await env.DB.prepare(`SELECT COUNT(*) AS n FROM drops`).first();
+  const newest = await env.DB.prepare(`SELECT MAX(uploaded_at) AS last FROM drops`).first();
+
+  console.log(
+    `PURGE removed=${removed} remaining_estimate=${remaining?.n ?? "?"} bytes=${bytes}`,
+  );
+
+  // Kill criterion as a breadcrumb, deliberately not an alerting integration:
+  // if nobody has uploaded in 180 days, this project should be deleted, and
+  // the log is where whoever next looks will find that stated.
+  if (newest?.last) {
+    const idleMs = Date.parse(now) - Date.parse(newest.last);
+    if (idleMs > IDLE_DAYS * DAY_MS) {
+      console.log(
+        `IDLE-${IDLE_DAYS} no upload in ${Math.floor(idleMs / DAY_MS)} days — consider deleting this project (see RUNBOOK.md)`,
+      );
+    }
+  }
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(purge(env));
+  },
+
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     const method = request.method;
