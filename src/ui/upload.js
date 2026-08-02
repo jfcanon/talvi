@@ -76,12 +76,16 @@ export function uploadPage() {
     // attached, so the control is a real <button> and the decoration is
     // aria-hidden.
     '<div class="ambient">' +
-    // One supplied sprite, replacing the two hand-drawn canvases. Decorative,
-    // so alt="" rather than a description — it carries no information a
-    // screen-reader user would be missing.
-    '<img class="ambient__figure" src="/s.png?v=' +
+    // Four-frame walk cycle, supplied as a strip. The <img> is the full strip
+    // and the wrapper is a one-frame window over it — the animation slides the
+    // strip, the window crops. Doing it this way rather than as a CSS
+    // background-image is what lets the URL carry ?v=<hash>: the stylesheet is
+    // a static file and cannot interpolate the asset version, but markup can.
+    '<span class="figure" aria-hidden="true">' +
+    '<img class="figure__strip" src="/s.png?v=' +
     encodeURIComponent(ASSET_VERSION) +
-    '" alt="" width="68" height="120">' +
+    '" alt="" width="372" height="96">' +
+    "</span>" +
     '<button class="btn btn--ghost btn--quiet" type="button" id="sound" aria-pressed="false">SOUND OFF</button>' +
     "</div>" +
     // Result panel, in the same HUD frame as the view page's file record —
