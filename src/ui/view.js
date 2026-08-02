@@ -45,22 +45,35 @@ export function viewPage(row, slug) {
 
   const content =
     '<div class="panel">' +
-    '<h2 class="file__name">' +
+    '<div class="hud">' +
+    // The filename gets its own full-width row and is NOT uppercased — it is
+    // the one value on this page read character by character.
+    '<div class="hud__row">' +
+    '<div class="hud__cell hud__cell--tag"><span class="hud__label">file</span></div>' +
+    '<div class="hud__cell"><span class="hud__value hud__value--verbatim">' +
     name +
-    "</h2>" +
-    '<dl class="meta">' +
-    "<dt>Size</dt><dd class=\"meta__hi\">" +
+    "</span></div>" +
+    "</div>" +
+    '<div class="hud__row">' +
+    '<div class="hud__cell"><span class="hud__label">size</span>' +
+    '<span class="hud__value">' +
     size +
-    "</dd>" +
-    "<dt>Type</dt><dd>" +
+    "</span></div>" +
+    '<div class="hud__cell"><span class="hud__label">type</span>' +
+    '<span class="hud__value">' +
     type +
-    "</dd>" +
-    '<dt>Expires</dt><dd class="meta__expiry" id="expires" data-expires="' +
+    "</span></div>" +
+    "</div>" +
+    '<div class="hud__row">' +
+    '<div class="hud__cell"><span class="hud__label">expires</span>' +
+    '<span class="hud__value meta__expiry" id="expires" data-expires="' +
     iso +
     '">' +
     stamp +
-    "</dd>" +
-    "</dl>" +
+    "</span></div>" +
+    "</div>" +
+    '<div class="hud__strip" aria-hidden="true"></div>' +
+    "</div>" +
     '<a class="dl" href="/' +
     escapeHtml(slug) +
     '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +

@@ -37,14 +37,19 @@ export function uploadPage() {
     '<div class="panel">' +
     // label + visually-hidden input: keyboard-reachable and screen-reader
     // announced without a single JS event listener involved.
-    '<label class="drop" id="drop" for="file">' +
-    '<span class="drop__hd">Drop it here</span>' +
-    '<span class="drop__sub">AWAITING INPUT — or press Enter to choose a file</span>' +
-    '<span class="drop__file" id="chosen"></span>' +
+    // A prompt waiting for input, nothing else. The visible label text is
+    // gone; the accessible name is not — the input keeps a visually-hidden
+    // <label>, so a screen reader still announces "choose a file" even though
+    // sighted users see only the caret.
+    '<label class="term" id="drop" for="file">' +
+    '<span aria-hidden="true">&gt;</span>' +
+    '<span class="term__caret" id="caret" aria-hidden="true"></span>' +
+    '<span class="term__echo" id="chosen"></span>' +
+    '<span class="vh">Choose a file to upload</span>' +
     '<input class="vh" type="file" id="file">' +
     "</label>" +
     '<fieldset class="ttl">' +
-    '<legend class="ttl__legend">Delete after</legend>' +
+    '<legend class="ttl__legend glitch">Delete after</legend>' +
     '<div class="ttl__row">' +
     ttlOptions() +
     "</div>" +
@@ -64,11 +69,22 @@ export function uploadPage() {
     '<canvas class="ambient__drone" id="drone" aria-hidden="true"></canvas>' +
     '<button class="btn btn--ghost btn--quiet" type="button" id="sound" aria-pressed="false">SOUND OFF</button>' +
     "</div>" +
+    // Result panel, in the same HUD frame as the view page's file record —
+    // one visual language for "the machine is reporting a fact".
     '<div class="panel hidden" id="result">' +
-    '<a class="result__link" id="link" href="#"></a>' +
+    '<div class="hud">' +
+    '<div class="hud__row">' +
+    '<div class="hud__cell hud__cell--tag"><span class="hud__label">link</span></div>' +
+    '<div class="hud__cell"><a class="result__link" id="link" href="#"></a></div>' +
+    "</div>" +
+    '<div class="hud__row">' +
+    '<div class="hud__cell"><span class="hud__label">expires</span>' +
+    '<span class="hud__value" id="expiry"></span></div>' +
+    "</div>" +
+    '<div class="hud__strip" aria-hidden="true"></div>' +
+    "</div>" +
     '<div class="result__actions">' +
     '<button class="btn btn--ghost" type="button" id="copy">COPY LINK</button>' +
-    '<span class="meta__expiry" id="expiry"></span>' +
     "</div>" +
     "</div>";
 

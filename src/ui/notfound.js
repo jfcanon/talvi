@@ -11,7 +11,7 @@ import { renderPage } from "./layout.js";
 
 export function notFoundPage() {
   const content =
-    '<p class="lost">404</p>' +
+    '<p class="lost glitch">404</p>' +
     '<p class="lost__say">Nothing lives at this address. It may have expired, ' +
     "it may never have existed — this page cannot tell you which, and that is " +
     "on purpose.</p>" +

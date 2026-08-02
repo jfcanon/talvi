@@ -139,7 +139,7 @@
         send.disabled = true;
         return;
       }
-      chosen.textContent = f.name + " · " + humanSize(f.size);
+      chosen.textContent = f.name + "  " + humanSize(f.size);
       // Client-side size check is a courtesy, not a control — the Worker
       // rejects oversize with 413 regardless of what this does.
       if (f.size > MAX_BYTES) {
