@@ -32,12 +32,20 @@
   --cyan: #22e8ff;
   --amber: #ffb648;
 
-  /* Phosphor — the console register (A.5a). A second voice, not a
-     replacement: the sign above stays magenta/cyan, the machine below talks
-     in green. Slightly blue-shifted from a pure P1 phosphor so it sits in the
-     same night as the neon rather than fighting it. */
-  --phosphor: #6bffa8;
-  --phosphor-dim: #3d9e6b;
+  /* Phosphor — sampled from the reference terminal (A.5b). The whole
+     interface is now this one green: bright lines, dim rules, and a
+     desaturated teal fill inside every box. The neon magenta/cyan survives
+     only in the wordmark and in the glitch's RGB split, which is what keeps
+     this from becoming a plain terminal. */
+  --phosphor: #7dffc4;
+  --phosphor-dim: #35d998;
+  --hud-line: rgba(61, 224, 160, 0.75);
+  --hud-line-soft: rgba(61, 224, 160, 0.32);
+  /* Box interiors in the reference are not black — they are a desaturated
+     dark teal, slightly lighter than the ground, which is what makes the
+     wireframe read as glass panels rather than as drawn lines. */
+  --hud-fill: rgba(18, 43, 40, 0.55);
+  --hud-fill-lit: rgba(28, 66, 60, 0.7);
 
   --text-hi: #eaf2ff;
   --text-lo: #8e9bbe;
@@ -242,6 +250,14 @@ html::after {
   }
 }
 
+/* A plain bordered box. Every run of text on the page sits in one of these,
+   which is the A.5b rule: nothing floats on the ground. */
+.box {
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  padding: 0.95rem 1rem 0.85rem;
+}
+
 /* ---------------------------------------------------------------- masthead */
 
 .sign {
@@ -255,13 +271,14 @@ html::after {
   line-height: 0.85;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--text-hi);
-  /* Layered hard glow — a lit sign, not a soft blur. */
+  /* A.5b: the reference is one colour, so the wordmark joins it. The neon
+     magenta/cyan now survives ONLY in the glitch's RGB split — present as a
+     fault, not as a palette. One line to revert if the sign is missed. */
+  color: var(--phosphor);
   text-shadow:
-    0 0 2px rgba(255, 255, 255, 0.9),
-    0 0 14px rgba(255, 46, 136, 0.75),
-    0 0 38px rgba(255, 46, 136, 0.35),
-    0 0 70px rgba(34, 232, 255, 0.22);
+    0 0 2px rgba(255, 255, 255, 0.55),
+    0 0 18px rgba(125, 255, 196, 0.6),
+    0 0 46px rgba(61, 224, 160, 0.3);
 }
 
 .sign__mark {
@@ -320,7 +337,7 @@ html::after {
 }
 
 .lede {
-  margin: 0 0 2.4rem;
+  margin: 0;
   max-width: 34rem;
   font-family: var(--font-console);
   font-size: 0.86rem;
@@ -481,8 +498,8 @@ html::after {
   display: inline-flex;
   align-items: center;
   padding: 0.5rem 0.9rem;
-  border: 1px solid rgba(107, 255, 168, 0.3);
-  background: rgba(8, 20, 16, 0.5);
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
   color: var(--phosphor-dim);
   font-family: var(--font-console);
   font-size: 0.78rem;
@@ -523,32 +540,32 @@ html::after {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.85rem 1.6rem;
-  border: 0;
-  background: var(--magenta);
-  color: #12000a;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  border: 1px solid var(--phosphor);
+  background: var(--hud-fill-lit);
+  color: var(--phosphor);
+  font-family: var(--font-console);
+  font-size: 0.92rem;
+  font-weight: 400;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   text-decoration: none; /* .btn is also used on an <a> (the 404 page) */
   cursor: pointer;
-  box-shadow: var(--glow-magenta);
+  box-shadow: 0 0 12px rgba(61, 224, 160, 0.18);
   transition:
     filter 0.12s linear,
     box-shadow 0.12s linear;
 }
 
 .btn:hover {
-  filter: brightness(1.12);
-  box-shadow:
-    0 0 12px rgba(255, 46, 136, 0.75),
-    0 0 40px rgba(255, 46, 136, 0.3);
+  background: var(--phosphor);
+  color: #04140d;
+  box-shadow: 0 0 16px rgba(125, 255, 196, 0.5);
 }
 
 .btn[disabled] {
-  background: var(--rule-lit);
-  color: var(--text-dim);
+  border-color: var(--hud-line-soft);
+  background: transparent;
+  color: rgba(61, 224, 160, 0.35);
   box-shadow: none;
   cursor: not-allowed;
 }
@@ -737,17 +754,18 @@ html::after {
   justify-content: space-between;
   gap: 1rem;
   padding: 1.35rem 1.6rem;
-  background: var(--magenta);
-  color: #12000a;
-  font-family: var(--font-display);
-  font-size: clamp(1.3rem, 5vw, 1.75rem);
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  background: var(--phosphor);
+  color: #04140d;
+  font-family: var(--font-console);
+  font-size: clamp(1.15rem, 4.5vw, 1.5rem);
+  font-weight: 400;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   text-decoration: none;
-  box-shadow:
-    0 0 14px rgba(255, 46, 136, 0.7),
-    0 0 46px rgba(255, 46, 136, 0.28);
+  /* Still the loudest element on the page — but loud now means SOLID against
+     a wireframe, rather than a second colour. In a one-colour instrument,
+     fill is the hierarchy. */
+  box-shadow: 0 0 22px rgba(125, 255, 196, 0.45);
   transition:
     filter 0.12s linear,
     box-shadow 0.12s linear;
@@ -809,6 +827,93 @@ html::after {
 }
 
 
+
+/* ========================================================== the page frame */
+
+/* A.5b: the WHOLE page sits inside the instrument, not just the panels. The
+   reference image is a single framed readout with bracket cutouts down each
+   edge — so the frame is a real element wrapping everything, and every piece
+   of text on the page lives inside a box or on a line.
+   Overlap is deliberate and encouraged: tag boxes straddle the rules they sit
+   on, exactly as the reference does. */
+.frame {
+  position: relative;
+  z-index: 1;
+  border: 1px solid var(--hud-line);
+  padding: clamp(1rem, 3vw, 2.25rem);
+  min-height: calc(100vh - 2 * clamp(0.75rem, 3vw, 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+/* Bracket cutouts on the left and right edges — the detail that makes the
+   reference read as a machine housing rather than a table border. Drawn as
+   two absolutely-positioned pseudo-elements per side, no extra markup. */
+.frame::before,
+.frame::after {
+  content: "";
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  width: 10px;
+  border: 1px solid var(--hud-line);
+  pointer-events: none;
+}
+
+.frame::before {
+  left: -1px;
+  border-right: 0;
+  border-radius: 3px 0 0 3px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0 18%,
+    var(--void) 18% 26%,
+    transparent 26% 74%,
+    var(--void) 74% 82%,
+    transparent 82%
+  );
+}
+
+.frame::after {
+  right: -1px;
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0 18%,
+    var(--void) 18% 26%,
+    transparent 26% 74%,
+    var(--void) 74% 82%,
+    transparent 82%
+  );
+}
+
+/* A small label that straddles the border of the box below it — the
+   reference is full of these, and they are most of what makes it look like an
+   instrument rather than a table. */
+.tagline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: -0.55rem; /* NEGATIVE: this is the overlap, and it is on purpose */
+  padding-left: 0.6rem;
+  z-index: 2;
+}
+
+.tagline__box {
+  border: 1px solid var(--hud-line);
+  background: var(--void);
+  padding: 0.1rem 0.5rem;
+  font-family: var(--font-console);
+  font-size: 0.55rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--phosphor-dim);
+  white-space: nowrap;
+}
+
 /* ============================================================== HUD frames */
 
 /* Restyled after a reference image: a forensic terminal — thin phosphor
@@ -818,8 +923,8 @@ html::after {
 
 .hud {
   position: relative;
-  border: 1px solid var(--phosphor-dim);
-  background: linear-gradient(rgba(10, 26, 20, 0.35), rgba(6, 14, 12, 0.35));
+  border: 1px solid var(--hud-line);
+  background: var(--hud-fill);
   padding: 1px;
   display: flex;
   flex-direction: column;
@@ -863,7 +968,7 @@ html::after {
   flex: 1 1 auto;
   min-width: 0;
   padding: 0.55rem 0.7rem 0.5rem;
-  border: 1px solid rgba(107, 255, 168, 0.28);
+  border: 1px solid var(--hud-line-soft);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -913,7 +1018,7 @@ html::after {
    rather than a row of elements. */
 .hud__strip {
   height: 18px;
-  border: 1px solid rgba(107, 255, 168, 0.28);
+  border: 1px solid var(--hud-line-soft);
   background-image:
     repeating-linear-gradient(
       to right,
@@ -946,8 +1051,8 @@ html::after {
   gap: 0.15rem;
   min-height: 11rem;
   padding: 1.75rem;
-  border: 1px solid var(--phosphor-dim);
-  background: rgba(8, 20, 16, 0.5);
+  border: 1px solid var(--hud-line);
+  background: var(--hud-fill);
   font-family: var(--font-console);
   font-size: clamp(1.8rem, 7vw, 2.6rem);
   color: var(--phosphor);
@@ -979,7 +1084,7 @@ html::after {
 .term.is-over,
 .term:active {
   border-color: var(--phosphor);
-  background: rgba(16, 40, 30, 0.6);
+  background: var(--hud-fill-lit);
 }
 
 .term:focus-within {

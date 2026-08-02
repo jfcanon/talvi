@@ -19,14 +19,10 @@
 import { ASSET_VERSION } from "../generated/assets.js";
 import { escapeHtml } from "../sanitise.js";
 
-const FOOT =
-  "Files are deleted when they expire. Anyone with the link can download — " +
-  "there is no sign-in, so treat a link like the file itself.";
-
 // `title` and `lede` are RAW text: escaping happens here so it cannot be
 // forgotten at a call site, and so nothing is ever escaped twice. `content` is
 // already-built markup and is the caller's responsibility.
-export function renderPage(title, { lede, content, foot = "", script = false }) {
+export function renderPage(title, { lede, content, script = false }) {
   const v = encodeURIComponent(ASSET_VERSION);
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
@@ -45,6 +41,9 @@ export function renderPage(title, { lede, content, foot = "", script = false }) 
     // pseudo-element, because html has only ::before and ::after and both are
     // spoken for — rain and static scanlines. Empty, decorative, aria-hidden.
     '<div class="scan" aria-hidden="true"></div>' +
+    // A.5b: the entire page lives inside one framed instrument. Every piece of
+    // text below is inside a box or sitting on a line — nothing floats.
+    '<div class="frame">' +
     '<div class="wrap">' +
     '<header class="head">' +
     // Just "talvi". The "drop" mark was redundant — the lede below already
@@ -55,17 +54,18 @@ export function renderPage(title, { lede, content, foot = "", script = false }) 
     // typewriter writes with textContent, so any markup inside would be
     // silently flattened. Emphasis in a console voice comes from the words,
     // not from bold.
-    '<p class="lede" data-type>' +
+    '<div class="tagline"><span class="tagline__box">status</span></div>' +
+    '<div class="box">' +
+    '<p class="lede glitch" data-type>' +
     escapeHtml(lede) +
     "</p>" +
+    "</div>" +
     "</header>" +
     '<main class="stack">' +
     content +
     "</main>" +
-    '<footer class="foot">' +
-    FOOT +
-    (foot ? " " + foot : "") +
-    "</footer>" +
-    "</div></body></html>"
+    // Footer removed entirely (A.5b). What it said — links are public, files
+    // expire — is either already in the lede or visible in the record itself.
+    "</div></div></body></html>"
   );
 }

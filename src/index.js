@@ -14,7 +14,11 @@ import { sanitiseFilename, validateContentType } from "./sanitise.js";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB — see blueprint B.6
 const MAX_DAILY_BYTES = 250 * 1024 * 1024; // 250 MiB/day — bounds storage inside R2 free tier, B.8
-const TTL_DAYS = new Set([1, 7, 30, 90]); // must match the lifecycle prefixes in main.tf
+// 90 removed 2026-08-02: no NEW 90-day uploads. The d90/ lifecycle rule stays
+// in main.tf until existing d90/ objects have aged out — deleting the rule
+// while objects still carry that prefix would leave them with nothing to
+// expire them (RUNBOOK §4).
+const TTL_DAYS = new Set([1, 7, 30]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // CREATE TABLE IF NOT EXISTS at the top of any handler touching D1 — the
@@ -56,7 +60,7 @@ async function handleUpload(request, env) {
   const ttlRaw = request.headers.get("x-drop-ttl") ?? "1";
   const ttl = Number(ttlRaw);
   if (!TTL_DAYS.has(ttl)) {
-    return json({ error: "invalid ttl; allowed: 1, 7, 30, 90" }, 400);
+    return json({ error: "invalid ttl; allowed: 1, 7, 30" }, 400);
   }
 
   // Content-Length is mandatory so an oversize upload can be refused before a
