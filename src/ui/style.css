@@ -794,7 +794,12 @@ html::after {
    upscale into mush and the whole point of hand-placed pixels is lost. */
 .ambient__drone {
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 6px rgba(34, 232, 255, 0.35));
+  /* Diffuse green bloom, matching the instrument. Two shadows rather than
+     one: a tight bright core and a wide soft halo, which is what reads as
+     light coming OFF the object instead of a flat outline around it. */
+  filter:
+    drop-shadow(0 0 3px rgba(125, 255, 196, 0.55))
+    drop-shadow(0 0 12px rgba(53, 217, 152, 0.35));
 }
 
 .btn--quiet {
