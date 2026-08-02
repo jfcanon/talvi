@@ -143,6 +143,18 @@ resource "cloudflare_workers_script" "talvi_web" {
 # A fresh script's workers.dev route defaults to disabled — encoded from the
 # relay project's first deploy. The account-level workers.dev subdomain
 # itself (ygdcbtmc4u) already exists and needs no action here.
+# Nightly purge (Step 7). R2 lifecycle rules delete the OBJECTS; nothing
+# deleted the D1 ROWS, so `drops` grew forever and the daily-budget query —
+# which sums size_bytes across the last 24h on every single upload — got
+# slower every day. 03:00 UTC is chosen for being nobody's peak.
+resource "cloudflare_workers_cron_trigger" "talvi_purge" {
+  account_id  = var.cloudflare_account_id
+  script_name = cloudflare_workers_script.talvi_web.script_name
+  body = [
+    { cron = "0 3 * * *" }
+  ]
+}
+
 resource "cloudflare_workers_script_subdomain" "talvi_web_subdomain" {
   account_id       = var.cloudflare_account_id
   script_name      = cloudflare_workers_script.talvi_web.script_name

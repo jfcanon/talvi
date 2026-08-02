@@ -1,0 +1,238 @@
+# talvi — runbook
+
+Operational guide. Written for someone who has **never seen this codebase**.
+If a procedure here needs knowledge that is not on this page, that is a bug in
+this page — fix it here.
+
+**Live URL:** `https://talvi-web.ygdcbtmc4u.workers.dev`
+
+---
+
+## 0. Two rules that override everything below
+
+1. **Terraform NEVER runs locally.** Open a PR → CI runs `plan`. Merge → CI runs
+   `apply`. There is no `terraform apply` on a laptop in this project, ever,
+   including "just this once to fix something". If infrastructure is wrong, the
+   fix is a PR.
+2. **Every secret comes from Bitwarden, read at use time.** Nothing is typed by
+   hand, pasted from memory, or committed. `wrangler` has no credentials of its
+   own here — it reads `CLOUDFLARE_API_TOKEN` from the environment, and that
+   value comes out of Bitwarden immediately before use.
+
+### Getting a token into your shell
+
+Every `wrangler` command on this page assumes you ran this first:
+
+```bash
+set -a; source .secrets.env; set +a          # gitignored: holds BW_PASSWORD
+BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
+export CLOUDFLARE_API_TOKEN=$(bw get password talvicftoken --session "$BW_SESSION")
+```
+
+---
+
+## 1. Take down a specific file (abuse report, or "delete that now")
+
+You need the **slug** — the last path segment of the shared link.
+`https://talvi-web.ygdcbtmc4u.workers.dev/KcDdGOFGk-yVQTqP` → `KcDdGOFGk-yVQTqP`
+
+```bash
+# 1. Find the object key for that slug.
+npx wrangler d1 execute talvi-meta --remote --command \
+  "SELECT slug, r2_key, size_bytes, expires_at FROM drops WHERE slug = '<SLUG>'"
+
+# 2. Delete the object (r2_key looks like d1/<slug>, d7/<slug>, ...).
+npx wrangler r2 object delete talvi-drop/<R2_KEY>
+
+# 3. Delete the row.
+npx wrangler d1 execute talvi-meta --remote --command \
+  "DELETE FROM drops WHERE slug = '<SLUG>'"
+
+# 4. Confirm it is gone — expect 404.
+curl -sS -o /dev/null -w "%{http_code}\n" https://talvi-web.ygdcbtmc4u.workers.dev/<SLUG>
+```
+
+**Order matters.** Delete the object first. If you delete the row first you have
+lost the `r2_key` and the object is orphaned in the bucket until its lifecycle
+rule expires it.
+
+### Delete everything currently stored
+
+```bash
+npx wrangler d1 execute talvi-meta --remote --command \
+  "SELECT COUNT(*) AS n, SUM(size_bytes) AS bytes FROM drops"   # see what you are about to remove
+
+npx wrangler d1 execute talvi-meta --remote --command \
+  "SELECT r2_key FROM drops"                                     # keys to delete
+
+# delete each object, then:
+npx wrangler d1 execute talvi-meta --remote --command "DELETE FROM drops"
+```
+
+Nothing is required for routine cleanup: **every upload expires on its own**,
+and the nightly purge removes its row. This is only for "remove it now".
+
+---
+
+## 2. The nightly purge
+
+A Cron Trigger runs `scheduled()` at **03:00 UTC daily** (`main.tf`,
+`cloudflare_workers_cron_trigger.talvi_purge`). Each run:
+
+- selects up to **200** expired rows,
+- deletes each R2 object (redundant with the lifecycle rules, deliberately — it
+  is the safety net if a lifecycle rule is ever mis-edited),
+- deletes exactly those rows,
+- logs one line: `PURGE removed=<n> remaining_estimate=<m> bytes=<total>`.
+
+**The log line contains no slug, filename, or URL, and must never be changed to
+include one.** A slug is the file's only secret and a log has a wider audience
+than the database.
+
+Watch a run:
+
+```bash
+npx wrangler tail talvi-web        # then wait for 03:00 UTC, or trigger from the dashboard
+```
+
+If a backlog ever exceeds 200 rows a night, it drains over consecutive nights.
+That is intended: a Worker invocation is capped at 50 subrequests, so an
+unbounded batch would fail partway and never recover.
+
+### `IDLE-180`
+
+If nothing has been uploaded for 180 days, the purge logs
+`IDLE-180 no upload in <n> days`. That is the kill criterion: **delete the
+project** (section 7). It is a breadcrumb in the logs, not an alert — nobody is
+paged for a hobby file drop.
+
+---
+
+## 3. Change the daily budget
+
+`MAX_DAILY_BYTES` in `src/index.js` (currently 250 MiB/day). Uploads beyond it
+return `503` and the UI shows "closed for the day".
+
+**Redo the storage arithmetic in the same PR.** The worst-case stored bytes are
+`daily budget × longest retention` — at 250 MiB/day and 90 days that is ~22 GB,
+which is a few cents a month over the R2 free tier. Raising the budget without
+redoing that sum is how a free hobby project quietly starts costing money.
+
+---
+
+## 4. Change or add a retention tier
+
+> **`TTL_DAYS` in `src/index.js` and the R2 lifecycle prefixes in `main.tf` are
+> two halves of ONE contract. Changing one without the other silently creates
+> objects that never expire.**
+
+A file uploaded with TTL *n* is stored under key `d<n>/<slug>`, and the *only*
+thing that deletes that object is a lifecycle rule matching prefix `d<n>/`. Add
+`14` to `TTL_DAYS` without adding a `d14/` lifecycle rule and every 14-day
+upload lives forever, invisibly, and is billed forever.
+
+Both halves, same PR:
+
+1. `src/index.js` — add the value to `TTL_DAYS`.
+2. `main.tf` — add the matching lifecycle rule.
+3. `src/ui/upload.js` — add the button, so the option is reachable.
+
+### `max_age` is in SECONDS
+
+Confirmed twice, the hard way:
+
+| Tier | Days | `max_age` |
+|---|---|---|
+| `d1/` | 1 | `86400` |
+| `d7/` | 7 | `604800` |
+| `d30/` | 30 | `2592000` |
+| `d90/` | 90 | `7776000` |
+
+### Declaration order is LEXICAL
+
+The Cloudflare provider reads lifecycle rules back sorted **lexically** by
+prefix — `d1`, `d30`, `d7`, `d90` — not numerically. `main.tf` declares them in
+that order deliberately. Declaring them numerically makes every `plan` show a
+permanent "1 to change" that is not a real change.
+
+---
+
+## 5. Rotate the Cloudflare API token
+
+**Rolling the account API token also regenerates its R2 S3 access keys.** All
+three Bitwarden items and all three GitHub secrets must be updated together, or
+Terraform loses access to its own state bucket:
+
+1. Roll the token in the Cloudflare dashboard.
+2. Update Bitwarden: the API token, the R2 access key id, the R2 secret access key.
+3. Update the GitHub Actions secrets from Bitwarden — `bw get`, never typed.
+4. Re-run the latest `main` Terraform workflow and confirm `apply` is green.
+
+---
+
+## 6. CI checks, and what to do when one is red
+
+| Workflow | Job | Meaning |
+|---|---|---|
+| Guards | `identity-guard` | Every authored commit must be `jfcanon <148238747+jfcanon@users.noreply.github.com>` |
+| Guards | `leak-guard` | No forbidden personal string in the diff |
+| Terraform | `plan` / `apply` | Plan on PR, apply on merge to `main` |
+| Security scans | `trivy` `gitleaks` `zizmor` `sonarqube` | Supply chain, secrets, workflow hardening, code quality |
+
+**`identity-guard` failed.** Your commit was authored by the wrong identity. Set
+it repo-locally and amend:
+
+```bash
+git config user.name "jfcanon"
+git config user.email "148238747+jfcanon@users.noreply.github.com"
+git commit --amend --reset-author --no-edit
+```
+
+Merge commits authored by `GitHub <noreply@github.com>` are tolerated — only
+commits with fewer than two parents are held to the strict identity.
+
+**`sonarqube` failed.** The job prints the failing condition with its measured
+value in both the log and the step summary. Read that before theorising; it
+names the metric, the threshold, and the actual number.
+
+**`gh pr checks` exited 8.** That means PENDING, not failed.
+
+---
+
+## 7. Delete the entire project
+
+In order:
+
+1. Empty `main.tf` of resources, PR it, merge — CI's `apply` destroys the
+   Worker, D1 database, R2 bucket, and lifecycle rules.
+2. Delete the Terraform state bucket `talvi-tfstate` by hand (it is not managed
+   by Terraform — chicken and egg).
+3. Delete the GitHub repo.
+4. Delete the Bitwarden items and the Cloudflare API token.
+
+**Do not delete the branches** before step 3 if the history matters to you — they
+are the record of how this was built.
+
+---
+
+## 8. Facts worth knowing before you change anything
+
+- **All 404s are byte-identical** — malformed slug, never existed, expired, and
+  object-missing all return the same bytes, deliberately, so an observer cannot
+  tell which. Any change that makes one distinguishable is a security
+  regression. The cost of this design: a route that has not deployed yet looks
+  exactly like broken storage. Check the apply time before diagnosing a 404.
+- **The download path never echoes the uploaded content type.** Always
+  `application/octet-stream` + `attachment` + `nosniff` + `sandbox`. Uploaded
+  HTML must never render on this origin. Re-test after touching that block:
+  upload an `.html` and confirm it downloads rather than renders.
+- **The CSP has no `'unsafe-inline'`** — which is why CSS and JS are served from
+  `/s.css` and `/s.js` rather than inlined. Do not inline anything to make a
+  change easier.
+- **Assets are cached immutably for a year** and requested as `/s.css?v=<hash>`.
+  The hash comes from the asset contents at build time, so an edit changes the
+  URL. Never serve those paths immutably without the version query.
+- **Rate limiting is currently INERT.** The bindings exist and the code is
+  correct against Cloudflare's documented API, but `limit()` returns
+  `{success: true}` indefinitely and the cause is unresolved. Do not read the
+  presence of `RL_UPLOAD`/`RL_READ` as protection.
