@@ -47,7 +47,10 @@ export function renderPage(title, { lede, content, foot = "", script = false }) 
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="wrap">' +
     '<header class="head">' +
-    '<h1 class="sign">talvi<span class="sign__mark">drop</span></h1>' +
+    // Just "talvi". The "drop" mark was redundant — the lede below already
+    // says what the thing does, and a wordmark repeating its own product
+    // description is the kind of thing that reads as filler.
+    '<h1 class="sign glitch">talvi</h1>' +
     // data-type marks this for the typed reveal. The text is PLAIN — the
     // typewriter writes with textContent, so any markup inside would be
     // silently flattened. Emphasis in a console voice comes from the words,
