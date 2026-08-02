@@ -3,6 +3,7 @@
 // No inline style and no inline script anywhere (CSP, B.7 item 3).
 // No <form>: form-action is 'none', so a real submit would be blocked. The
 // send button is an ordinary button driven by XHR.
+import { ASSET_VERSION } from "../generated/assets.js";
 import { renderPage } from "./layout.js";
 
 // 90 days removed 2026-08-02 at the human's request.
@@ -75,8 +76,12 @@ export function uploadPage() {
     // attached, so the control is a real <button> and the decoration is
     // aria-hidden.
     '<div class="ambient">' +
-    '<canvas class="ambient__noir" id="noir" aria-hidden="true"></canvas>' +
-    '<canvas class="ambient__drone" id="drone" aria-hidden="true"></canvas>' +
+    // One supplied sprite, replacing the two hand-drawn canvases. Decorative,
+    // so alt="" rather than a description — it carries no information a
+    // screen-reader user would be missing.
+    '<img class="ambient__figure" src="/s.png?v=' +
+    encodeURIComponent(ASSET_VERSION) +
+    '" alt="" width="68" height="120">' +
     '<button class="btn btn--ghost btn--quiet" type="button" id="sound" aria-pressed="false">SOUND OFF</button>' +
     "</div>" +
     // Result panel, in the same HUD frame as the view page's file record —
