@@ -150,7 +150,12 @@ resource "cloudflare_workers_script" "talvi_web" {
 resource "cloudflare_workers_cron_trigger" "talvi_purge" {
   account_id  = var.cloudflare_account_id
   script_name = cloudflare_workers_script.talvi_web.script_name
-  body = [
+  # `schedules`, NOT `body`. The blueprint's Step 7 snippet says `body` and
+  # marks it "confirmed"; it is wrong for cloudflare provider v5, which
+  # rejected it outright: 'An argument named "body" is not expected here' plus
+  # 'The argument "schedules" is required'. Corrected here, and the blueprint
+  # has been annotated so the next reader does not re-derive this.
+  schedules = [
     { cron = "0 3 * * *" }
   ]
 }
