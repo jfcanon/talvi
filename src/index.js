@@ -1,10 +1,15 @@
 // talvi Worker.
-// Step 2 stood up an inert skeleton; Step 3 adds the write path (no UI — it is
-// driven entirely by curl, so the security logic is tested against a hostile
-// client rather than a friendly form). Read paths arrive in Step 4.
-import { renderPage } from "./ui/layout.js";
+// Step 2 stood up an inert skeleton; Step 3 added the write path (no UI — it
+// was driven entirely by curl, so the security logic was tested against a
+// hostile client rather than a friendly form). Step 4 added the read paths.
+// Step 5 adds the UI: "/" now serves an upload page instead of falling through
+// to the 404, and /s.css and /s.js serve real content.
+import { STYLE_CSS, CLIENT_JS } from "./generated/assets.js";
+import { notFoundPage } from "./ui/notfound.js";
+import { uploadPage } from "./ui/upload.js";
+import { viewPage } from "./ui/view.js";
 import { newSlug, isValidSlug } from "./slug.js";
-import { sanitiseFilename, validateContentType, escapeHtml } from "./sanitise.js";
+import { sanitiseFilename, validateContentType } from "./sanitise.js";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB — see blueprint B.6
 const MAX_DAILY_BYTES = 250 * 1024 * 1024; // 250 MiB/day — bounds storage inside R2 free tier, B.8
@@ -198,12 +203,9 @@ const HTML_HEADERS = {
 
 // One 404 for everything: malformed slug, never-existed, expired. Deliberately
 // byte-identical so an observer cannot distinguish "expired" from "never
-// existed" (B.7 item 5). Stub styling until Step 5.
+// existed" (B.7 item 5) — which is why notFoundPage() takes no arguments.
 function notFound() {
-  return new Response(
-    renderPage("not found", "<main><h1>404</h1><p>nothing here.</p></main>"),
-    { status: 404, headers: HTML_HEADERS },
-  );
+  return new Response(notFoundPage(), { status: 404, headers: HTML_HEADERS });
 }
 
 // Look up a live (non-expired) drop, or null. Slug is regex-validated BEFORE
@@ -219,27 +221,10 @@ async function getLiveDrop(env, slug) {
   return row;
 }
 
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
+// Markup lives in src/ui/view.js; every interpolated value is escaped there.
+// The view page is the app's only stored-XSS sink (B.7 item 3).
 function handleView(row, slug) {
-  // Every interpolated value goes through escapeHtml — the view page is the
-  // app's only stored-XSS sink (B.7 item 3).
-  const name = escapeHtml(row.filename);
-  const type = escapeHtml(row.content_type);
-  const size = escapeHtml(formatSize(row.size_bytes));
-  const expires = escapeHtml(row.expires_at);
-  const body =
-    "<main>" +
-    `<h1>${name}</h1>` +
-    `<p>${type} &middot; ${size}</p>` +
-    `<p>expires ${expires}</p>` +
-    `<p><a href="/${slug}/d">download</a></p>` +
-    "</main>";
-  return new Response(renderPage(name, body), { status: 200, headers: HTML_HEADERS });
+  return new Response(viewPage(row, slug), { status: 200, headers: HTML_HEADERS });
 }
 
 async function handleDownload(env, row, ctx) {
@@ -284,19 +269,24 @@ async function handleDownload(env, row, ctx) {
   });
 }
 
-// Stub assets. no-store DELIBERATELY — the immutable year-long cache header
-// must not ship until Step 5 puts real content at these URLs, or anyone who
-// loads a page during Step 4 is stuck with empty stubs for a year.
+// Real assets (Step 5). Step 4 served stubs with `no-store` deliberately, so
+// that nobody who loaded a page then would be stuck with an empty stylesheet
+// for a year. Now that there is real content, the cache is immutable and
+// year-long — safe ONLY because layout.js requests these as /s.css?v=<hash>,
+// so the URL changes whenever the bytes do. Never ship an immutable cache on
+// an unversioned URL: the next edit would never reach a returning visitor.
+const ASSET_CACHE = "public, max-age=31536000, immutable";
+
 function handleAsset(pathname) {
-  if (pathname === "/s.css") {
-    return new Response("/* step 5 */", {
-      headers: { "content-type": "text/css", "cache-control": "no-store" },
-    });
-  }
-  return new Response("// step 5", {
+  const isCss = pathname === "/s.css";
+  return new Response(isCss ? STYLE_CSS : CLIENT_JS, {
     headers: {
-      "content-type": "text/javascript",
-      "cache-control": "no-store",
+      "content-type": isCss
+        ? "text/css; charset=utf-8"
+        : "text/javascript; charset=utf-8",
+      "cache-control": ASSET_CACHE,
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex, nofollow",
     },
   });
 }
@@ -308,6 +298,11 @@ export default {
 
     if (pathname === "/healthz" && method === "GET") {
       return new Response("ok", { status: 200 });
+    }
+
+    // "/" — the upload page (Step 5). Until now this fell through to the 404.
+    if (pathname === "/" && method === "GET") {
+      return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
     }
 
     if (pathname === "/api/upload" && method === "POST") {
