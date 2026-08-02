@@ -291,43 +291,61 @@ function handleAsset(pathname) {
   });
 }
 
+// /:slug and /:slug/d. Split out of fetch() to keep the router's cognitive
+// complexity under the quality gate's ceiling — the whole read path is one
+// decision ("is this a live drop?") and reads better as its own function.
+//
+// NOTE for anyone debugging a 404 here: every miss below, and any unmatched
+// path in fetch(), returns a BYTE-IDENTICAL 404 — the same bytes for "expired",
+// "never existed", and "R2 object missing", deliberately (B.7 item 5). The cost
+// of that design is that a route which is simply not deployed yet is
+// indistinguishable from broken storage. That exact confusion cost a full
+// debugging cycle on this project; see the commit "docs: correct the record on
+// the phantom download bug".
+const SLUG_ROUTE = /^\/([^/]+)(\/d)?$/;
+
+async function handleSlugRoute(match, env, ctx) {
+  const slug = match[1];
+  const wantsDownload = Boolean(match[2]);
+
+  // Validate shape BEFORE any lookup — a malformed slug never reaches D1.
+  if (!isValidSlug(slug)) return notFound();
+
+  const row = await getLiveDrop(env, slug);
+  if (!row) return notFound();
+
+  return wantsDownload ? handleDownload(env, row, ctx) : handleView(row, slug);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     const method = request.method;
 
-    if (pathname === "/healthz" && method === "GET") {
+    if (method !== "GET") {
+      // The only non-GET route in the app.
+      if (pathname === "/api/upload" && method === "POST") {
+        return handleUpload(request, env);
+      }
+      return notFound();
+    }
+
+    if (pathname === "/healthz") {
       return new Response("ok", { status: 200 });
     }
 
     // "/" — the upload page (Step 5). Until now this fell through to the 404.
-    if (pathname === "/" && method === "GET") {
+    if (pathname === "/") {
       return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
     }
 
-    if (pathname === "/api/upload" && method === "POST") {
-      return handleUpload(request, env);
-    }
-
-    if ((pathname === "/s.css" || pathname === "/s.js") && method === "GET") {
+    if (pathname === "/s.css" || pathname === "/s.js") {
       return handleAsset(pathname);
     }
 
-    // /:slug and /:slug/d — validate shape BEFORE any lookup.
-    //
-    // NOTE for anyone debugging a 404 here: an unmatched path falls through to
-    // the catch-all notFound() at the bottom of this function, and that 404 is
-    // BYTE-IDENTICAL to "slug expired" and to "R2 object missing" — deliberately
-    // so (B.7 item 5). The cost of that design is that a route which is simply
-    // not deployed yet is indistinguishable from broken storage. That exact
-    // confusion cost a full debugging cycle on this project; see the commit
-    // "docs: correct the record on the phantom download bug".
-    const m = pathname.match(/^\/([^/]+)(\/d)?$/);
-    if (m && method === "GET") {
-      if (!isValidSlug(m[1])) return notFound();
-      const row = await getLiveDrop(env, m[1]);
-      if (!row) return notFound();
-      return m[2] ? handleDownload(env, row, ctx) : handleView(row, m[1]);
+    const match = SLUG_ROUTE.exec(pathname);
+    if (match) {
+      return handleSlugRoute(match, env, ctx);
     }
 
     return notFound();

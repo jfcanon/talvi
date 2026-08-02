@@ -20,7 +20,7 @@ export function formatSize(bytes) {
 // page still states exactly when the file dies.
 function utcStamp(iso) {
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return iso;
   const pad = (n) => String(n).padStart(2, "0");
   return (
     d.getUTCFullYear() +
