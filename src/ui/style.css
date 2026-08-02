@@ -281,6 +281,19 @@ html::after {
     0 0 46px rgba(61, 224, 160, 0.3);
 }
 
+.sign__link {
+  color: inherit;
+  text-decoration: none;
+  /* The glow lives on the <h1>, so the link inherits it and needs no styling
+     of its own — but it still needs a focus state, since it is now the first
+     tab stop on the page. */
+}
+
+.sign__link:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 6px;
+}
+
 .sign__mark {
   color: var(--cyan);
   font-size: 0.42em;
@@ -785,9 +798,22 @@ html::after {
 
 .ambient {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 1.25rem;
+}
+
+/* The sound toggle is pushed to the far end; the two sprites share the near
+   end, standing next to each other. */
+.ambient > .btn {
+  margin-left: auto;
+}
+
+.ambient__noir {
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 3px rgba(125, 255, 196, 0.45))
+    drop-shadow(0 0 10px rgba(53, 217, 152, 0.28));
 }
 
 /* image-rendering: pixelated matters — without it the browser smooths a 3x

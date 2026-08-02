@@ -61,18 +61,132 @@
     5: "#c6ffe8", // lamp core, the brightest pixel on the page's smallest object
   };
 
-  function drawDrone(ctx, scale, lampOn) {
-    for (let y = 0; y < DRONE.length; y += 1) {
-      const row = DRONE[y];
+  // Generic: paints any pixel grid. `skip` suppresses one palette index, which
+  // is how the drone's lamp blinks without a second grid.
+  function drawGrid(ctx, grid, scale, skip) {
+    for (let y = 0; y < grid.length; y += 1) {
+      const row = grid[y];
       for (let x = 0; x < row.length; x += 1) {
         const cell = row[x];
-        if (cell === "0") continue;
-        // Only the lamp and its glow blink; the hull stays put.
-        if (cell === "5" && !lampOn) continue; // only the lamp core blinks
+        if (cell === "0" || cell === skip) continue;
         ctx.fillStyle = PALETTE[cell];
         ctx.fillRect(x * scale, y * scale, scale, scale);
       }
     }
+  }
+
+  // ------------------------------------------------------------- the figure
+
+  // A hardboiled detective: long coat, tie, pistol held low, leaning into the
+  // wind. The noir archetype, which predates the film by forty years
+  // (Hammett, Chandler, Bogart) and belongs to nobody.
+  //
+  // Deliberately NOT a likeness. A specific actor's or character's appearance
+  // is protected; a genre silhouette is not — and at 16x20 pixels a likeness
+  // is not achievable anyway. The posture and the coat carry the homage, which
+  // is the honest way to pay one.
+  //
+  // The tie is TWO rows, right under the collar. A first pass ran it the full
+  // height of the torso and at 4x it read as a bright stripe down a blob, not
+  // as a tie — at this size a detail has to be small AND high-contrast, not
+  // large.
+  //
+  // Two frames: the coat tail streams further in the second. Only the coat
+  // moves — the figure stands still, which is what makes it read as bracing
+  // against the wind rather than walking.
+  const NOIR_A = [
+    "0000011111000000",
+    "0000122222100000",
+    "0000124442100000",
+    "0000124442100000",
+    "0000112221100000",
+    "0001223332210000",
+    "0012233533221000",
+    "0122233533222100",
+    "0122233333222210",
+    "0122233333222210",
+    "0122233333222211",
+    "5122223333222222",
+    "5122223333222221",
+    "0122222222222100",
+    "0012222222221000",
+    "0012200022100000",
+    "0012200022100000",
+    "0012200022100000",
+    "0011100011000000",
+  ];
+
+  const NOIR_B = [
+    "0000011111000000",
+    "0000122222100000",
+    "0000124442100000",
+    "0000124442100000",
+    "0000112221100000",
+    "0001223332210000",
+    "0012233533221000",
+    "0122233533222100",
+    "0122233333222210",
+    "0122233333222211",
+    "0122233333222222",
+    "5122223333222221",
+    "5122223333222210",
+    "0122222222222100",
+    "0012222222210000",
+    "0012200022100000",
+    "0012200022100000",
+    "0012200022100000",
+    "0011100011000000",
+  ];
+
+  function initNoir() {
+    const canvas = document.getElementById("noir");
+    if (!canvas) return;
+
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const scale = 4;
+    const w = NOIR_A[0].length * scale;
+    const h = NOIR_A.length * scale;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.imageSmoothingEnabled = false;
+
+    if (still) {
+      drawGrid(ctx, NOIR_A, scale, null);
+      return;
+    }
+
+    let frame = 0;
+    let raf = 0;
+
+    function tick() {
+      frame += 1;
+      ctx.clearRect(0, 0, w, h);
+      // The coat changes about twice a second, not every frame.
+      drawGrid(ctx, frame % 60 < 30 ? NOIR_A : NOIR_B, scale, null);
+      raf = window.requestAnimationFrame(tick);
+    }
+
+    tick();
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        window.cancelAnimationFrame(raf);
+      } else {
+        raf = window.requestAnimationFrame(tick);
+      }
+    });
+  }
+
+  function drawDrone(ctx, scale, lampOn) {
+    drawGrid(ctx, DRONE, scale, lampOn ? null : "5");
   }
 
     function initSprite() {
@@ -246,6 +360,7 @@
 
   function boot() {
     initSprite();
+    initNoir();
     initSound();
   }
 
