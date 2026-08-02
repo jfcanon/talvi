@@ -833,23 +833,24 @@ html::after {
   margin-left: auto;
 }
 
-.ambient__noir {
-  image-rendering: pixelated;
-  filter:
-    drop-shadow(0 0 3px rgba(125, 255, 196, 0.45))
-    drop-shadow(0 0 10px rgba(53, 217, 152, 0.28));
-}
 
-/* image-rendering: pixelated matters — without it the browser smooths a 3x
-   upscale into mush and the whole point of hand-placed pixels is lost. */
-.ambient__drone {
+
+/* The supplied sprite arrives full-colour — brown coat, blue shirt. It is
+   mapped into the instrument's single green by FILTER rather than by
+   recolouring the source: grayscale flattens it to luminance, sepia tints it,
+   hue-rotate swings the tint to green, saturate pushes it back up. The source
+   PNG stays untouched, so a different palette later is one line here.
+
+   image-rendering: pixelated is essential — without it the browser smooths the
+   upscale and the pixel edges turn to mush. */
+.ambient__figure {
   image-rendering: pixelated;
-  /* Diffuse green bloom, matching the instrument. Two shadows rather than
-     one: a tight bright core and a wide soft halo, which is what reads as
-     light coming OFF the object instead of a flat outline around it. */
+  width: 68px;
+  height: 120px;
   filter:
-    drop-shadow(0 0 3px rgba(125, 255, 196, 0.55))
-    drop-shadow(0 0 12px rgba(53, 217, 152, 0.35));
+    grayscale(1) sepia(1) hue-rotate(88deg) saturate(2.6) brightness(1.05)
+    drop-shadow(0 0 4px rgba(125, 255, 196, 0.4))
+    drop-shadow(0 0 12px rgba(53, 217, 152, 0.25));
 }
 
 .btn--quiet {
