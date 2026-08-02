@@ -306,6 +306,27 @@ function handleAsset(pathname) {
 // rate limiter that takes the whole app down when it misbehaves is a worse
 // outcome than one that briefly stops limiting — and this is a personal file
 // drop, not a bank.
+// KNOWN UNRESOLVED as of 2026-08-02, recorded here so nobody re-derives it:
+// these limits DO NOT currently fire. Terraform sends the bindings with
+// `simple = { limit, period }`, the apply reports them created, and at
+// runtime `env.RL_UPLOAD` is an object whose `.limit` is a function taking a
+// key — all verified live with a temporary probe route. But `limit()` returns
+// `{ success: true }` indefinitely: 6 uploads against a 3/min cap and 65 reads
+// against a 60/min cap all passed, as did 5 consecutive probe calls using one
+// fixed key.
+//
+// What is CONFIRMED: the binding exists at runtime, the call shape matches
+// Cloudflare's documented API, CF-Connecting-IP is present, and Terraform
+// transmitted limit/period.
+// What is NOT known: why the namespace does not count. Not investigated
+// further because it needs an API-token query against the deployed script's
+// stored binding config, and every token in this project is human-held.
+//
+// The code stays because it is correct against the documented API and costs
+// nothing while inert — and because when the binding does start counting, it
+// will simply begin working. Do NOT read this as "rate limiting is in place".
+// The same pattern is used by the relay, whose limiter has never been
+// verified live either; it may well be equally inert.
 async function withinLimit(binding, request) {
   if (!binding) return true; // binding not deployed yet — do not break the app
   const ip = request.headers.get("CF-Connecting-IP");
@@ -380,33 +401,6 @@ export default {
       // Never rate limited: an uptime check that trips the limiter reports an
       // outage that is not happening.
       return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
-    }
-
-    // TEMPORARY (Step 6 diagnosis). Rate limits did not fire live despite the
-    // apply reporting the bindings as created, and the two hypotheses —
-    // "binding absent at runtime" vs "binding present but limit() not
-    // counting" — are indistinguishable from outside, because withinLimit()
-    // fails open for both. This route reports which it is.
-    //
-    // Deliberately reports NO env keys and NO values: only the shape of the
-    // two rate-limit bindings and the verdict of one live call. To be removed
-    // in the very next commit, exactly as Session 0's /probe was.
-    if (pathname === "/rl-probe") {
-      let probe = null;
-      let error = null;
-      try {
-        probe = await env.RL_UPLOAD?.limit({ key: "probe-fixed-key" });
-      } catch (e) {
-        error = String(e && e.message ? e.message : e);
-      }
-      return json({
-        rl_upload: typeof env.RL_UPLOAD,
-        rl_upload_limit_fn: typeof env.RL_UPLOAD?.limit,
-        rl_read: typeof env.RL_READ,
-        probe_result: probe,
-        probe_error: error,
-        has_cf_ip: Boolean(request.headers.get("CF-Connecting-IP")),
-      });
     }
 
     if (pathname === "/robots.txt") {
