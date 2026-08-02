@@ -40,11 +40,20 @@ export function renderPage(title, { lede, content, foot = "", script = false }) 
     v +
     '">' +
     (script ? '<script src="/s.js?v=' + v + '" defer></script>' : "") +
-    '</head><body><div class="wrap">' +
+    "</head><body>" +
+    // The moving scan band (A.5a). A real element rather than a third
+    // pseudo-element, because html has only ::before and ::after and both are
+    // spoken for — rain and static scanlines. Empty, decorative, aria-hidden.
+    '<div class="scan" aria-hidden="true"></div>' +
+    '<div class="wrap">' +
     '<header class="head">' +
     '<h1 class="sign">talvi<span class="sign__mark">drop</span></h1>' +
-    '<p class="lede">' +
-    lede +
+    // data-type marks this for the typed reveal. The text is PLAIN — the
+    // typewriter writes with textContent, so any markup inside would be
+    // silently flattened. Emphasis in a console voice comes from the words,
+    // not from bold.
+    '<p class="lede" data-type>' +
+    escapeHtml(lede) +
     "</p>" +
     "</header>" +
     '<main class="stack">' +

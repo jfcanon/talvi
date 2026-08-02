@@ -143,7 +143,7 @@
       // Client-side size check is a courtesy, not a control — the Worker
       // rejects oversize with 413 regardless of what this does.
       if (f.size > MAX_BYTES) {
-        say("That file is " + humanSize(f.size) + ". The ceiling is 25 MB.", true);
+        say("REFUSED — that file is " + humanSize(f.size) + ". Ceiling is 25 MB.", true);
         send.disabled = true;
         return;
       }
@@ -193,7 +193,8 @@
       const ratio = total > 0 ? loaded / total : 0;
       const whole = Math.min(100, Math.round(ratio * 100));
       fill.style.width = whole + "%";
-      pct.textContent = whole + "% · " + humanSize(loaded) + " of " + humanSize(total);
+      pct.textContent =
+        "UPLINK " + whole + "% — " + humanSize(loaded) + " of " + humanSize(total);
     }
 
     function fail(text) {
@@ -213,7 +214,7 @@
       link.textContent = body.url;
       link.setAttribute("href", body.url);
       expiry.textContent =
-        "Expires " + absolute(body.expires_at) + " — " + relative(body.expires_at) + ".";
+        "EXPIRES " + absolute(body.expires_at) + " — " + relative(body.expires_at) + ".";
       result.className = "panel";
       file = null;
       chosen.textContent = "";
@@ -223,17 +224,17 @@
     // Status -> message. 503 is not an error the user caused, and does not read
     // like one; 429 arrives once Step 6's rate limits exist.
     function failureText(status, body) {
-      if (status === 413) return "Too big. The ceiling is 25 MB per file.";
+      if (status === 413) return "REFUSED — over the 25 MB ceiling.";
       if (status === 503) {
-        return "Closed for the day — the daily budget is spent. Try tomorrow.";
+        return "CLOSED FOR THE DAY — the daily budget is spent. Try tomorrow.";
       }
-      if (status === 429) return "Too many uploads too fast. Wait a minute and try again.";
+      if (status === 429) return "THROTTLED — too many uploads too fast. Wait a minute.";
       if (status === 400 || status === 411) {
         return body?.error
-          ? "Rejected: " + body.error + "."
-          : "Rejected. Check the file and try again.";
+          ? "REFUSED — " + body.error + "."
+          : "REFUSED. Check the file and try again.";
       }
-      return "Upload failed (" + status + "). Nothing was stored.";
+      return "FAILED (" + status + "). Nothing was stored.";
     }
 
     function parseBody(text) {
@@ -274,11 +275,11 @@
 
       xhr.upload.onload = () => {
         // Bytes are up; the Worker is still writing to R2 and D1.
-        pct.textContent = "STORING";
+        pct.textContent = "STORING — holding the line";
       };
 
       xhr.onerror = () => {
-        fail("The connection dropped. Nothing was stored — try again.");
+        fail("UPLINK LOST. Nothing was stored. Try again.");
       };
 
       xhr.onload = () => {
@@ -310,9 +311,51 @@
     when.textContent = absolute(iso) + (rel ? " — " + rel : "");
   }
 
+  // ------------------------------------------------------- typed reveal
+
+  // Types out elements marked [data-type]. Progressive enhancement done
+  // honestly: the full text is already in the DOM from the server, so a
+  // screen reader, a search crawler, and a JS-off reader all get the complete
+  // string. This only *re-reveals* text that is already there — it never
+  // supplies content, so nothing is lost when it does not run.
+  function initTyping() {
+    const targets = document.querySelectorAll("[data-type]");
+    if (!targets.length) return;
+
+    // Honoured here as well as in CSS: typing is motion, and a user who asked
+    // for less of it should get the finished text immediately, not a fast
+    // version of the same effect.
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (still) return;
+
+    for (const [index, el] of [...targets].entries()) {
+      const full = el.textContent;
+      el.textContent = "";
+      const cursor = document.createElement("span");
+      cursor.className = "cursor";
+      el.appendChild(cursor);
+
+      let i = 0;
+      const startAt = 220 + index * 260; // after the element's own light-up
+      window.setTimeout(() => {
+        const tick = window.setInterval(() => {
+          i += 1;
+          cursor.remove();
+          el.textContent = full.slice(0, i);
+          if (i >= full.length) {
+            window.clearInterval(tick);
+            return;
+          }
+          el.appendChild(cursor);
+        }, 14);
+      }, startAt);
+    }
+  }
+
   function boot() {
     initUpload();
     initView();
+    initTyping();
   }
 
   if (document.readyState === "loading") {

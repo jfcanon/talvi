@@ -39,7 +39,7 @@ export function uploadPage() {
     // announced without a single JS event listener involved.
     '<label class="drop" id="drop" for="file">' +
     '<span class="drop__hd">Drop it here</span>' +
-    '<span class="drop__sub">or press Enter to choose a file</span>' +
+    '<span class="drop__sub">AWAITING INPUT — or press Enter to choose a file</span>' +
     '<span class="drop__file" id="chosen"></span>' +
     '<input class="vh" type="file" id="file">' +
     "</label>" +
@@ -66,8 +66,8 @@ export function uploadPage() {
 
   return renderPage("talvi — drop a file", {
     lede:
-      "Drop a file, get a link. It dies on schedule — <strong>one day</strong> " +
-      "unless you say otherwise, 25 MB a file.",
+      "SESSION OPEN. Drop a file, take a link. The link expires on schedule — " +
+      "one day unless you say otherwise. Ceiling 25 MB.",
     content,
     script: true,
   });
