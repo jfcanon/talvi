@@ -18,7 +18,7 @@ export function notFoundPage() {
     '<a class="btn" href="/">Drop a file</a>';
 
   return renderPage("talvi — nothing here", {
-    lede: "The link is dead, or was never alive.",
+    lede: "NO RECORD. This address is dead, or was never alive.",
     content,
   });
 }

@@ -67,7 +67,7 @@ export function viewPage(row, slug) {
     "</div>";
 
   return renderPage(row.filename, {
-    lede: "Someone left this for you. Take it before it expires.",
+    lede: "INCOMING. One file is being held for you. Collect it before it expires.",
     content,
     foot:
       "The type above is only a label — every download is served as an opaque " +
