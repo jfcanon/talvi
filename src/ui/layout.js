@@ -41,6 +41,12 @@ export function renderPage(title, { lede, content, script = false }) {
     // pseudo-element, because html has only ::before and ::after and both are
     // spoken for — rain and static scanlines. Empty, decorative, aria-hidden.
     '<div class="scan" aria-hidden="true"></div>' +
+    // Wear layers (A.5c). Three separate elements because they blend
+    // differently: light leaks screen over the ground, grain overlays it, and
+    // scratches multiply into it. One combined layer cannot do all three.
+    '<div class="leak" aria-hidden="true"></div>' +
+    '<div class="grain" aria-hidden="true"></div>' +
+    '<div class="wear" aria-hidden="true"></div>' +
     // A.5b: the entire page lives inside one framed instrument. Every piece of
     // text below is inside a box or sitting on a line — nothing floats.
     '<div class="frame">' +
