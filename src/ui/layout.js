@@ -49,7 +49,10 @@ export function renderPage(title, { lede, content, script = false }) {
     // Just "talvi". The "drop" mark was redundant — the lede below already
     // says what the thing does, and a wordmark repeating its own product
     // description is the kind of thing that reads as filler.
-    '<h1 class="sign glitch">talvi</h1>' +
+    // The wordmark is a link home on EVERY page, including the download page.
+    // A logo that does nothing is a small broken promise: it is the first
+    // thing anyone clicks to get out of a dead end.
+    '<h1 class="sign glitch"><a class="sign__link" href="/">talvi</a></h1>' +
     // data-type marks this for the typed reveal. The text is PLAIN — the
     // typewriter writes with textContent, so any markup inside would be
     // silently flattened. Emphasis in a console voice comes from the words,

@@ -75,6 +75,7 @@ export function uploadPage() {
     // attached, so the control is a real <button> and the decoration is
     // aria-hidden.
     '<div class="ambient">' +
+    '<canvas class="ambient__noir" id="noir" aria-hidden="true"></canvas>' +
     '<canvas class="ambient__drone" id="drone" aria-hidden="true"></canvas>' +
     '<button class="btn btn--ghost btn--quiet" type="button" id="sound" aria-pressed="false">SOUND OFF</button>' +
     "</div>" +
