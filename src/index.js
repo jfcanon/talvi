@@ -382,6 +382,33 @@ export default {
       return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
     }
 
+    // TEMPORARY (Step 6 diagnosis). Rate limits did not fire live despite the
+    // apply reporting the bindings as created, and the two hypotheses —
+    // "binding absent at runtime" vs "binding present but limit() not
+    // counting" — are indistinguishable from outside, because withinLimit()
+    // fails open for both. This route reports which it is.
+    //
+    // Deliberately reports NO env keys and NO values: only the shape of the
+    // two rate-limit bindings and the verdict of one live call. To be removed
+    // in the very next commit, exactly as Session 0's /probe was.
+    if (pathname === "/rl-probe") {
+      let probe = null;
+      let error = null;
+      try {
+        probe = await env.RL_UPLOAD?.limit({ key: "probe-fixed-key" });
+      } catch (e) {
+        error = String(e && e.message ? e.message : e);
+      }
+      return json({
+        rl_upload: typeof env.RL_UPLOAD,
+        rl_upload_limit_fn: typeof env.RL_UPLOAD?.limit,
+        rl_read: typeof env.RL_READ,
+        probe_result: probe,
+        probe_error: error,
+        has_cf_ip: Boolean(request.headers.get("CF-Connecting-IP")),
+      });
+    }
+
     if (pathname === "/robots.txt") {
       return new Response(ROBOTS, {
         status: 200,
