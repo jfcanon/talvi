@@ -5,6 +5,7 @@
 // Step 5 adds the UI: "/" now serves an upload page instead of falling through
 // to the 404, and /s.css and /s.js serve real content.
 import { STYLE_CSS, CLIENT_JS } from "./generated/assets.js";
+import { closedPage, limitedPage } from "./ui/errorpage.js";
 import { notFoundPage } from "./ui/notfound.js";
 import { uploadPage } from "./ui/upload.js";
 import { viewPage } from "./ui/view.js";
@@ -190,6 +191,8 @@ async function handleUpload(request, env) {
 // being inlined (a security decision driving a build decision, B.7 item 3).
 // Referrer-Policy: no-referrer matters more than usual: without it, clicking
 // any link from a view page leaks the secret slug in the Referer header.
+const ROBOTS_TAG = "noindex, nofollow";
+
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "content-security-policy":
@@ -198,7 +201,7 @@ const HTML_HEADERS = {
     "frame-ancestors 'none'; base-uri 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
-  "x-robots-tag": "noindex, nofollow",
+  "x-robots-tag": ROBOTS_TAG,
 };
 
 // One 404 for everything: malformed slug, never-existed, expired. Deliberately
@@ -291,6 +294,39 @@ function handleAsset(pathname) {
   });
 }
 
+// --------------------------------------------------------------------------
+// Abuse controls (Step 6).
+// --------------------------------------------------------------------------
+
+// Workers-native rate limiting, keyed on the client IP. CF-Connecting-IP is
+// set by the edge and cannot be spoofed by the client — unlike X-Forwarded-For,
+// which is client-supplied and must never be trusted for this.
+//
+// Fails OPEN: if the binding is missing or throws, the request proceeds. A
+// rate limiter that takes the whole app down when it misbehaves is a worse
+// outcome than one that briefly stops limiting — and this is a personal file
+// drop, not a bank.
+async function withinLimit(binding, request) {
+  if (!binding) return true; // binding not deployed yet — do not break the app
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (!ip) return true;
+  try {
+    const { success } = await binding.limit({ key: ip });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
+function limitedHtml() {
+  return new Response(limitedPage(), { status: 429, headers: HTML_HEADERS });
+}
+
+// robots.txt is a request; X-Robots-Tag is enforcement. Both, deliberately:
+// a crawler that ignores the file still sees the header, and the header alone
+// is invisible to anyone auditing the site's intent.
+const ROBOTS = "User-agent: *\nDisallow: /\n";
+
 // /:slug and /:slug/d. Split out of fetch() to keep the router's cognitive
 // complexity under the quality gate's ceiling — the whole read path is one
 // decision ("is this a live drop?") and reads better as its own function.
@@ -304,9 +340,13 @@ function handleAsset(pathname) {
 // the phantom download bug".
 const SLUG_ROUTE = /^\/([^/]+)(\/d)?$/;
 
-async function handleSlugRoute(match, env, ctx) {
+async function handleSlugRoute(match, env, request, ctx) {
   const slug = match[1];
   const wantsDownload = Boolean(match[2]);
+
+  // Read limit covers view pages, downloads, AND 404 probing — the last is the
+  // reason it exists, since it is what bounds slug guessing.
+  if (!(await withinLimit(env.RL_READ, request))) return limitedHtml();
 
   // Validate shape BEFORE any lookup — a malformed slug never reaches D1.
   if (!isValidSlug(slug)) return notFound();
@@ -325,13 +365,38 @@ export default {
     if (method !== "GET") {
       // The only non-GET route in the app.
       if (pathname === "/api/upload" && method === "POST") {
+        // JSON, not the themed HTML page: this is an API endpoint and its
+        // caller is the uploader script, which renders its own in-theme
+        // message from the status code.
+        if (!(await withinLimit(env.RL_UPLOAD, request))) {
+          return json({ error: "too many uploads; wait a minute" }, 429);
+        }
         return handleUpload(request, env);
       }
       return notFound();
     }
 
     if (pathname === "/healthz") {
-      return new Response("ok", { status: 200 });
+      // Never rate limited: an uptime check that trips the limiter reports an
+      // outage that is not happening.
+      return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
+    }
+
+    if (pathname === "/robots.txt") {
+      return new Response(ROBOTS, {
+        status: 200,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "x-robots-tag": ROBOTS_TAG,
+          "cache-control": "public, max-age=86400",
+        },
+      });
+    }
+
+    // The themed "closed for the day" page, linked from the uploader when the
+    // API returns 503 and reachable directly.
+    if (pathname === "/closed") {
+      return new Response(closedPage(), { status: 503, headers: HTML_HEADERS });
     }
 
     // "/" — the upload page (Step 5). Until now this fell through to the 404.
@@ -345,7 +410,7 @@ export default {
 
     const match = SLUG_ROUTE.exec(pathname);
     if (match) {
-      return handleSlugRoute(match, env, ctx);
+      return handleSlugRoute(match, env, request, ctx);
     }
 
     return notFound();

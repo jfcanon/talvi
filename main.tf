@@ -104,6 +104,39 @@ resource "cloudflare_workers_script" "talvi_web" {
   bindings = [
     { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_meta.id },
     { type = "r2_bucket", name = "BUCKET", bucket_name = cloudflare_r2_bucket.talvi_drop.name },
+
+    # Workers-native rate limiting (Step 6). Chosen over cloudflare_rate_limit
+    # because that resource is zone-scoped, and this account controls no zone
+    # for *.workers.dev. These bindings work on workers.dev directly — the same
+    # mechanism the relay already runs in production.
+    #
+    # `period` accepts only 10 or 60. namespace_id values are per-script;
+    # 2001/2002 are chosen to be visibly distinct from the relay's 1001/1002
+    # when the two configs are read side by side.
+    {
+      # Uploads per IP. Deliberately tight: this endpoint is unauthenticated
+      # and writes to storage. 3/min is generous for a human and hostile to a
+      # script.
+      type         = "ratelimit"
+      name         = "RL_UPLOAD"
+      namespace_id = "2001"
+      simple = {
+        limit  = 3
+        period = 60
+      }
+    },
+    {
+      # Reads per IP — covers view pages, downloads, and 404 probing. The last
+      # of those is why this exists: without it, a slug's 96-bit keyspace is
+      # still only as strong as the rate at which someone may guess.
+      type         = "ratelimit"
+      name         = "RL_READ"
+      namespace_id = "2002"
+      simple = {
+        limit  = 60
+        period = 60
+      }
+    },
   ]
 }
 
