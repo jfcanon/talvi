@@ -243,21 +243,60 @@ jobs:
                       i.get("severity", ""), i.get("rule", ""),
                       comp, i.get("line", ""), msg))
           PYEOF
+          # tee, not >> : this diagnosis used to land ONLY in the job summary,
+          # which the GitHub API does not expose. That made a failing gate
+          # readable exclusively by a human in the web UI — so an agent, or
+          # anyone reading `gh run view --log`, could see "FAILED" and nothing
+          # about why. It is the reason relay's identical failure sat
+          # undiagnosed. The log is the artifact everything can read; the
+          # summary is the convenience. Write both.
           curl -s -u "$SONAR_AUTH" \
             "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
-            | python3 /tmp/fmt.py >> "$GITHUB_STEP_SUMMARY"
+            | python3 /tmp/fmt.py | tee -a "$GITHUB_STEP_SUMMARY"
 
-          {
-            echo
-            echo "### Quality gate conditions in force"
-            echo
-            echo "| Metric | Fails when |"
-            echo "|---|---|"
-            echo "| security_rating | worse than A |"
-            echo "| reliability_rating | worse than A |"
-            echo "| sqale_rating (maintainability) | worse than A |"
-            echo "| security_hotspots_reviewed | under 100% |"
-            echo "| blocker_violations | above 0 |"
-            echo "| critical_violations | above 0 |"
-            echo "| duplicated_lines_density | above 3% |"
-          } >> "$GITHUB_STEP_SUMMARY"
+          # WHICH condition failed, with the actual measured value. Without
+          # this the gate reports a verdict and withholds its reasoning, and
+          # the only way forward is guesswork — which is how this project
+          # previously shipped a confident, wrong root-cause analysis.
+          cat > /tmp/gate.py <<'PYEOF'
+          import json, sys
+          d = json.load(sys.stdin).get("projectStatus", {})
+          print()
+          print("### Quality gate verdict: %s" % d.get("status", "?"))
+          print()
+          print("| Metric | Comparator | Threshold | Actual | Status |")
+          print("|---|---|---|---|---|")
+          for c in d.get("conditions", []):
+              print("| %s | %s | %s | %s | **%s** |" % (
+                  c.get("metricKey", ""), c.get("comparator", ""),
+                  c.get("errorThreshold", ""), c.get("actualValue", ""),
+                  c.get("status", "")))
+          PYEOF
+          curl -s -u "$SONAR_AUTH" \
+            "http://localhost:9000/api/qualitygates/project_status?projectKey=talvi" \
+            | python3 /tmp/gate.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # Hotspots are NOT issues and do not appear in the issues search
+          # above, but security_hotspots_reviewed is one of the gate
+          # conditions — so a hotspot can fail the build while the issue table
+          # reads "Total: 0". List them separately or that combination is
+          # unexplainable from the log.
+          cat > /tmp/hs.py <<'PYEOF'
+          import json, sys
+          hs = json.load(sys.stdin).get("hotspots", [])
+          print()
+          print("### Security hotspots awaiting review: %d" % len(hs))
+          if hs:
+              print()
+              print("| Rule | File | Line | Status | Message |")
+              print("|---|---|---|---|---|")
+              for h in hs:
+                  comp = h.get("component", "").split(":")[-1]
+                  msg = h.get("message", "").replace("|", "/")
+                  print("| %s | %s | %s | %s | %s |" % (
+                      h.get("ruleKey", ""), comp, h.get("line", ""),
+                      h.get("status", ""), msg))
+          PYEOF
+          curl -s -u "$SONAR_AUTH" \
+            "http://localhost:9000/api/hotspots/search?projectKey=talvi&ps=500" \
+            | python3 /tmp/hs.py | tee -a "$GITHUB_STEP_SUMMARY"

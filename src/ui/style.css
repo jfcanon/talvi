@@ -1,5 +1,632 @@
-/* Near-empty stub. Step 2 only exercises the asset-embedding pipeline;
-   the neon-noir system arrives in Step 5. */
+/* talvi — neon-noir (blueprint A.5, Step 5).
+ *
+ * A real .css file, not a JS template literal (B.9). scripts/build-assets.mjs
+ * reads it and JSON.stringify()s it into src/generated/assets.js, so backticks
+ * and ${ in here are structurally safe.
+ *
+ * Served at /s.css. NOT inlined: the CSP is `style-src 'self'` with no
+ * 'unsafe-inline' (B.7 item 3), so an inline <style> block is blocked by the
+ * browser. That constraint is the reason this file exists.
+ *
+ * Dark-only, deliberately (A.5) — this is a night aesthetic; a light variant is
+ * a different design brief, not a token swap. Colours are still all tokens on
+ * :root so that call stays reversible.
+ *
+ * No @font-face and no font CDN: default-src 'none' with no font-src means an
+ * external or data: face would fail silently. Typography is carried by system
+ * stacks chosen for genre fit, not by a downloaded display face.
+ */
+
 :root {
   color-scheme: dark;
+
+  /* Ground — near-black with a blue bias, not neutral grey. */
+  --void: #05060b;
+  --deep: #0b0d1c;
+  --raise: #12142a;
+
+  /* Sign colours. Magenta and cyan are played against each other, never
+     blended into a gradient — that blend is the AI-generic default A.5 names
+     explicitly. Amber is the third sign colour: expiry and focus only. */
+  --magenta: #ff2e88;
+  --cyan: #22e8ff;
+  --amber: #ffb648;
+
+  --text-hi: #eaf2ff;
+  --text-lo: #8e9bbe;
+  --text-dim: #5d6689;
+
+  --rule: #1e2340;
+  --rule-lit: #2d3660;
+
+  --col: 34rem;
+
+  --glow-cyan: 0 0 8px rgba(34, 232, 255, 0.55), 0 0 26px rgba(34, 232, 255, 0.2);
+  --glow-magenta: 0 0 8px rgba(255, 46, 136, 0.55), 0 0 26px rgba(255, 46, 136, 0.2);
+
+  --font-display: "Bahnschrift", "DIN Alternate", "Oswald",
+    "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui,
+    sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--void);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: clamp(1.5rem, 5vw, 4rem) clamp(1.25rem, 5vw, 3rem) 4rem;
+  background: var(--void);
+  color: var(--text-hi);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* The one ambient effect (A.5: pick one register, execute it well).
+   Fine diagonal rain over the whole ground. Pointer-events none, fixed, and
+   behind everything. prefers-reduced-motion stops it dead — see the bottom of
+   this file. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    100deg,
+    transparent 0 9px,
+    rgba(180, 214, 255, 0.055) 9px 10px,
+    transparent 10px 23px
+  );
+  animation: rain 1.1s linear infinite;
+}
+
+@keyframes rain {
+  from {
+    transform: translate3d(0, -23px, 0);
+  }
+  to {
+    transform: translate3d(0, 23px, 0);
+  }
+}
+
+/* Phone first: one column, DOM order — sign, machine, small print. */
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: var(--col);
+  margin: 0;
+}
+
+/* Wide screens: an asymmetric two-column poster. The sign holds the left with
+   the small print beneath it; the machine takes the right. Deliberately not a
+   centred card floating in the middle of the void — that is the layout this
+   direction is most likely to default into. The grid places existing DOM
+   children, so reading order is identical in both layouts. */
+@media (min-width: 62rem) {
+  .wrap {
+    display: grid;
+    grid-template-columns: minmax(15rem, 20rem) minmax(0, var(--col));
+    /* auto/1fr, not the default auto/auto: .stack spans both rows, and with
+       two auto rows the browser splits its height between them, which opens a
+       dead gap under the lede. Row 1 hugs the header; row 2 absorbs the rest. */
+    grid-template-rows: auto 1fr;
+    column-gap: clamp(2.5rem, 6vw, 5rem);
+    max-width: 62rem;
+    align-items: start;
+  }
+
+  .head {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .stack {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .foot {
+    grid-column: 1;
+    grid-row: 2;
+    margin-top: 1.5rem;
+  }
+
+  .lede {
+    margin-bottom: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- masthead */
+
+.sign {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(3.2rem, 13vw, 5.5rem);
+  line-height: 0.85;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-hi);
+  /* Layered hard glow — a lit sign, not a soft blur. */
+  text-shadow:
+    0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 14px rgba(255, 46, 136, 0.75),
+    0 0 38px rgba(255, 46, 136, 0.35),
+    0 0 70px rgba(34, 232, 255, 0.22);
+}
+
+.sign__mark {
+  color: var(--cyan);
+  font-size: 0.42em;
+  letter-spacing: 0.32em;
+  text-shadow: var(--glow-cyan);
+}
+
+.lede {
+  margin: 0 0 2.4rem;
+  max-width: 30rem;
+  color: var(--text-lo);
+  font-size: 0.95rem;
+}
+
+.lede strong {
+  color: var(--text-hi);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ panels */
+
+.panel {
+  border: 1px solid var(--rule);
+  background: var(--deep);
+  padding: 1.4rem;
+  margin: 0 0 1.5rem;
+}
+
+/* -------------------------------------------------------------- drop zone */
+
+/* A <label> wrapping a visually-hidden <input type="file"> — so it is a real
+   form control: reachable by Tab, activatable by Space/Enter, announced by a
+   screen reader. A <div> with a click handler would be none of those. */
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 13rem;
+  padding: 1.75rem;
+  border: 2px solid var(--cyan);
+  outline: 1px solid rgba(34, 232, 255, 0.25);
+  outline-offset: 4px;
+  background: var(--deep);
+  box-shadow:
+    inset 0 0 40px rgba(34, 232, 255, 0.07),
+    0 0 14px rgba(34, 232, 255, 0.14);
+  cursor: pointer;
+  transition:
+    border-color 0.15s linear,
+    box-shadow 0.15s linear,
+    background-color 0.15s linear;
+}
+
+.drop__hd {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--text-hi);
+}
+
+.drop__sub {
+  color: var(--text-lo);
+  font-size: 0.9rem;
+}
+
+.drop__file {
+  color: var(--cyan);
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.drop.is-over {
+  border-color: var(--magenta);
+  background-color: var(--raise);
+  box-shadow:
+    inset 0 0 60px rgba(255, 46, 136, 0.12),
+    0 0 22px rgba(255, 46, 136, 0.3);
+}
+
+/* Visually hidden, still focusable — do not use display:none. */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------- ttl */
+
+.ttl {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.ttl__legend {
+  padding: 0;
+  margin: 0 0 0.7rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.ttl__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Radios, styled as buttons. Keyboard arrow-key group behaviour and the
+   single-selection invariant come free from the platform. */
+.ttl__opt {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--rule-lit);
+  background: var(--raise);
+  color: var(--text-lo);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 0.12s linear,
+    border-color 0.12s linear,
+    box-shadow 0.12s linear;
+}
+
+.ttl__opt:hover {
+  color: var(--text-hi);
+  border-color: var(--cyan);
+}
+
+.ttl__in:checked + .ttl__opt {
+  color: var(--void);
+  background: var(--cyan);
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.ttl__in:focus-visible + .ttl__opt {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ button */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding: 0.85rem 1.6rem;
+  border: 0;
+  background: var(--magenta);
+  color: #12000a;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none; /* .btn is also used on an <a> (the 404 page) */
+  cursor: pointer;
+  box-shadow: var(--glow-magenta);
+  transition:
+    filter 0.12s linear,
+    box-shadow 0.12s linear;
+}
+
+.btn:hover {
+  filter: brightness(1.12);
+  box-shadow:
+    0 0 12px rgba(255, 46, 136, 0.75),
+    0 0 40px rgba(255, 46, 136, 0.3);
+}
+
+.btn[disabled] {
+  background: var(--rule-lit);
+  color: var(--text-dim);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn--ghost {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+
+.btn--ghost:hover {
+  background: rgba(34, 232, 255, 0.1);
+  filter: none;
+  box-shadow: var(--glow-cyan);
+}
+
+.btn--ghost.is-done {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* Focus ring is amber on purpose: it is the one sign colour not used by any
+   resting state, so it stays legible against both cyan and magenta glow.
+   A.5's easiest failure mode is ambient glow swallowing the focus state. */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.drop:focus-within {
+  border-color: var(--amber);
+  outline: 2px solid var(--amber);
+  outline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------- progress */
+
+.prog {
+  margin-top: 1.5rem;
+}
+
+.prog__track {
+  height: 10px;
+  border: 1px solid var(--rule-lit);
+  background: var(--void);
+  overflow: hidden;
+}
+
+.prog__fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+  transition: width 0.12s linear;
+}
+
+.prog__pct {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+}
+
+/* ------------------------------------------------------------------ result */
+
+.result__link {
+  display: block;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--rule-lit);
+  background: var(--void);
+  color: var(--cyan);
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.result__link:hover {
+  border-color: var(--cyan);
+}
+
+.result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------- view page */
+
+.file__name {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 6vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  color: var(--text-hi);
+  overflow-wrap: break-word; /* not word-break: break-word — deprecated (css:S1874) */
+  /* No glow and NO uppercase transform: a filename is data the reader needs
+     verbatim — case included — not a display string to style (A.5). Every
+     other display-face element on the site is uppercase; this one is not, and
+     that is the point. */
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr;
+  gap: 0.55rem 1.25rem;
+  margin: 0 0 1.75rem;
+  padding: 0;
+  font-size: 0.95rem;
+}
+
+.meta dt {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-top: 0.15rem;
+}
+
+.meta dd {
+  margin: 0;
+  color: var(--text-lo);
+  overflow-wrap: break-word; /* not word-break: break-word — deprecated (css:S1874) */
+}
+
+.meta__hi {
+  color: var(--text-hi);
+}
+
+.meta__expiry {
+  color: var(--amber);
+}
+
+/* The download button is the brightest, largest thing on the view page —
+   the hierarchy says "this is what you came for" (Step 5 task 4). */
+.dl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.6rem;
+  background: var(--magenta);
+  color: #12000a;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 5vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow:
+    0 0 14px rgba(255, 46, 136, 0.7),
+    0 0 46px rgba(255, 46, 136, 0.28);
+  transition:
+    filter 0.12s linear,
+    box-shadow 0.12s linear;
+}
+
+.dl:hover {
+  filter: brightness(1.12);
+}
+
+.dl__arrow {
+  font-family: var(--font-ui);
+  font-size: 1.4em;
+  line-height: 1;
+}
+
+/* --------------------------------------------------------------- messages */
+
+.msg {
+  margin: 1.5rem 0 0;
+  padding: 0.9rem 1.1rem;
+  border-left: 3px solid var(--amber);
+  background: var(--raise);
+  color: var(--text-hi);
+  font-size: 0.95rem;
+}
+
+.msg--bad {
+  border-left-color: var(--magenta);
+}
+
+.hidden {
+  display: none;
+}
+
+/* --------------------------------------------------------------- 404 page */
+
+.lost {
+  font-family: var(--font-display);
+  font-size: clamp(4.5rem, 22vw, 10rem);
+  font-weight: 700;
+  line-height: 0.8;
+  letter-spacing: 0.02em;
+  /* line-height 0.8 crops the box tight to the glyphs, so the numeral needs
+     its own top margin or it crowds the wordmark above it on a phone. */
+  margin: 0.5rem 0 1.25rem;
+  color: var(--magenta);
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.55),
+    0 0 22px rgba(255, 46, 136, 0.6),
+    0 0 60px rgba(255, 46, 136, 0.25);
+}
+
+.lost__say {
+  margin: 0 0 2rem;
+  max-width: 26rem;
+  color: var(--text-lo);
+}
+
+/* ----------------------------------------------------------------- footer */
+
+.foot {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.foot a {
+  color: var(--text-lo);
+}
+
+a {
+  color: var(--cyan);
+}
+
+/* ------------------------------------------------------- reduced motion */
+
+/* Non-negotiable (Step 5). Kills the rain and every transition. */
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 26rem) {
+  .dl {
+    font-size: 1.15rem;
+    padding: 1.1rem 1.15rem;
+  }
 }
