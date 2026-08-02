@@ -32,6 +32,14 @@ variable "cloudflare_account_id" {
   type = string
 }
 
+# Zone ID for ygdcbtmc4u.uk — the same zone the relay uses. Supplied as a
+# GitHub Actions VARIABLE, not a secret: a zone id is an identifier, not a
+# credential, and treating it as a secret would only make it harder to read in
+# a plan diff where it is genuinely useful.
+variable "talvi_zone_id" {
+  type = string
+}
+
 resource "cloudflare_d1_database" "talvi_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-meta"
@@ -158,6 +166,28 @@ resource "cloudflare_workers_cron_trigger" "talvi_purge" {
   schedules = [
     { cron = "0 3 * * *" }
   ]
+}
+
+# Custom domain. WHY, since workers.dev worked fine: *.workers.dev is a shared
+# free-tier namespace with a lot of abuse in it, so corporate proxies, mail
+# filters and some DNS blocklists treat those links with suspicion. For an app
+# whose entire purpose is sending someone a link, a silently blocked link is a
+# total product failure — this is the one downside that actually bites.
+#
+# Same shape the relay already proves in production
+# (cloudflare_workers_custom_domain, which creates its own DNS record — no
+# separate cloudflare_dns_record needed).
+#
+# The workers.dev subdomain below stays ENABLED and untouched. Every link
+# already shared points at it, and turning it off would break every one of
+# them. Two hostnames serve the same Worker; new links use whichever host the
+# uploader visited.
+resource "cloudflare_workers_custom_domain" "talvi_web_custom_domain" {
+  account_id = var.cloudflare_account_id
+  zone_id    = var.talvi_zone_id
+  zone_name  = "ygdcbtmc4u.uk"
+  hostname   = "talvi.ygdcbtmc4u.uk"
+  service    = cloudflare_workers_script.talvi_web.script_name
 }
 
 resource "cloudflare_workers_script_subdomain" "talvi_web_subdomain" {
