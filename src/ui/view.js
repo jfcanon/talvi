@@ -45,6 +45,7 @@ export function viewPage(row, slug) {
 
   const content =
     '<div class="panel">' +
+    '<div class="tagline"><span class="tagline__box">record</span></div>' +
     '<div class="hud">' +
     // The filename gets its own full-width row and is NOT uppercased — it is
     // the one value on this page read character by character.
@@ -82,9 +83,6 @@ export function viewPage(row, slug) {
   return renderPage(row.filename, {
     lede: "INCOMING. One file is being held for you. Collect it before it expires.",
     content,
-    foot:
-      "The type above is only a label — every download is served as an opaque " +
-      "attachment, never rendered by this site.",
     script: true,
   });
 }

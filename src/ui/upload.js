@@ -5,11 +5,18 @@
 // send button is an ordinary button driven by XHR.
 import { renderPage } from "./layout.js";
 
+// 90 days removed 2026-08-02 at the human's request.
+//
+// The d90/ LIFECYCLE RULE in main.tf is deliberately left in place. TTL_DAYS
+// and the lifecycle prefixes are two halves of one contract (RUNBOOK §4), and
+// the danger runs in both directions: removing the rule while objects still
+// carry a d90/ prefix would leave those objects with nothing to expire them —
+// stored, and billed, forever. Dropping the option stops NEW 90-day uploads;
+// the rule stays until the last existing one has aged out.
 const TTLS = [
   { days: 1, label: "1 DAY" },
   { days: 7, label: "7 DAYS" },
   { days: 30, label: "30 DAYS" },
-  { days: 90, label: "90 DAYS" },
 ];
 
 const DEFAULT_TTL = 1; // A.4 — and it must stay one of the R2 lifecycle prefixes
@@ -41,6 +48,7 @@ export function uploadPage() {
     // gone; the accessible name is not — the input keeps a visually-hidden
     // <label>, so a screen reader still announces "choose a file" even though
     // sighted users see only the caret.
+    '<div class="tagline"><span class="tagline__box">input</span></div>' +
     '<label class="term" id="drop" for="file">' +
     '<span aria-hidden="true">&gt;</span>' +
     '<span class="term__caret" id="caret" aria-hidden="true"></span>' +
@@ -48,8 +56,9 @@ export function uploadPage() {
     '<span class="vh">Choose a file to upload</span>' +
     '<input class="vh" type="file" id="file">' +
     "</label>" +
+    '<div class="tagline"><span class="tagline__box">retention</span></div>' +
     '<fieldset class="ttl">' +
-    '<legend class="ttl__legend glitch">Delete after</legend>' +
+    '<legend class="vh">Delete after</legend>' +
     '<div class="ttl__row">' +
     ttlOptions() +
     "</div>" +
