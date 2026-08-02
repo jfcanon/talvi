@@ -48,12 +48,17 @@
     "0000000500000000",
   ];
 
+  // Same single green as the rest of the instrument (A.5b), spread across
+  // five steps so the hull still reads as a shaded object rather than a flat
+  // silhouette. The steps stay inside a narrow band around --phosphor
+  // (#7dffc4) and --phosphor-dim (#35d998) — near enough to belong to the
+  // palette, far enough apart to model form.
   const PALETTE = {
-    1: "#2b3a5c",
-    2: "#5c7fb0",
-    3: "#a8c8ec",
-    4: "#22e8ff",
-    5: "#ff2e88",
+    1: "#12503a", // shadowed edge
+    2: "#1f7f5c", // hull in shade
+    3: "#35d998", // hull lit
+    4: "#7dffc4", // canopy highlight
+    5: "#c6ffe8", // lamp core, the brightest pixel on the page's smallest object
   };
 
   function drawDrone(ctx, scale, lampOn) {
@@ -63,7 +68,7 @@
         const cell = row[x];
         if (cell === "0") continue;
         // Only the lamp and its glow blink; the hull stays put.
-        if ((cell === "4" || cell === "5") && !lampOn) continue;
+        if (cell === "5" && !lampOn) continue; // only the lamp core blinks
         ctx.fillStyle = PALETTE[cell];
         ctx.fillRect(x * scale, y * scale, scale, scale);
       }
