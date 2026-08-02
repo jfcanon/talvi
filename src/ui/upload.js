@@ -56,6 +56,14 @@ export function uploadPage() {
     "</div>" +
     '<p class="msg hidden" id="msg"></p>' +
     "</div>" +
+    // The drone patrols the gap between the machine and the small print, and
+    // the sound toggle sits beside it. Both are decoration with a control
+    // attached, so the control is a real <button> and the decoration is
+    // aria-hidden.
+    '<div class="ambient">' +
+    '<canvas class="ambient__drone" id="drone" aria-hidden="true"></canvas>' +
+    '<button class="btn btn--ghost btn--quiet" type="button" id="sound" aria-pressed="false">SOUND OFF</button>' +
+    "</div>" +
     '<div class="panel hidden" id="result">' +
     '<a class="result__link" id="link" href="#"></a>' +
     '<div class="result__actions">' +

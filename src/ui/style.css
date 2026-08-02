@@ -759,6 +759,51 @@ html::after {
   line-height: 1;
 }
 
+/* -------------------------------------------------------- ambient controls */
+
+.ambient {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* image-rendering: pixelated matters — without it the browser smooths a 3x
+   upscale into mush and the whole point of hand-placed pixels is lost. */
+.ambient__drone {
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px rgba(34, 232, 255, 0.35));
+}
+
+.btn--quiet {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  padding: 0.4rem 0.75rem;
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor-dim);
+  font-family: var(--font-console);
+}
+
+.btn--quiet:hover {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+  background: rgba(107, 255, 168, 0.08);
+  box-shadow: none;
+}
+
+/* Armed = "you had sound on last visit". Deliberately NOT auto-playing:
+   browsers block it, and unannounced audio is hostile. This only makes the
+   control easy to find for someone who wants it back. */
+.btn--quiet.is-armed {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+}
+
+.btn--quiet[aria-pressed="true"] {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
 /* --------------------------------------------------------------- messages */
 
 /* Machine output — the console voice, including failures. Amber for a
