@@ -73,14 +73,22 @@ body {
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   position: relative;
-  overflow-x: hidden;
+  /* NO overflow-x here. iOS Safari clips `position: fixed` descendants of an
+     element with overflow hidden, which silently killed the rain layer on
+     iPhone while it rendered fine on desktop Chrome. Sideways overflow is
+     prevented at the source instead — overflow-wrap on the long strings
+     (filenames, URLs) and minmax(0,…) on the grid tracks. */
 }
 
 /* The one ambient effect (A.5: pick one register, execute it well).
    Fine diagonal rain over the whole ground. Pointer-events none, fixed, and
-   behind everything. prefers-reduced-motion stops it dead — see the bottom of
-   this file. */
-body::before {
+   behind everything.
+
+   Attached to html, not body: body is the element that carries page padding
+   and (previously) overflow, and on iOS that combination is what broke it.
+   html is a clean, unclipped containing block. prefers-reduced-motion stops it
+   dead — see the bottom of this file. */
+html::before {
   content: "";
   position: fixed;
   inset: -25%;
@@ -194,11 +202,41 @@ body::before {
 
 /* ------------------------------------------------------------------ panels */
 
+/* Spacing is owned by the CONTAINER, not by the components inside it.
+   Every child previously carried its own margin-top, so the gap between any
+   two elements depended on which pair happened to be adjacent — and hiding one
+   (the progress bar, the result panel) left its neighbour's margin behind.
+   One `gap` per container instead: consistent by construction, and a hidden
+   child contributes no gap at all. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1.5rem;
+  min-width: 0; /* lets long filenames wrap instead of widening the column */
+}
+
 .panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.25rem;
   border: 1px solid var(--rule);
   background: var(--deep);
   padding: 1.4rem;
-  margin: 0 0 1.5rem;
+  margin: 0;
+  min-width: 0;
+}
+
+/* Children that must span the panel rather than hug its start. */
+.panel > .drop,
+.panel > .ttl,
+.panel > .prog,
+.panel > .msg,
+.panel > .meta,
+.panel > .dl,
+.panel > .result__link {
+  align-self: stretch;
 }
 
 /* -------------------------------------------------------------- drop zone */
@@ -273,7 +311,7 @@ body::before {
 /* --------------------------------------------------------------------- ttl */
 
 .ttl {
-  margin: 1.5rem 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
 }
@@ -340,7 +378,6 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  margin-top: 1.5rem;
   padding: 0.85rem 1.6rem;
   border: 0;
   background: var(--magenta);
@@ -373,7 +410,6 @@ body::before {
 }
 
 .btn--ghost {
-  margin: 0;
   padding: 0.55rem 1rem;
   background: transparent;
   border: 1px solid var(--cyan);
@@ -393,6 +429,38 @@ body::before {
   color: var(--amber);
 }
 
+/* ------------------------------------------------------------ touch states */
+
+/* A phone has no hover. Every :hover rule above is dead weight on iOS, which
+   left taps with no feedback at all — reported from an iPhone. :active gives
+   the press its own state; the tap-highlight override replaces Safari's grey
+   flash (which reads as a rendering glitch against neon) with something in
+   theme. Applied to controls only, never to the whole page. */
+.btn,
+.dl,
+.ttl__opt,
+.drop,
+.result__link {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* kills the 300ms double-tap-zoom delay */
+}
+
+.btn:active,
+.dl:active {
+  filter: brightness(0.92);
+  transform: translateY(1px);
+}
+
+.ttl__opt:active {
+  border-color: var(--cyan);
+  color: var(--text-hi);
+}
+
+.drop:active {
+  border-color: var(--magenta);
+  background-color: var(--raise);
+}
+
 /* Focus ring is amber on purpose: it is the one sign colour not used by any
    resting state, so it stays legible against both cyan and magenta glow.
    A.5's easiest failure mode is ambient glow swallowing the focus state. */
@@ -410,7 +478,7 @@ body::before {
 /* ---------------------------------------------------------------- progress */
 
 .prog {
-  margin-top: 1.5rem;
+  margin: 0;
 }
 
 .prog__track {
@@ -441,7 +509,7 @@ body::before {
 
 .result__link {
   display: block;
-  margin: 0 0 1rem;
+  margin: 0;
   padding: 0.85rem 1rem;
   border: 1px dashed var(--rule-lit);
   background: var(--void);
@@ -464,7 +532,7 @@ body::before {
 /* ------------------------------------------------------------- view page */
 
 .file__name {
-  margin: 0 0 1.25rem;
+  margin: 0;
   font-family: var(--font-display);
   font-size: clamp(1.6rem, 6vw, 2.6rem);
   font-weight: 700;
@@ -482,7 +550,7 @@ body::before {
   display: grid;
   grid-template-columns: minmax(6rem, auto) 1fr;
   gap: 0.55rem 1.25rem;
-  margin: 0 0 1.75rem;
+  margin: 0;
   padding: 0;
   font-size: 0.95rem;
 }
@@ -548,7 +616,7 @@ body::before {
 /* --------------------------------------------------------------- messages */
 
 .msg {
-  margin: 1.5rem 0 0;
+  margin: 0;
   padding: 0.9rem 1.1rem;
   border-left: 3px solid var(--amber);
   background: var(--raise);
@@ -574,7 +642,7 @@ body::before {
   letter-spacing: 0.02em;
   /* line-height 0.8 crops the box tight to the glyphs, so the numeral needs
      its own top margin or it crowds the wordmark above it on a phone. */
-  margin: 0.5rem 0 1.25rem;
+  margin: 0;
   color: var(--magenta);
   text-shadow:
     0 0 3px rgba(255, 255, 255, 0.55),
@@ -583,7 +651,7 @@ body::before {
 }
 
 .lost__say {
-  margin: 0 0 2rem;
+  margin: 0;
   max-width: 26rem;
   color: var(--text-lo);
 }
@@ -610,7 +678,7 @@ a {
 
 /* Non-negotiable (Step 5). Kills the rain and every transition. */
 @media (prefers-reduced-motion: reduce) {
-  body::before {
+  html::before {
     animation: none;
   }
 
