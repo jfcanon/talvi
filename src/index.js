@@ -488,70 +488,95 @@ async function logIdle(env, now, removed, bytes) {
   }
 }
 
+// Routing proper. Split out of `fetch` only so that HEAD can be routed as a
+// GET without every branch below needing to know that HEAD exists.
+//
+// `method` is a parameter rather than a read of `request.method`: on a HEAD
+// request the two differ on purpose, and reading it here would quietly undo
+// that.
+async function route(request, method, env, ctx) {
+  const { pathname } = new URL(request.url);
+
+  if (method !== "GET") {
+    // The only non-GET route in the app.
+    if (pathname === "/api/upload" && method === "POST") {
+      // JSON, not the themed HTML page: this is an API endpoint and its
+      // caller is the uploader script, which renders its own in-theme
+      // message from the status code.
+      if (!(await withinLimit(env.RL_UPLOAD, request))) {
+        return json({ error: "too many uploads; wait a minute" }, 429);
+      }
+      return handleUpload(request, env);
+    }
+    return notFound();
+  }
+
+  if (pathname === "/healthz") {
+    // Never rate limited: an uptime check that trips the limiter reports an
+    // outage that is not happening.
+    return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
+  }
+
+  if (pathname === "/robots.txt") {
+    return new Response(ROBOTS, {
+      status: 200,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": ROBOTS_TAG,
+        "cache-control": "public, max-age=86400",
+      },
+    });
+  }
+
+  // The themed "closed for the day" page, linked from the uploader when the
+  // API returns 503 and reachable directly.
+  if (pathname === "/closed") {
+    return new Response(closedPage(), { status: 503, headers: HTML_HEADERS });
+  }
+
+  // "/" — the upload page (Step 5). Until now this fell through to the 404.
+  if (pathname === "/") {
+    return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
+  }
+
+  if (pathname === "/s.css" || pathname === "/s.js") {
+    return handleAsset(pathname);
+  }
+
+  if (pathname === "/s.png") {
+    return handleSprite();
+  }
+
+  const match = SLUG_ROUTE.exec(pathname);
+  if (match) {
+    return handleSlugRoute(match, env, request, ctx);
+  }
+
+  return notFound();
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(purge(env));
   },
 
+  // HEAD is a GET whose response carries no body (RFC 9110 §9.3.2). Every route
+  // above tests `method === "GET"`, so until now a HEAD fell through to the 404
+  // on every path — `curl -I https://…/` read a 404's headers for a page that
+  // answers 200 to a browser.
+  //
+  // Routing HEAD as GET and dropping the body in one place keeps HEAD's headers
+  // identical to GET's by construction. A per-route HEAD branch would let the
+  // two drift, and the download route's octet-stream + attachment + nosniff +
+  // sandbox set is precisely the thing that must never drift.
+  //
+  // The body is discarded here rather than left to the runtime: an HTTP server
+  // must not put a body on a HEAD response, but "the layer below will strip it"
+  // is not a property this app should be depending on unverified.
   async fetch(request, env, ctx) {
-    const { pathname } = new URL(request.url);
-    const method = request.method;
-
-    if (method !== "GET") {
-      // The only non-GET route in the app.
-      if (pathname === "/api/upload" && method === "POST") {
-        // JSON, not the themed HTML page: this is an API endpoint and its
-        // caller is the uploader script, which renders its own in-theme
-        // message from the status code.
-        if (!(await withinLimit(env.RL_UPLOAD, request))) {
-          return json({ error: "too many uploads; wait a minute" }, 429);
-        }
-        return handleUpload(request, env);
-      }
-      return notFound();
-    }
-
-    if (pathname === "/healthz") {
-      // Never rate limited: an uptime check that trips the limiter reports an
-      // outage that is not happening.
-      return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
-    }
-
-    if (pathname === "/robots.txt") {
-      return new Response(ROBOTS, {
-        status: 200,
-        headers: {
-          "content-type": "text/plain; charset=utf-8",
-          "x-robots-tag": ROBOTS_TAG,
-          "cache-control": "public, max-age=86400",
-        },
-      });
-    }
-
-    // The themed "closed for the day" page, linked from the uploader when the
-    // API returns 503 and reachable directly.
-    if (pathname === "/closed") {
-      return new Response(closedPage(), { status: 503, headers: HTML_HEADERS });
-    }
-
-    // "/" — the upload page (Step 5). Until now this fell through to the 404.
-    if (pathname === "/") {
-      return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
-    }
-
-    if (pathname === "/s.css" || pathname === "/s.js") {
-      return handleAsset(pathname);
-    }
-
-    if (pathname === "/s.png") {
-      return handleSprite();
-    }
-
-    const match = SLUG_ROUTE.exec(pathname);
-    if (match) {
-      return handleSlugRoute(match, env, request, ctx);
-    }
-
-    return notFound();
+    const isHead = request.method === "HEAD";
+    const response = await route(request, isHead ? "GET" : request.method, env, ctx);
+    if (!isHead) return response;
+    return new Response(null, { status: response.status, headers: response.headers });
   },
 };
