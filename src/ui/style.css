@@ -864,7 +864,7 @@ html::after {
     grayscale(1) sepia(1) hue-rotate(88deg) saturate(2.6) brightness(1.05)
     drop-shadow(0 0 4px rgba(125, 255, 196, 0.4))
     drop-shadow(0 0 12px rgba(53, 217, 152, 0.25));
-  animation: walkcycle 0.85s steps(4, end) infinite;
+  animation: walkcycle 1.2s steps(4, end) infinite;
 }
 
 @keyframes walkcycle {
