@@ -21,7 +21,7 @@ jobs:
   trivy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - name: Trivy scan (vuln, secret, misconfig)
         run: |
@@ -55,7 +55,7 @@ jobs:
     env:
       GITLEAKS_VERSION: v8.30.1   # latest as of 2026-08-03
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
         # in .git/config, where any later artifact upload can carry it out of
         # the runner (zizmor's `artipacked`). Nothing here pushes.
@@ -82,7 +82,7 @@ jobs:
   zizmor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: '3.12' }
@@ -118,7 +118,7 @@ jobs:
         ports:
           - 9000:9000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
         # in .git/config, where any later artifact upload can carry it out of
         # the runner (zizmor's `artipacked`). Nothing here pushes.
