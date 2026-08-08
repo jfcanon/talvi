@@ -50,9 +50,14 @@ variable "clerk_publishable_key" {
   sensitive = true
 }
 
+# Optional: PEM from Clerk dashboard Keys section. When set, enables local
+# (networkless) __session verification in the Worker. When empty, Clerk's SDK
+# fetches the verification key from the API on first use and caches it — auth
+# works either way, jwtKey is a performance optimization, not a requirement.
 variable "clerk_jwt_key" {
   type      = string
   sensitive = true
+  default   = ""
 }
 
 resource "cloudflare_d1_database" "talvi_meta" {
