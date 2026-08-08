@@ -260,11 +260,12 @@ resource "cloudflare_workers_script_subdomain" "talvi_web_subdomain" {
 # the write endpoint only — /api/upload. /:slug and /:slug/d stay public
 # (sharing is the product), and the "/" upload page renders for everyone (the
 # POST is what requires the PIN). Mirrors ivlat's proven Access pattern.
-resource "cloudflare_zero_trust_access_identity_provider" "talvi_email_otp" {
-  account_id = var.cloudflare_account_id
-  name       = "talvi — Email one-time PIN"
-  type       = "onetimepin"
-  config     = {}
+# The onetimepin identity provider is ACCOUNT-scoped and already exists (ivlat
+# created it, id d4addd78-c730-401d-bca3-02ec5e2fa5dd) — Cloudflare rejects a
+# second one (code 12132). Reference the existing provider by its UUID.
+data "cloudflare_zero_trust_access_identity_provider" "email_otp" {
+  account_id           = var.cloudflare_account_id
+  identity_provider_id = "d4addd78-c730-401d-bca3-02ec5e2fa5dd"
 }
 
 resource "cloudflare_zero_trust_access_application" "talvi_upload" {
@@ -272,7 +273,7 @@ resource "cloudflare_zero_trust_access_application" "talvi_upload" {
   name         = "talvi — upload"
   domain       = "talvi.ygdcbtmc4u.uk/api/upload"
   type         = "self_hosted"
-  allowed_idps = [cloudflare_zero_trust_access_identity_provider.talvi_email_otp.id]
+  allowed_idps = [data.cloudflare_zero_trust_access_identity_provider.email_otp.id]
   policies = [
     {
       id         = cloudflare_zero_trust_access_policy.talvi_owner_email.id
