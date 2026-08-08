@@ -745,13 +745,13 @@ async function route(request, method, env, ctx) {
     return notFound();
   }
 
-  return routePage(request, env, pathname);
+  return routePage(request, env, ctx, pathname);
 }
 
 // GET page routes — extracted out of `route` for the cognitive-complexity gate.
 // Kept together (not merged into routeStatic) because these carry the auth
 // gate for "/" and "/sign-in".
-async function routePage(request, env, pathname) {
+async function routePage(request, env, ctx, pathname) {
   if (pathname === "/healthz") {
     // Never rate limited: an uptime check that trips the limiter reports an
     // outage that is not happening.
