@@ -1,302 +1,316 @@
-name: Security scans
+# =============================================================================
+# TEMPORARILY DISABLED — 2026-08-08
+# -----------------------------------------------------------------------------
+# All security scanning is off while the product is being finished. CI minutes
+# exhausted the GitHub Free 2,000 min/month quota and blocked Actions entirely,
+# so the scans (Trivy, gitleaks, zizmor, SonarQube) were commented out rather
+# than removed. They will be re-enabled after delivery (SAST/DAST/appsec).
+#
+# To restore the enabled version:
+#   git log --oneline -- .github/workflows/security.yml
+#   git show <last-enabled-commit>:.github/workflows/security.yml #     > .github/workflows/security.yml
+# =============================================================================
 
-on:
-  pull_request:
-  push:
-    branches: [main, master]
-
-permissions:
-  contents: read
-
-jobs:
-  # ---------------------------------------------------------------------------
-  # Trivy — dependency vulns, IaC misconfiguration, and secrets.
-  #
-  # Run through the official image rather than aquasecurity/trivy-action: the
-  # action's tag names move around (0.28.0 does not exist), and Docker is
-  # already installed on the GitHub-hosted runner. Nothing here runs locally.
-  # `:0.58.0` is pinned deliberately — `:latest` would make this job's verdict
-  # depend on the day it ran.
-  # ---------------------------------------------------------------------------
-  trivy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - name: Trivy scan (vuln, secret, misconfig)
-        run: |
-          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.0 \
-            fs . \
-            --scanners vuln,secret,misconfig \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --exit-code 1 \
-            --no-progress
-
-  # ---------------------------------------------------------------------------
-  # Gitleaks — secrets across the FULL GIT HISTORY, which is the gap Trivy's
-  # filesystem scan leaves open. Trivy sees the working tree; gitleaks sees
-  # every commit ever made. This repo exists partly because a leak got into
-  # commit metadata once and had to be scrubbed retroactively.
-  #
-  # Complements leak-guard rather than duplicating it: leak-guard knows a
-  # specific list of forbidden personal strings; gitleaks knows what a
-  # credential looks like in general (API keys, tokens, private keys).
-  #
-  # The version was previously resolved at run time, because the exact
-  # published tag could not be verified while the job was first written. It is
-  # green and the tag is now known, so it is pinned: a scanner that silently
-  # follows `latest` can change verdict between two runs of the same commit,
-  # and "the security job started failing and nothing changed" is not a state
-  # this repo should be able to reach. Bump it deliberately.
-  # ---------------------------------------------------------------------------
-  gitleaks:
-    runs-on: ubuntu-latest
-    env:
-      GITLEAKS_VERSION: v8.30.1   # latest as of 2026-08-03
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
-        # in .git/config, where any later artifact upload can carry it out of
-        # the runner (zizmor's `artipacked`). Nothing here pushes.
-        with: { fetch-depth: 0, persist-credentials: false }   # full history — the entire point of this job
-
-      - name: Scan full history for secrets
-        run: |
-          echo "gitleaks ${GITLEAKS_VERSION} (pinned)"
-          docker run --rm -v "$PWD:/repo" \
-            "ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION}" \
-            detect --source=/repo --config=/repo/.gitleaks.toml \
-                   --redact --verbose --exit-code 1
-
-  # ---------------------------------------------------------------------------
-  # zizmor — static analysis of the workflow files themselves.
-  #
-  # Worth its own job here specifically because these workflows handle real
-  # credentials (Cloudflare token, R2 keys, FORBIDDEN_STRINGS). It catches
-  # template-expression injection, pull_request_target misuse, unpinned
-  # actions, and over-broad `permissions:` — the exact failure modes that turn
-  # a CI file into a credential-exfiltration path. Nothing else in this
-  # pipeline looks at the pipeline.
-  # ---------------------------------------------------------------------------
-  zizmor:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: { python-version: '3.12' }
-      - name: Audit workflows
-        # Pinned for the same reason as gitleaks: an unpinned linter can change
-        # its verdict on an unchanged commit. 1.29.0 exists; 1.28.0 is the
-        # version this repo was last green on, so the bump is its own change.
-        run: |
-          pip install --quiet zizmor==1.28.0
-          zizmor --version   # asserts the pin took, rather than announcing success
-          zizmor --persona=regular .github/workflows/
-
-  # ---------------------------------------------------------------------------
-  # SonarQube Community as an EPHEMERAL service container — zero cost, zero
-  # standing infrastructure, works on a private repo (SonarCloud's free tier is
-  # public-repos-only). Tradeoff: no history between runs, so every analysis is
-  # a fresh baseline and "new code" conditions are meaningless. The quality
-  # gate below is therefore written entirely against OVERALL-code metrics.
-  # ---------------------------------------------------------------------------
-  sonarqube:
-    runs-on: ubuntu-latest
-    # SonarQube's fixed first-boot credentials. Held in an env var rather than
-    # written inline on each `curl -u ...` because gitleaks' curl-auth-user
-    # rule correctly flags inline credentials, and the right response to a
-    # scanner finding is to stop emitting the pattern — not to allowlist it.
-    # The server this authenticates to is created and destroyed inside this
-    # job and is never reachable from outside the runner.
-    env:
-      SONAR_AUTH: admin:admin
-    services:
-      sonarqube:
-        image: sonarqube:community
-        ports:
-          - 9000:9000
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
-        # in .git/config, where any later artifact upload can carry it out of
-        # the runner (zizmor's `artipacked`). Nothing here pushes.
-        with: { fetch-depth: 0, persist-credentials: false }
-
-      - name: Wait for SonarQube to come up
-        run: |
-          for i in $(seq 1 60); do
-            if curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "SonarQube never reached UP"; exit 1
-
-      # Ephemeral server, default credentials, destroyed with the runner —
-      # nothing here is a real secret, but mask the token anyway.
-      - name: Generate analysis token
-        run: |
-          TOKEN=$(curl -s -u "$SONAR_AUTH" -X POST \
-            "http://localhost:9000/api/user_tokens/generate?name=ci-$GITHUB_RUN_ID" \
-            | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
-          if [ -z "$TOKEN" ]; then echo "token generation failed"; exit 1; fi
-          echo "::add-mask::$TOKEN"
-          echo "SONAR_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-
-      # The built-in "Sonar way" gate only grades NEW code, which on a fresh
-      # ephemeral server means it passes almost unconditionally — it passed on
-      # the very first run before any of this project's code was reviewed.
-      # This gate replaces it with absolute thresholds on the whole codebase,
-      # so the verdict means something.
-      - name: Create and apply the talvi quality gate
-        run: |
-          set -e
-          GATE="talvi-strict"
-          curl -sf -u "$SONAR_AUTH" -X POST \
-            "http://localhost:9000/api/qualitygates/create?name=$GATE" > /dev/null
-
-          # metric | operator | threshold  — fails the build when breached.
-          # Ratings: 1=A. "GT 1" therefore means "anything worse than A fails".
-          add() {
-            curl -sf -u "$SONAR_AUTH" -X POST \
-              "http://localhost:9000/api/qualitygates/create_condition" \
-              --data-urlencode "gateName=$GATE" \
-              --data-urlencode "metric=$1" \
-              --data-urlencode "op=$2" \
-              --data-urlencode "error=$3" > /dev/null
-            echo "  gate condition: $1 $2 $3"
-          }
-
-          add security_rating            GT 1    # no vulnerability worse than A
-          add reliability_rating         GT 1    # no bug worse than A
-          add sqale_rating               GT 1    # maintainability A
-          add security_hotspots_reviewed LT 100  # every hotspot triaged, none ignored
-          add blocker_violations         GT 0    # zero blockers, absolute
-          add critical_violations        GT 0    # zero criticals, absolute
-          add duplicated_lines_density   GT 3    # copy-paste ceiling
-
-          curl -sf -u "$SONAR_AUTH" -X POST \
-            "http://localhost:9000/api/qualitygates/select" \
-            --data-urlencode "gateName=$GATE" \
-            --data-urlencode "projectKey=talvi" > /dev/null || true
-          echo "Gate '$GATE' created and selected."
-
-      # The project must exist before the gate can be bound to it, and it does
-      # not exist until the first analysis. So: analyze, bind, analyze again.
-      # The second run is the one whose gate verdict is authoritative.
-      - name: Analyze (first pass — creates the project)
-        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
-        env:
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
-          SONAR_HOST_URL: http://localhost:9000
-        with:
-          args: >
-            -Dsonar.projectKey=talvi
-            -Dsonar.projectName=talvi
-            -Dsonar.sources=.
-            -Dsonar.exclusions=node_modules/**,dist/**,src/generated/**
-
-      - name: Bind the strict gate to the project
-        run: |
-          curl -sf -u "$SONAR_AUTH" -X POST \
-            "http://localhost:9000/api/qualitygates/select" \
-            --data-urlencode "gateName=talvi-strict" \
-            --data-urlencode "projectKey=talvi"
-          echo "bound"
-
-      - name: Analyze (second pass — this verdict is the gate)
-        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
-        env:
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
-          SONAR_HOST_URL: http://localhost:9000
-        with:
-          args: >
-            -Dsonar.projectKey=talvi
-            -Dsonar.projectName=talvi
-            -Dsonar.sources=.
-            -Dsonar.exclusions=node_modules/**,dist/**,src/generated/**
-            -Dsonar.qualitygate.wait=true
-
-      # The formatter lives in its own file with a QUOTED heredoc delimiter.
-      # Inlining it into `python3 -c '...'` inside a YAML block scalar means
-      # three nested quoting layers, and the escaped double-quotes silently
-      # became a SyntaxError the first time this ran.
-      - name: Publish issue summary
-        if: always()
-        run: |
-          cat > /tmp/fmt.py <<'PYEOF'
-          import json, sys
-          issues = json.load(sys.stdin).get("issues", [])
-          print("## SonarQube issues (ephemeral run — no history)")
-          print()
-          print("Total: %d" % len(issues))
-          print()
-          if issues:
-              print("| Severity | Rule | File | Line | Message |")
-              print("|---|---|---|---|---|")
-              for i in issues:
-                  comp = i.get("component", "").split(":")[-1]
-                  msg = i.get("message", "").replace("|", "/")
-                  print("| %s | %s | %s | %s | %s |" % (
-                      i.get("severity", ""), i.get("rule", ""),
-                      comp, i.get("line", ""), msg))
-          PYEOF
-          # tee, not >> : this diagnosis used to land ONLY in the job summary,
-          # which the GitHub API does not expose. That made a failing gate
-          # readable exclusively by a human in the web UI — so an agent, or
-          # anyone reading `gh run view --log`, could see "FAILED" and nothing
-          # about why. It is the reason relay's identical failure sat
-          # undiagnosed. The log is the artifact everything can read; the
-          # summary is the convenience. Write both.
-          curl -s -u "$SONAR_AUTH" \
-            "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
-            | python3 /tmp/fmt.py | tee -a "$GITHUB_STEP_SUMMARY"
-
-          # WHICH condition failed, with the actual measured value. Without
-          # this the gate reports a verdict and withholds its reasoning, and
-          # the only way forward is guesswork — which is how this project
-          # previously shipped a confident, wrong root-cause analysis.
-          cat > /tmp/gate.py <<'PYEOF'
-          import json, sys
-          d = json.load(sys.stdin).get("projectStatus", {})
-          print()
-          print("### Quality gate verdict: %s" % d.get("status", "?"))
-          print()
-          print("| Metric | Comparator | Threshold | Actual | Status |")
-          print("|---|---|---|---|---|")
-          for c in d.get("conditions", []):
-              print("| %s | %s | %s | %s | **%s** |" % (
-                  c.get("metricKey", ""), c.get("comparator", ""),
-                  c.get("errorThreshold", ""), c.get("actualValue", ""),
-                  c.get("status", "")))
-          PYEOF
-          curl -s -u "$SONAR_AUTH" \
-            "http://localhost:9000/api/qualitygates/project_status?projectKey=talvi" \
-            | python3 /tmp/gate.py | tee -a "$GITHUB_STEP_SUMMARY"
-
-          # Hotspots are NOT issues and do not appear in the issues search
-          # above, but security_hotspots_reviewed is one of the gate
-          # conditions — so a hotspot can fail the build while the issue table
-          # reads "Total: 0". List them separately or that combination is
-          # unexplainable from the log.
-          cat > /tmp/hs.py <<'PYEOF'
-          import json, sys
-          hs = json.load(sys.stdin).get("hotspots", [])
-          print()
-          print("### Security hotspots awaiting review: %d" % len(hs))
-          if hs:
-              print()
-              print("| Rule | File | Line | Status | Message |")
-              print("|---|---|---|---|---|")
-              for h in hs:
-                  comp = h.get("component", "").split(":")[-1]
-                  msg = h.get("message", "").replace("|", "/")
-                  print("| %s | %s | %s | %s | %s |" % (
-                      h.get("ruleKey", ""), comp, h.get("line", ""),
-                      h.get("status", ""), msg))
-          PYEOF
-          curl -s -u "$SONAR_AUTH" \
-            "http://localhost:9000/api/hotspots/search?projectKey=talvi&ps=500" \
-            | python3 /tmp/hs.py | tee -a "$GITHUB_STEP_SUMMARY"
+# name: Security scans
+#
+# on:
+#   pull_request:
+#   push:
+#     branches: [main, master]
+#
+# permissions:
+#   contents: read
+#
+# jobs:
+#   # ---------------------------------------------------------------------------
+#   # Trivy — dependency vulns, IaC misconfiguration, and secrets.
+#   #
+#   # Run through the official image rather than aquasecurity/trivy-action: the
+#   # action's tag names move around (0.28.0 does not exist), and Docker is
+#   # already installed on the GitHub-hosted runner. Nothing here runs locally.
+#   # `:0.58.0` is pinned deliberately — `:latest` would make this job's verdict
+#   # depend on the day it ran.
+#   # ---------------------------------------------------------------------------
+#   trivy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#         with: { persist-credentials: false }
+#       - name: Trivy scan (vuln, secret, misconfig)
+#         run: |
+#           docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.0 \
+#             fs . \
+#             --scanners vuln,secret,misconfig \
+#             --severity CRITICAL,HIGH \
+#             --ignore-unfixed \
+#             --exit-code 1 \
+#             --no-progress
+#
+#   # ---------------------------------------------------------------------------
+#   # Gitleaks — secrets across the FULL GIT HISTORY, which is the gap Trivy's
+#   # filesystem scan leaves open. Trivy sees the working tree; gitleaks sees
+#   # every commit ever made. This repo exists partly because a leak got into
+#   # commit metadata once and had to be scrubbed retroactively.
+#   #
+#   # Complements leak-guard rather than duplicating it: leak-guard knows a
+#   # specific list of forbidden personal strings; gitleaks knows what a
+#   # credential looks like in general (API keys, tokens, private keys).
+#   #
+#   # The version was previously resolved at run time, because the exact
+#   # published tag could not be verified while the job was first written. It is
+#   # green and the tag is now known, so it is pinned: a scanner that silently
+#   # follows `latest` can change verdict between two runs of the same commit,
+#   # and "the security job started failing and nothing changed" is not a state
+#   # this repo should be able to reach. Bump it deliberately.
+#   # ---------------------------------------------------------------------------
+#   gitleaks:
+#     runs-on: ubuntu-latest
+#     env:
+#       GITLEAKS_VERSION: v8.30.1   # latest as of 2026-08-03
+#     steps:
+#       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#         # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
+#         # in .git/config, where any later artifact upload can carry it out of
+#         # the runner (zizmor's `artipacked`). Nothing here pushes.
+#         with: { fetch-depth: 0, persist-credentials: false }   # full history — the entire point of this job
+#
+#       - name: Scan full history for secrets
+#         run: |
+#           echo "gitleaks ${GITLEAKS_VERSION} (pinned)"
+#           docker run --rm -v "$PWD:/repo" \
+#             "ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION}" \
+#             detect --source=/repo --config=/repo/.gitleaks.toml \
+#                    --redact --verbose --exit-code 1
+#
+#   # ---------------------------------------------------------------------------
+#   # zizmor — static analysis of the workflow files themselves.
+#   #
+#   # Worth its own job here specifically because these workflows handle real
+#   # credentials (Cloudflare token, R2 keys, FORBIDDEN_STRINGS). It catches
+#   # template-expression injection, pull_request_target misuse, unpinned
+#   # actions, and over-broad `permissions:` — the exact failure modes that turn
+#   # a CI file into a credential-exfiltration path. Nothing else in this
+#   # pipeline looks at the pipeline.
+#   # ---------------------------------------------------------------------------
+#   zizmor:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#         with: { persist-credentials: false }
+#       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+#         with: { python-version: '3.12' }
+#       - name: Audit workflows
+#         # Pinned for the same reason as gitleaks: an unpinned linter can change
+#         # its verdict on an unchanged commit. 1.29.0 exists; 1.28.0 is the
+#         # version this repo was last green on, so the bump is its own change.
+#         run: |
+#           pip install --quiet zizmor==1.28.0
+#           zizmor --version   # asserts the pin took, rather than announcing success
+#           zizmor --persona=regular .github/workflows/
+#
+#   # ---------------------------------------------------------------------------
+#   # SonarQube Community as an EPHEMERAL service container — zero cost, zero
+#   # standing infrastructure, works on a private repo (SonarCloud's free tier is
+#   # public-repos-only). Tradeoff: no history between runs, so every analysis is
+#   # a fresh baseline and "new code" conditions are meaningless. The quality
+#   # gate below is therefore written entirely against OVERALL-code metrics.
+#   # ---------------------------------------------------------------------------
+#   sonarqube:
+#     runs-on: ubuntu-latest
+#     # SonarQube's fixed first-boot credentials. Held in an env var rather than
+#     # written inline on each `curl -u ...` because gitleaks' curl-auth-user
+#     # rule correctly flags inline credentials, and the right response to a
+#     # scanner finding is to stop emitting the pattern — not to allowlist it.
+#     # The server this authenticates to is created and destroyed inside this
+#     # job and is never reachable from outside the runner.
+#     env:
+#       SONAR_AUTH: admin:admin
+#     services:
+#       sonarqube:
+#         image: sonarqube:community
+#         ports:
+#           - 9000:9000
+#     steps:
+#       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#         # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
+#         # in .git/config, where any later artifact upload can carry it out of
+#         # the runner (zizmor's `artipacked`). Nothing here pushes.
+#         with: { fetch-depth: 0, persist-credentials: false }
+#
+#       - name: Wait for SonarQube to come up
+#         run: |
+#           for i in $(seq 1 60); do
+#             if curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; then
+#               exit 0
+#             fi
+#             sleep 5
+#           done
+#           echo "SonarQube never reached UP"; exit 1
+#
+#       # Ephemeral server, default credentials, destroyed with the runner —
+#       # nothing here is a real secret, but mask the token anyway.
+#       - name: Generate analysis token
+#         run: |
+#           TOKEN=$(curl -s -u "$SONAR_AUTH" -X POST \
+#             "http://localhost:9000/api/user_tokens/generate?name=ci-$GITHUB_RUN_ID" \
+#             | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+#           if [ -z "$TOKEN" ]; then echo "token generation failed"; exit 1; fi
+#           echo "::add-mask::$TOKEN"
+#           echo "SONAR_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+#
+#       # The built-in "Sonar way" gate only grades NEW code, which on a fresh
+#       # ephemeral server means it passes almost unconditionally — it passed on
+#       # the very first run before any of this project's code was reviewed.
+#       # This gate replaces it with absolute thresholds on the whole codebase,
+#       # so the verdict means something.
+#       - name: Create and apply the talvi quality gate
+#         run: |
+#           set -e
+#           GATE="talvi-strict"
+#           curl -sf -u "$SONAR_AUTH" -X POST \
+#             "http://localhost:9000/api/qualitygates/create?name=$GATE" > /dev/null
+#
+#           # metric | operator | threshold  — fails the build when breached.
+#           # Ratings: 1=A. "GT 1" therefore means "anything worse than A fails".
+#           add() {
+#             curl -sf -u "$SONAR_AUTH" -X POST \
+#               "http://localhost:9000/api/qualitygates/create_condition" \
+#               --data-urlencode "gateName=$GATE" \
+#               --data-urlencode "metric=$1" \
+#               --data-urlencode "op=$2" \
+#               --data-urlencode "error=$3" > /dev/null
+#             echo "  gate condition: $1 $2 $3"
+#           }
+#
+#           add security_rating            GT 1    # no vulnerability worse than A
+#           add reliability_rating         GT 1    # no bug worse than A
+#           add sqale_rating               GT 1    # maintainability A
+#           add security_hotspots_reviewed LT 100  # every hotspot triaged, none ignored
+#           add blocker_violations         GT 0    # zero blockers, absolute
+#           add critical_violations        GT 0    # zero criticals, absolute
+#           add duplicated_lines_density   GT 3    # copy-paste ceiling
+#
+#           curl -sf -u "$SONAR_AUTH" -X POST \
+#             "http://localhost:9000/api/qualitygates/select" \
+#             --data-urlencode "gateName=$GATE" \
+#             --data-urlencode "projectKey=talvi" > /dev/null || true
+#           echo "Gate '$GATE' created and selected."
+#
+#       # The project must exist before the gate can be bound to it, and it does
+#       # not exist until the first analysis. So: analyze, bind, analyze again.
+#       # The second run is the one whose gate verdict is authoritative.
+#       - name: Analyze (first pass — creates the project)
+#         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+#         env:
+#           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+#           SONAR_HOST_URL: http://localhost:9000
+#         with:
+#           args: >
+#             -Dsonar.projectKey=talvi
+#             -Dsonar.projectName=talvi
+#             -Dsonar.sources=.
+#             -Dsonar.exclusions=node_modules/**,dist/**,src/generated/**
+#
+#       - name: Bind the strict gate to the project
+#         run: |
+#           curl -sf -u "$SONAR_AUTH" -X POST \
+#             "http://localhost:9000/api/qualitygates/select" \
+#             --data-urlencode "gateName=talvi-strict" \
+#             --data-urlencode "projectKey=talvi"
+#           echo "bound"
+#
+#       - name: Analyze (second pass — this verdict is the gate)
+#         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+#         env:
+#           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+#           SONAR_HOST_URL: http://localhost:9000
+#         with:
+#           args: >
+#             -Dsonar.projectKey=talvi
+#             -Dsonar.projectName=talvi
+#             -Dsonar.sources=.
+#             -Dsonar.exclusions=node_modules/**,dist/**,src/generated/**
+#             -Dsonar.qualitygate.wait=true
+#
+#       # The formatter lives in its own file with a QUOTED heredoc delimiter.
+#       # Inlining it into `python3 -c '...'` inside a YAML block scalar means
+#       # three nested quoting layers, and the escaped double-quotes silently
+#       # became a SyntaxError the first time this ran.
+#       - name: Publish issue summary
+#         if: always()
+#         run: |
+#           cat > /tmp/fmt.py <<'PYEOF'
+#           import json, sys
+#           issues = json.load(sys.stdin).get("issues", [])
+#           print("## SonarQube issues (ephemeral run — no history)")
+#           print()
+#           print("Total: %d" % len(issues))
+#           print()
+#           if issues:
+#               print("| Severity | Rule | File | Line | Message |")
+#               print("|---|---|---|---|---|")
+#               for i in issues:
+#                   comp = i.get("component", "").split(":")[-1]
+#                   msg = i.get("message", "").replace("|", "/")
+#                   print("| %s | %s | %s | %s | %s |" % (
+#                       i.get("severity", ""), i.get("rule", ""),
+#                       comp, i.get("line", ""), msg))
+#           PYEOF
+#           # tee, not >> : this diagnosis used to land ONLY in the job summary,
+#           # which the GitHub API does not expose. That made a failing gate
+#           # readable exclusively by a human in the web UI — so an agent, or
+#           # anyone reading `gh run view --log`, could see "FAILED" and nothing
+#           # about why. It is the reason relay's identical failure sat
+#           # undiagnosed. The log is the artifact everything can read; the
+#           # summary is the convenience. Write both.
+#           curl -s -u "$SONAR_AUTH" \
+#             "http://localhost:9000/api/issues/search?componentKeys=talvi&ps=500" \
+#             | python3 /tmp/fmt.py | tee -a "$GITHUB_STEP_SUMMARY"
+#
+#           # WHICH condition failed, with the actual measured value. Without
+#           # this the gate reports a verdict and withholds its reasoning, and
+#           # the only way forward is guesswork — which is how this project
+#           # previously shipped a confident, wrong root-cause analysis.
+#           cat > /tmp/gate.py <<'PYEOF'
+#           import json, sys
+#           d = json.load(sys.stdin).get("projectStatus", {})
+#           print()
+#           print("### Quality gate verdict: %s" % d.get("status", "?"))
+#           print()
+#           print("| Metric | Comparator | Threshold | Actual | Status |")
+#           print("|---|---|---|---|---|")
+#           for c in d.get("conditions", []):
+#               print("| %s | %s | %s | %s | **%s** |" % (
+#                   c.get("metricKey", ""), c.get("comparator", ""),
+#                   c.get("errorThreshold", ""), c.get("actualValue", ""),
+#                   c.get("status", "")))
+#           PYEOF
+#           curl -s -u "$SONAR_AUTH" \
+#             "http://localhost:9000/api/qualitygates/project_status?projectKey=talvi" \
+#             | python3 /tmp/gate.py | tee -a "$GITHUB_STEP_SUMMARY"
+#
+#           # Hotspots are NOT issues and do not appear in the issues search
+#           # above, but security_hotspots_reviewed is one of the gate
+#           # conditions — so a hotspot can fail the build while the issue table
+#           # reads "Total: 0". List them separately or that combination is
+#           # unexplainable from the log.
+#           cat > /tmp/hs.py <<'PYEOF'
+#           import json, sys
+#           hs = json.load(sys.stdin).get("hotspots", [])
+#           print()
+#           print("### Security hotspots awaiting review: %d" % len(hs))
+#           if hs:
+#               print()
+#               print("| Rule | File | Line | Status | Message |")
+#               print("|---|---|---|---|---|")
+#               for h in hs:
+#                   comp = h.get("component", "").split(":")[-1]
+#                   msg = h.get("message", "").replace("|", "/")
+#                   print("| %s | %s | %s | %s | %s |" % (
+#                       h.get("ruleKey", ""), comp, h.get("line", ""),
+#                       h.get("status", ""), msg))
+#           PYEOF
+#           curl -s -u "$SONAR_AUTH" \
+#             "http://localhost:9000/api/hotspots/search?projectKey=talvi&ps=500" \
+#             | python3 /tmp/hs.py | tee -a "$GITHUB_STEP_SUMMARY"
+#

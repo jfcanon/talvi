@@ -1,67 +1,81 @@
-name: Guards
+# =============================================================================
+# TEMPORARILY DISABLED — 2026-08-08
+# -----------------------------------------------------------------------------
+# The identity/leak guards are off while the product is being finished. CI
+# minutes exhausted the GitHub Free 2,000 min/month quota and blocked Actions
+# entirely, so the guards were commented out rather than removed. They will be
+# re-enabled after delivery.
+#
+# To restore the enabled version:
+#   git log --oneline -- .github/workflows/guards.yml
+#   git show <last-enabled-commit>:.github/workflows/guards.yml #     > .github/workflows/guards.yml
+# =============================================================================
 
-on:
-  pull_request:
-  push:
-    branches: [main, master]
-
-permissions:
-  contents: read
-
-jobs:
-  identity-guard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
-        # in .git/config, where any later step (or artifact upload) can carry it
-        # out of the runner (zizmor's `artipacked`). Nothing here pushes, so the
-        # token is not needed after the clone. fetch-depth: 0 is still required:
-        # identity-guard reads full history, which the credential does not affect.
-        with: { fetch-depth: 0, persist-credentials: false }
-      - name: Enforce commit identity (pull_request)
-        if: github.event_name == 'pull_request'
-        run: |
-          RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-          # Authored commits: jfcanon, nothing else. No exceptions here.
-          BAD=$(git log --no-merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
-                | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
-          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY (authored):"; echo "$BAD"; exit 1; fi
-          # Merge commits only: GitHub's merge button signs as GitHub <noreply@github.com>.
-          # That is GitHub's own bot identity, not a personal one, so it is tolerated
-          # HERE ONLY — on commits with 2+ parents. Everything a human wrote is still
-          # held to jfcanon by the check above.
-          BADM=$(git log --merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
-                 | grep -v -e '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' \
-                           -e '^GitHub <noreply@github\.com>$' || true)
-          if [ -n "$BADM" ]; then echo "FORBIDDEN COMMIT IDENTITY (merge):"; echo "$BADM"; exit 1; fi
-      - name: Enforce commit identity (push)
-        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-        run: |
-          RANGE="${{ github.event.before }}..${{ github.sha }}"
-          # Authored commits: jfcanon, nothing else. No exceptions here.
-          BAD=$(git log --no-merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
-                | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
-          if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY (authored):"; echo "$BAD"; exit 1; fi
-          # Merge commits only — see the pull_request step for the rationale. This is
-          # the branch that was failing: every merge to main produced a GitHub-authored
-          # merge commit, so Guards went red on main while passing on the PR.
-          BADM=$(git log --merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
-                 | grep -v -e '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' \
-                           -e '^GitHub <noreply@github\.com>$' || true)
-          if [ -n "$BADM" ]; then echo "FORBIDDEN COMMIT IDENTITY (merge):"; echo "$BADM"; exit 1; fi
-
-  leak-guard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - name: Scan for forbidden strings
-        env:
-          FORBIDDEN_STRINGS: ${{ secrets.FORBIDDEN_STRINGS }}
-        run: |
-          printf '%s\n' "$FORBIDDEN_STRINGS" | grep -v '^$' > /tmp/forbidden.txt
-          if [ -s /tmp/forbidden.txt ] && grep -ril -f /tmp/forbidden.txt . --exclude-dir=.git > /tmp/hits.txt 2>/dev/null; then
-            echo "LEAK DETECTED in the following files:"; cat /tmp/hits.txt; exit 1
-          fi
-          echo "leak-guard: clean"
+# name: Guards
+#
+# on:
+#   pull_request:
+#   push:
+#     branches: [main, master]
+#
+# permissions:
+#   contents: read
+#
+# jobs:
+#   identity-guard:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#         # persist-credentials: false — checkout otherwise leaves GITHUB_TOKEN
+#         # in .git/config, where any later step (or artifact upload) can carry it
+#         # out of the runner (zizmor's `artipacked`). Nothing here pushes, so the
+#         # token is not needed after the clone. fetch-depth: 0 is still required:
+#         # identity-guard reads full history, which the credential does not affect.
+#         with: { fetch-depth: 0, persist-credentials: false }
+#       - name: Enforce commit identity (pull_request)
+#         if: github.event_name == 'pull_request'
+#         run: |
+#           RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+#           # Authored commits: jfcanon, nothing else. No exceptions here.
+#           BAD=$(git log --no-merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+#                 | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
+#           if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY (authored):"; echo "$BAD"; exit 1; fi
+#           # Merge commits only: GitHub's merge button signs as GitHub <noreply@github.com>.
+#           # That is GitHub's own bot identity, not a personal one, so it is tolerated
+#           # HERE ONLY — on commits with 2+ parents. Everything a human wrote is still
+#           # held to jfcanon by the check above.
+#           BADM=$(git log --merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+#                  | grep -v -e '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' \
+#                            -e '^GitHub <noreply@github\.com>$' || true)
+#           if [ -n "$BADM" ]; then echo "FORBIDDEN COMMIT IDENTITY (merge):"; echo "$BADM"; exit 1; fi
+#       - name: Enforce commit identity (push)
+#         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+#         run: |
+#           RANGE="${{ github.event.before }}..${{ github.sha }}"
+#           # Authored commits: jfcanon, nothing else. No exceptions here.
+#           BAD=$(git log --no-merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+#                 | grep -v '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' || true)
+#           if [ -n "$BAD" ]; then echo "FORBIDDEN COMMIT IDENTITY (authored):"; echo "$BAD"; exit 1; fi
+#           # Merge commits only — see the pull_request step for the rationale. This is
+#           # the branch that was failing: every merge to main produced a GitHub-authored
+#           # merge commit, so Guards went red on main while passing on the PR.
+#           BADM=$(git log --merges --format='%an <%ae>%n%cn <%ce>' "$RANGE" | sort -u \
+#                  | grep -v -e '^jfcanon <148238747+jfcanon@users\.noreply\.github\.com>$' \
+#                            -e '^GitHub <noreply@github\.com>$' || true)
+#           if [ -n "$BADM" ]; then echo "FORBIDDEN COMMIT IDENTITY (merge):"; echo "$BADM"; exit 1; fi
+#
+#   leak-guard:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#         with: { persist-credentials: false }
+#       - name: Scan for forbidden strings
+#         env:
+#           FORBIDDEN_STRINGS: ${{ secrets.FORBIDDEN_STRINGS }}
+#         run: |
+#           printf '%s\n' "$FORBIDDEN_STRINGS" | grep -v '^$' > /tmp/forbidden.txt
+#           if [ -s /tmp/forbidden.txt ] && grep -ril -f /tmp/forbidden.txt . --exclude-dir=.git > /tmp/hits.txt 2>/dev/null; then
+#             echo "LEAK DETECTED in the following files:"; cat /tmp/hits.txt; exit 1
+#           fi
+#           echo "leak-guard: clean"
+#
