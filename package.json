@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --outfile=dist/index.js"
+    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --outfile=dist/index.js",
+    "test:chat": "node scripts/chat-gate-test.mjs && node scripts/chat-channel-test.mjs",
+    "verify:chat": "node scripts/chat-verify.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
