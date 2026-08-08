@@ -1634,3 +1634,15 @@ a {
   line-height: 1.5;
   margin: 0;
 }
+
+/* Sits beside a .tagline__box to mark a field as not required. Deliberately
+   quieter than the box it follows — no border, no fill — so the label reads
+   as an annotation on the field rather than a second label competing with it. */
+.chat__optional {
+  font-family: var(--font-console);
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--phosphor-dim);
+  opacity: 0.7;
+}

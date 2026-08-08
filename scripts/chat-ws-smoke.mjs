@@ -26,6 +26,13 @@
 //   # oversize frame rejected with error "toolarge", socket stays open:
 //   node scripts/chat-ws-smoke.mjs wss://…/chat/alpha ws/c --raw "$(node -e 'process.stdout.write(JSON.stringify({t:"msg",d:"x".repeat(5000)}))')" --expect-error toolarge
 //
+//   # --gate-test: the whole PIN gate (PR3) against a live channel, driven by
+//   # the REAL browser derivation loaded out of src/ui/chatcrypto.js. Creates
+//   # the channel, admits the right PIN, refuses the wrong one, then proves the
+//   # lockout by having a KNOWN-GOOD PIN refused after 5 misses. Use a fresh
+//   # channel name — it leaves that channel locked for 60 s.
+//   node scripts/chat-ws-smoke.mjs wss://…/chat/<fresh-name>/ws --gate-test
+//
 //   # cap: 65 connections join, the last must get error "full" + close 1013:
 //   node scripts/chat-ws-smoke.mjs wss://…/chat/alpha cap --cap-test 65
 //
@@ -48,19 +55,27 @@ function parseArgv(argv) {
     sendNow: false,
     delayNow: 0,
     pair: null,
+    gateTest: false,
+    pin: "Correct-Horse-9!",
   };
+  // Flags that take a value must CONSUME it. Without the `i += 1` the value
+  // fell through to the positional branch on the next pass and overwrote the
+  // nick — harmless-looking, but it means a run reports a nick nobody asked
+  // for, and `--expect-close 4003 somenick` would silently ignore the nick.
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
-    if (a === "--send") out.send = argv[i + 1];
-    else if (a === "--expect") out.expect = argv[i + 1];
-    else if (a === "--raw") out.raw = argv[i + 1];
-    else if (a === "--expect-error") out.expectError = argv[i + 1];
-    else if (a === "--expect-close") out.expectClose = argv[i + 1];
+    if (a === "--send") out.send = argv[(i += 1)];
+    else if (a === "--expect") out.expect = argv[(i += 1)];
+    else if (a === "--raw") out.raw = argv[(i += 1)];
+    else if (a === "--expect-error") out.expectError = argv[(i += 1)];
+    else if (a === "--expect-close") out.expectClose = parseInt(argv[(i += 1)], 10);
     else if (a === "--nojoin") out.nojoin = true;
     else if (a === "--send-now") out.sendNow = true;
-    else if (a === "--delay-now") out.delayNow = parseInt(argv[i + 1], 10) || 0;
-    else if (a === "--cap-test") out.capTest = parseInt(argv[i + 1], 10) || 65;
+    else if (a === "--delay-now") out.delayNow = parseInt(argv[(i += 1)], 10) || 0;
+    else if (a === "--cap-test") out.capTest = parseInt(argv[(i += 1)], 10) || 65;
     else if (a === "--pair") out.pair = true;
+    else if (a === "--gate-test") out.gateTest = true;
+    else if (a === "--pin") out.pin = argv[(i += 1)];
     else if (out.url === null) out.url = a;
     else out.nick = a;
   }
@@ -268,6 +283,176 @@ async function pairTest(a) {
   });
 }
 
+// Gate test (PR3). Drives the whole D7/D8/D9 gate against the LIVE object,
+// using the real browser derivation from src/ui/chatcrypto.js — the artifact
+// the user actually runs, not a re-implementation that could agree with the
+// server while the browser disagrees.
+//
+// Sequence, in one process so the channel object stays resident throughout
+// (the gate lives in memory and dies with the last member — D4):
+//   1. A creates the channel with setgate  → ready
+//   2. B answers the challenge correctly   → ready, and A sees B join
+//   3. A speaks, B hears it                → gated channel still relays
+//   4. C answers with the WRONG PIN        → close 4003
+//   5. four more wrong answers (5 total)   → lockout armed (D8)
+//   6. a CORRECT-PIN client is now refused → close 4003, lockout proven
+//
+// Step 6 is the whole point: 4003 alone proves nothing about the lockout,
+// because a wrong PIN closes 4003 too. Only a known-good PIN being refused
+// distinguishes "locked" from "wrong", and the uniform close code is exactly
+// what makes those indistinguishable to an attacker (D8).
+async function gateTest(a) {
+  const { createContext, runInContext } = await import("node:vm");
+  const { readFile } = await import("node:fs/promises");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const sandbox = { window: {}, crypto, TextEncoder, console };
+  createContext(sandbox);
+  runInContext(await readFile(join(root, "src/ui/chatcrypto.js"), "utf8"), sandbox);
+  const talvi = sandbox.window.talviGate;
+
+  // /chat/<name>/ws → <name>. The name is the KDF salt, so it must match what
+  // the browser would use for this URL exactly.
+  const name = new URL(a.url).pathname.replace(/^\/chat\//, "").replace(/\/ws$/, "");
+  const goodGate = await talvi.gateHex(await talvi.deriveMasterHex(a.pin, name), name);
+  const badGate = await talvi.gateHex(
+    await talvi.deriveMasterHex(a.pin + "-wrong", name),
+    name,
+  );
+
+  const failures = [];
+  const held = [];
+
+  // Opens a socket, answers any challenge with `gate`, and resolves with what
+  // happened: "ready" | "closed:<code>" | "error:<code>".
+  function attempt(nick, gate, opts = {}) {
+    return new Promise((resolve) => {
+      const ws = new WebSocket(a.url);
+      let settled = false;
+      const done = (r) => {
+        if (settled) return;
+        settled = true;
+        if (opts.hold && r === "ready") held.push(ws);
+        else ws.close();
+        resolve(r);
+      };
+      const timer = setTimeout(() => done("timeout"), 15000);
+      ws.addEventListener("open", () => {
+        const frame = { t: "join", nick };
+        if (opts.setgate) frame.setgate = gate;
+        ws.send(JSON.stringify(frame));
+      });
+      ws.addEventListener("message", async (event) => {
+        let f;
+        try {
+          f = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (f.t === "challenge") {
+          const answer = await talvi.answerHex(gate, f.nonce);
+          ws.send(JSON.stringify({ t: "join", nick, gate: answer }));
+          return;
+        }
+        if (f.t === "ready") {
+          clearTimeout(timer);
+          if (opts.onReady) opts.onReady(ws);
+          done("ready");
+        }
+        if (f.t === "error") {
+          clearTimeout(timer);
+          done("error:" + f.code);
+        }
+      });
+      ws.addEventListener("close", (e) => {
+        clearTimeout(timer);
+        done("closed:" + e.code);
+      });
+      ws.addEventListener("error", () => {
+        clearTimeout(timer);
+        done("error:socket");
+      });
+    });
+  }
+
+  function expect(label, actual, want) {
+    const ok = actual === want;
+    console.log(`[gate] ${ok ? "pass" : "FAIL"}  ${label} → ${actual}`);
+    if (!ok) failures.push(`${label}: got ${actual}, want ${want}`);
+  }
+
+  // 1. create
+  let heardFromA = null;
+  const rA = await attempt("gate-a", goodGate, {
+    setgate: true,
+    hold: true,
+    onReady: (ws) =>
+      ws.addEventListener("message", (ev) => {
+        try {
+          const f = JSON.parse(ev.data);
+          if (f.t === "msg") heardFromA = f.d;
+        } catch {
+          /* ignore */
+        }
+      }),
+  });
+  expect("creator sets gate", rA, "ready");
+
+  // 2. correct PIN joins. Sends `setgate` too, because the real browser sends
+  // it on every join it has a key for — the server must IGNORE it on an
+  // already-gated channel and challenge instead. Testing the shape the
+  // artifact actually emits is the point; a hand-tuned frame would pass while
+  // the browser failed.
+  let bSocket = null;
+  const rB = await attempt("gate-b", goodGate, {
+    setgate: true,
+    hold: true,
+    onReady: (ws) => {
+      bSocket = ws;
+      ws.addEventListener("message", (ev) => {
+        try {
+          const f = JSON.parse(ev.data);
+          if (f.t === "msg") heardFromA = f.d;
+        } catch {
+          /* ignore */
+        }
+      });
+    },
+  });
+  expect("correct PIN admitted", rB, "ready");
+
+  // 3. gated channel still relays
+  if (bSocket) {
+    held[0]?.send(JSON.stringify({ t: "msg", d: "gated-hello" }));
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  expect("gated channel relays", heardFromA, "gated-hello");
+
+  // 4. wrong PIN refused
+  const rC = await attempt("gate-c", badGate);
+  expect("wrong PIN refused 4003", rC, "closed:4003");
+
+  // 5. four more wrong answers arms the lockout (5 total, D8)
+  for (let i = 0; i < 4; i += 1) {
+    await attempt("gate-x" + i, badGate);
+  }
+
+  // 6. correct PIN is now refused too — that is the lockout, not the PIN
+  const rLocked = await attempt("gate-good-but-locked", goodGate);
+  expect("correct PIN refused while locked out", rLocked, "closed:4003");
+
+  for (const ws of held) ws.close();
+
+  if (failures.length) {
+    console.error("\n[gate] FAILED:\n  " + failures.join("\n  "));
+    process.exit(3);
+  }
+  console.log("\n[gate] all gate assertions passed");
+  process.exit(0);
+}
+
 // Cap test: `count` sockets join; the last must be refused with "full" + 1013.
 async function capTest(url, count) {
   const sockets = [];
@@ -318,12 +503,15 @@ const a = parseArgv(process.argv.slice(2));
 if (!a.url) {
   console.error(
     "usage: node scripts/chat-ws-smoke.mjs <url> [nick] [--send text] [--expect text] " +
-      "[--raw json] [--expect-error code] [--expect-close code] [--cap-test N] [--pair]",
+      "[--raw json] [--expect-error code] [--expect-close code] [--cap-test N] [--pair] " +
+      "[--gate-test [--pin <pin>]]",
   );
   process.exit(2);
 }
 
-if (a.pair) {
+if (a.gateTest) {
+  await gateTest(a);
+} else if (a.pair) {
   await pairTest(a);
 } else if (a.capTest > 0) {
   await capTest(a.url, a.capTest);
