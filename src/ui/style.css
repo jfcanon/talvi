@@ -1497,6 +1497,14 @@ a {
     animation: none;
   }
 
+  /* Chat lines arrive instantly. A message list is the one place motion is
+     genuinely in the way: lines appear while you are reading the ones above,
+     and someone who asked for less motion is asking not to have text move
+     under their eye. Removed, not shortened — a 1ms fade is still a flash. */
+  .chat__line {
+    animation: none;
+  }
+
   .cursor,
   .term__caret {
     display: none;
@@ -1633,6 +1641,52 @@ a {
   font-size: 0.78em;
   line-height: 1.5;
   margin: 0;
+}
+
+/* Who is in the room. Reads as an instrument label, not a sidebar: the room
+   holds at most 64 people and a full panel would cost more space than it is
+   worth next to the transcript. */
+.chat__members {
+  font-family: var(--font-console);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--phosphor-dim);
+  margin: 0 0 0.5rem;
+  min-height: 1em; /* reserve the line so the transcript never jumps */
+}
+
+/* A reconnect draws a rule rather than clearing the transcript: the room kept
+   no history, so what is on screen is this tab's own record and deleting it
+   would destroy the only copy. The rule marks the seam so nobody reads across
+   the gap as one continuous conversation. */
+.chat__line--rule {
+  display: flex;
+  justify-content: center;
+  color: var(--phosphor-dim);
+  font-family: var(--font-console);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  padding: 0.5rem 0;
+}
+
+/* New lines arrive with a short fade. Removed outright under reduced motion
+   below — not shortened, since a 1ms fade is still a flash. */
+.chat__line {
+  animation: chat-in 160ms ease-out both;
+}
+
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Sits beside a .tagline__box to mark a field as not required. Deliberately

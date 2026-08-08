@@ -191,6 +191,8 @@
     const send = $("send");
     const msg = $("msg");
     const mode = $("mode"); // encryption disclosure, filled in after the handshake
+    const members = $("members");
+    const reconnect = $("reconnect");
     if (!msgs || !text || !send) return; // not this page
 
     const gate = window.talviGate;
@@ -284,7 +286,36 @@
     let open = false;
     let lastError = null;
 
-    const ws = new WebSocket(wsUrl);
+    // The socket is rebuilt on every connect, so this is a `let`. Everything
+    // that sends goes through the CURRENT one.
+    let ws = null;
+
+    // Who is in the room. Rebuilt from scratch on each connect: the server
+    // replays the full roster to a newcomer, so after a reconnect the fresh
+    // replay is the truth and anything remembered from the previous socket is
+    // stale by definition.
+    const roster = new Set();
+
+    function renderMembers() {
+      if (!members) return;
+      const others = [...roster].filter((n) => n !== nick);
+      members.textContent = others.length
+        ? "IN THE ROOM — you, " + others.join(", ")
+        : "IN THE ROOM — just you.";
+    }
+
+    function connect() {
+      roster.clear();
+      roster.add(nick);
+      renderMembers();
+      if (reconnect) reconnect.hidden = true;
+      say("CONNECTING…");
+
+      ws = new WebSocket(wsUrl);
+      wire(ws);
+    }
+
+    function wire(sock) {
 
     // Send the join as soon as the socket opens, carrying H_gate as `setgate`
     // whenever we hold a key. The server decides what that means:
@@ -296,19 +327,19 @@
     //
     // So the same frame both creates and joins, and the object's real state —
     // not a guess made on the landing page — settles which happened.
-    ws.addEventListener("open", () => {
+    sock.addEventListener("open", () => {
       const frame = { t: "join", nick };
       if (!keys) {
-        ws.send(JSON.stringify(frame));
+        sock.send(JSON.stringify(frame));
         return;
       }
       gate
         .gateHex(keys.master, channelName)
         .then((h) => {
           frame.setgate = h;
-          ws.send(JSON.stringify(frame));
+          sock.send(JSON.stringify(frame));
         })
-        .catch(() => ws.send(JSON.stringify(frame)));
+        .catch(() => sock.send(JSON.stringify(frame)));
     });
 
     async function answerChallenge(nonce) {
@@ -317,17 +348,17 @@
           "LOCKED — this channel needs a PIN. Go back and enter it with the " +
           "channel name.";
         say(lastError);
-        ws.close();
+        sock.close();
         return;
       }
       try {
         const h = await gate.gateHex(keys.master, channelName);
         const answer = await gate.answerHex(h, nonce);
-        ws.send(JSON.stringify({ t: "join", nick, gate: answer }));
+        sock.send(JSON.stringify({ t: "join", nick, gate: answer }));
       } catch {
         lastError = "KEY FAILED — this browser refused the crypto this needs.";
         say(lastError);
-        ws.close();
+        sock.close();
       }
     }
 
@@ -344,7 +375,7 @@
           cryptoKey = await gate.encKey(keys.master, channelName);
         } catch {
           say("KEY FAILED — this browser refused the crypto this needs.");
-          ws.close();
+          sock.close();
           return;
         }
       }
@@ -361,6 +392,9 @@
       }
       open = true;
       send.disabled = false;
+      if (reconnect) reconnect.hidden = true;
+      say("");
+      renderMembers();
       text.focus();
     }
 
@@ -383,7 +417,7 @@
       if (typeof frame.d === "string") line("them", who, frame.d);
     }
 
-    ws.addEventListener("message", (event) => {
+    sock.addEventListener("message", (event) => {
       let frame;
       try {
         frame = JSON.parse(event.data);
@@ -403,10 +437,14 @@
         return;
       }
       if (frame.t === "join" && typeof frame.nick === "string") {
+        roster.add(frame.nick);
+        renderMembers();
         line("join", frame.nick, "joined");
         return;
       }
       if (frame.t === "leave" && typeof frame.nick === "string") {
+        roster.delete(frame.nick);
+        renderMembers();
         line("leave", frame.nick, "left");
         return;
       }
@@ -432,21 +470,36 @@
     // join, so remember the actionable message and let close() show it rather
     // than stamping the generic DISCONNECTED over it before anyone reads it.
     function closed(event) {
+      if (sock !== ws) return; // a superseded socket closing; not our business
       open = false;
       send.disabled = true;
+      roster.clear();
+      renderMembers();
+
       // D8: one close code for every gate refusal — wrong PIN, malformed
       // answer, or a channel locked out by someone else's guessing. The
       // server does not say which, so neither does this.
-      if (!lastError && event && event.code === CLOSE_GATE) {
+      const refusedByGate = event && event.code === CLOSE_GATE;
+      if (!lastError && refusedByGate) {
         lastError =
           "REFUSED — wrong PIN, or too many attempts on this channel. " +
           "Wait a minute and try again.";
       }
-      say(lastError ?? "DISCONNECTED — the room is gone or the link dropped. Reload.");
+      say(lastError ?? "DISCONNECTED — the room is gone, or the link dropped.");
+
+      // Offer a button rather than retrying on a timer. An automatic retry
+      // against a gated channel spends a lockout attempt every time, so a room
+      // that refused you once would be hammered shut by its own client. The
+      // person decides, having read why they were dropped.
+      if (reconnect) {
+        reconnect.hidden = false;
+        reconnect.textContent = refusedByGate ? "TRY AGAIN" : "RECONNECT";
+      }
       lastError = null;
     }
-    ws.addEventListener("close", closed);
-    ws.addEventListener("error", () => closed(null));
+    sock.addEventListener("close", closed);
+    sock.addEventListener("error", () => closed(null));
+    }
 
     // emit() is async now (sealing awaits WebCrypto). Nothing waits on it, so
     // catch here or a rejection goes unhandled and the message disappears with
@@ -459,6 +512,23 @@
     text.addEventListener("keydown", (e) => {
       if (e.key === "Enter") trySend();
     });
+
+    if (reconnect) {
+      reconnect.hidden = true;
+      reconnect.addEventListener("click", () => {
+        // A reconnect is a NEW membership, not a resumption: the room kept no
+        // history and the object may have been evicted and rebuilt while we
+        // were away. The transcript on screen stays as this tab's own record,
+        // with a rule drawn so nobody reads across the gap as one conversation.
+        const rule = document.createElement("li");
+        rule.className = "chat__line chat__line--rule";
+        rule.textContent = "— reconnected —";
+        msgs.appendChild(rule);
+        connect();
+      });
+    }
+
+    connect();
   }
 
   function boot() {
