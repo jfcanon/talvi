@@ -129,21 +129,39 @@ resource "cloudflare_workers_script" "talvi_web" {
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-07-30"
 
-  # Durable Object migrations (chat sidequest, PR1 + PR1b).
+  # NO `migrations` BLOCK — deliberate, and it must stay that way. (PR2b)
   #
-  # PR1b: the account is on the FREE plan, and Cloudflare rejects `new_classes`
-  # outright for free plans: "In order to use Durable Objects with a free plan,
-  # you must create a namespace using a `new_sqlite_classes` migration." So the
-  # class is registered SQLite-backed. ChatChannel still writes ZERO bytes of
-  # state.storage — everything lives in memory (D2/D3) — so the "channel dies
-  # when last member leaves" property is unchanged; SQLite is the namespace
-  # backend, not a persistence we use. Recorded: blueprint PR1 originally said
-  # new_classes; that applies to paid plans only.
+  # The ChatChannel namespace already exists. It was created by the PR1b apply
+  # with `new_sqlite_classes = ["ChatChannel"]` (the free plan rejects
+  # `new_classes` outright: "In order to use Durable Objects with a free plan,
+  # you must create a namespace using a `new_sqlite_classes` migration"). That
+  # migration is DONE. Re-declaring it is not a no-op — it is an error.
   #
-  # Additive-only; this class is never renamed or deleted.
-  migrations = {
-    new_sqlite_classes = ["ChatChannel"]
-  }
+  # Why the block cannot simply stay here: provider v5 marks `migrations`
+  # WriteOnly, so Terraform stores it in neither state nor plan and re-sends it
+  # on EVERY apply (cloudflare/terraform-provider-cloudflare#5701, #5898). The
+  # Workers API is not idempotent for this field. The PR1b apply happened to
+  # succeed only because the class had no live objects yet; once PR1's WebSocket
+  # verification created some, the PR2 apply was refused outright:
+  #
+  #   PUT .../workers/scripts/talvi-web: 400 Bad Request
+  #   code 10074: "Cannot apply new-sqlite-class migration to class
+  #   'ChatChannel' that is already depended on by existing Durable Objects"
+  #
+  # That failure blocked the PR2 deploy entirely. Wrangler avoids this by
+  # reading the deployed script's migration tag and sending migrations ONLY
+  # when there are new ones; with no new migrations the field must be null.
+  # Omitting the block is how Terraform sends null.
+  #
+  # So: the class is registered SQLite-backed (the namespace backend, not a
+  # persistence we use — ChatChannel still writes ZERO bytes of state.storage,
+  # everything in memory per D2/D3, so "channel dies when last member leaves"
+  # is unchanged). It is never renamed or deleted.
+  #
+  # Add a `migrations` block again ONLY to declare a genuinely NEW class, and
+  # remove it again in the very next PR once applied. If this script is ever
+  # destroyed and recreated from scratch, the create-migration must be
+  # temporarily restored — the namespace would not exist then.
 
   bindings = [
     { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_meta.id },

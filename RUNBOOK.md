@@ -261,6 +261,19 @@ section is the operational record.
   namespace to be created with a `new_sqlite_classes` migration. ChatChannel
   never writes to that SQLite storage — it is the namespace backend the API
   requires, not persistence we use. The ephemeral property is unchanged.
+- PR2b (recorded): **`main.tf` carries no `migrations` block, and must not.**
+  Provider v5 marks `migrations` WriteOnly, so it lives in neither state nor
+  plan and is re-sent on *every* apply
+  (cloudflare/terraform-provider-cloudflare#5701, #5898) — and the Workers API
+  is not idempotent for it. PR1b's apply only succeeded because the class had
+  no live objects yet; after PR1's WebSocket verification created some, the
+  PR2 apply died on `400 code 10074: "Cannot apply new-sqlite-class migration
+  to class 'ChatChannel' that is already depended on by existing Durable
+  Objects"`, blocking the deploy. Wrangler sends migrations only when there are
+  new ones; otherwise the field must be null, and omitting the block is how
+  Terraform sends null. **Declaring a new DO class is therefore a two-PR
+  move:** one PR adds the `migrations` block, the next removes it. Restore a
+  create-migration only if the script is ever destroyed and rebuilt.
 
 ### Bounds (D11, enforced in-DO)
 
