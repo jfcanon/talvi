@@ -297,8 +297,14 @@ The platform `ratelimit` bindings (see §8) are **not** relied on for chat.
 
 - Global per-IP connection / message rate (per-DO caps only).
 - Total concurrent channels.
-- Offline brute force of a weak PIN (mitigated client-side: entropy floor D5,
-  PBKDF2 300k D6 — PIN strength is the whole confidentiality story).
+- Offline brute force of the PIN. **Not mitigated, and it cannot be** while the
+  PIN is 4 digits (D5, revised PR9). PBKDF2 at 300k (D6) only slows a *single*
+  guess; the whole 10,000-PIN keyspace still falls in seconds to minutes on
+  ordinary hardware, and faster on a GPU. This line previously read "mitigated
+  client-side: entropy floor D5" — that was written when D5 demanded 8+
+  characters across 3 classes, and it became false the moment the PIN became 4
+  digits. See "The PIN is 4 digits — what that does and does not buy" below for
+  the full accounting.
 - Ciphertext replay / reorder / drop (inherent to a trusted relay; GCM gives
   integrity, not anti-replay).
 - Impersonation within a group: any PIN-holder posts as anyone. No moderation,
@@ -357,6 +363,37 @@ be an oracle for probing which channel names are live.
 **Nothing in the DO logs.** Not the gate, not a nonce, not a proof, not a nick.
 That is load-bearing, not tidiness: a log has a wider audience than the object.
 
+### The PIN is 4 digits — what that does and does not buy (owner decision, PR9)
+
+D5 originally required 8+ characters across 3 character classes. **The owner
+changed it to exactly 4 digits.** That is the decision; this section records
+what follows from it so nobody has to re-derive it, and so nobody writes a
+claim the PIN cannot support.
+
+4 digits is 10,000 possibilities — about 13 bits.
+
+| Attack | Bounded? | Reality |
+|---|---|---|
+| **Online** guessing at the gate | **Yes** | 5 wrong answers → 60 s lockout (D8). Exhausting 10,000 PINs takes on the order of a day and a half of sustained attack, against a channel whose 100-bit name you must already know. |
+| **Offline** brute force of captured ciphertext | **No, and it cannot be** | `K_enc` comes from the PIN. Anyone holding ciphertext tries all 10,000 candidates locally with no gate and no lockout in the way. At 300k PBKDF2 iterations that is minutes on one core, less spread out. |
+
+So the honest claim, and the one the UI now makes, is:
+
+- Messages **are** encrypted in the browser; nothing readable crosses the wire
+  and this app never handles readable text. That part is unchanged and true.
+- A 4-digit PIN is **a lock on a door, not a safe**. Anyone who records the
+  traffic can try all ten thousand combinations and read along.
+
+**Do not restore wording implying otherwise while the PIN is 4 digits.** The
+copy in `src/ui/chatpage.js` and the `ENCRYPTED —` line in `src/ui/chat.js` say
+this explicitly; changing the PIN length is what should change that copy.
+
+**Raising the PBKDF2 iteration count does not rescue this.** Ten million
+iterations would cost every joining member seconds of wait and still lose the
+whole keyspace in hours. The only real fix is more PIN entropy — so if this app
+is ever used for something that genuinely needs secrecy, lengthen the PIN and
+update the copy in the same PR.
+
 ### Encryption (PR4)
 
 Gated channels are end-to-end encrypted; open channels are not, and both say so
@@ -411,6 +448,94 @@ gated. A late claim beats a wrong one.
 - **Reduced motion is honoured.** Chat lines are removed from the animation
   entirely rather than shortened: a message list is the one place motion is
   genuinely in the way, and a 1 ms fade is still a flash.
+
+### Gate lockout is a known nuisance vector (D12, accepted)
+
+Lockout is **per channel**, because per-socket is no bound at all — a guesser
+just reconnects. The cost: anyone who knows the channel name can wedge it shut
+for 60 s at a time by failing on purpose. Against an unguessable name (D9) that
+is a nuisance available to someone already invited, not a way in.
+
+### Origin gate — same-origin, never a hostname list (PR7)
+
+The upgrade check compares the request's `Origin` host to **the host the request
+actually arrived on**. There is nothing to configure and no list to maintain: it
+is correct on every hostname, including ones that do not exist yet.
+
+> **Do not reintroduce a hostname allowlist here.** It was one, and it is a trap
+> with a fuse on it. The day the site gains a host the list has not been told
+> about — a public-release domain, a **blue/green staging host**, a preview URL —
+> every WebSocket upgrade from that host is refused `403` and chat dies there
+> for those users only. The pages still render, so it reads as a chat bug rather
+> than a config one. The CSP already says `connect-src 'self'`, so same-origin
+> is the rule; enforce that rule, not a snapshot of today's DNS.
+
+Absent Origin is still **allowed** (recorded, PR2). Browsers always send Origin
+on a WS upgrade, so the CSWSH threat is closed; curl and the node smoke clients
+are not that threat. Channel names are unguessable secrets (D9), so a cross-site
+script without the name has nothing to probe.
+
+### Cloudflare injects a beacon on the proxied zone — do NOT fix it in the CSP
+
+On `talvi.ygdcbtmc4u.uk` (the proxied zone, **not** workers.dev) Cloudflare
+injects its Browser Insights beacon into HTML at the edge:
+
+```
+Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/…'
+violates the following Content Security Policy directive: "script-src 'self'".
+The action has been blocked.
+```
+
+**The CSP is working. Nothing is broken and nothing is leaking** — the script
+never executes. But every real visitor to that domain gets a console error, and
+Cloudflare Web Analytics collects nothing, so the feature is on and inert.
+
+It only appears for requests that look like real browser navigations
+(`Sec-Fetch-Dest: document`), which is why plain `curl` sees nothing and the
+browser test does. To reproduce from a shell:
+
+```bash
+curl -sS -A "Mozilla/5.0 … Chrome/131.0.0.0 Safari/537.36" \
+  -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' \
+  https://talvi.ygdcbtmc4u.uk/chat | grep -c cloudflareinsights   # → 1
+```
+
+> **The fix is to turn the zone feature OFF** (Cloudflare dashboard → Web
+> Analytics / Speed → Browser Insights), never to add
+> `static.cloudflareinsights.com` to `script-src`. The CSP has never been
+> weakened in this project, and this is exactly how that streak would end —
+> someone making a red line go green. A third-party analytics script injected
+> into a page whose entire premise is that it ships no third-party code is not
+> a CSP problem to accommodate; it is a setting to switch off.
+
+`scripts/chat-browser-test.mjs` reports this as its own named failure, separate
+from page violations, so the two are never confused.
+
+### Chat sits BEHIND the Clerk login — confirmed intended (owner, PR9)
+
+`/chat` is inside the Clerk-authenticated area, exactly like `/`. This is the
+owner's decision and is **not** a bug to route around. Do not add `/chat` to a
+public-route exemption list, and do not "fix" a sign-in redirect on a chat link
+by making chat public.
+
+What that means in practice, so nobody re-derives it wrong later:
+
+- **Reaching a room needs two different things, and they are not substitutes.**
+  Clerk answers *may you use this site*; the channel name and PIN answer *may
+  you enter this room*. Site auth is not a room key, and a room PIN is not site
+  auth.
+- **Guest nicks stay guest nicks.** Chat does not read `__session`, does not know
+  who you signed in as, and must not start showing Clerk identities next to
+  messages — the room's own disclosure says anyone in it posts as anyone, and
+  attaching real identities to that would make the disclosure a lie.
+- **Chat does not depend on Clerk being up.** It kept working through the Clerk
+  outage because it never asks Clerk anything. If chat ever starts failing when
+  Clerk fails, something has coupled them and that is the regression.
+- **A shared room link now survives the login.** Clerk sends an unauthenticated
+  visitor to sign-in and back; they land on `/chat/<name>`, which asks for nick
+  and PIN in place (PR9). Before that fix they were bounced to `/chat` and asked
+  to retype the channel name — a link that survived Clerk only to die on our own
+  page.
 
 ### Gate lockout is a known nuisance vector (D12, accepted)
 

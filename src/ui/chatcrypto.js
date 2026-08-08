@@ -198,43 +198,55 @@
   // the server sees a 256-bit HKDF output whether the PIN was "hunter2" or
   // forty random characters. So the floor is enforced HERE, at creation, and
   // creation is refused outright when it fails.
-  const PIN_MIN_LEN = 8;
-  const PIN_MIN_CLASSES = 3;
+  // D5, REVISED by owner decision: the PIN is exactly 4 DIGITS.
+  //
+  // Read this before changing anything that depends on it. A 4-digit PIN is
+  // 10,000 possibilities — about 13 bits. That is a door lock, not a safe, and
+  // it changes what this app may honestly claim:
+  //
+  //   ONLINE guessing is still bounded. The gate closes after 5 wrong answers
+  //   and locks the channel for 60 s (D8), so working through 10,000 PINs takes
+  //   on the order of a day and a half of sustained attack against one channel
+  //   whose unguessable name you already know.
+  //
+  //   OFFLINE guessing is NOT bounded, and nothing here can bound it. K_enc
+  //   comes from the PIN, so anyone who captures ciphertext can try all 10,000
+  //   candidates on their own machine, with no gate and no lockout in the way.
+  //   PBKDF2 at 300k iterations makes each attempt cost a few tens of
+  //   milliseconds, so the whole keyspace falls in minutes on one core, and in
+  //   seconds spread across many.
+  //
+  // So the encryption still keeps the app itself from reading messages in
+  // passing, and still keeps them off the wire in the clear — but it does not
+  // withstand anyone who both captures traffic AND decides to spend minutes on
+  // it. The UI says exactly that (D13: an accurate claim beats a flattering
+  // one). Do not restore language implying otherwise while the PIN is 4 digits.
+  //
+  // Raising the iteration count does not rescue this. Ten million iterations
+  // would cost every joining member seconds and still lose the whole keyspace
+  // in hours. The only real fix is more PIN entropy.
+  const PIN_DIGITS = 4;
+  const PIN_RE = /^[0-9]{4}$/;
 
-  // Not a dictionary — a dictionary cannot ship under this CSP budget and
-  // would be theatre next to the length+class floor. These are the handful
-  // that survive the floor while still being the first thing anyone tries.
+  // The PINs people actually pick. With only 10,000 options these are a
+  // meaningful slice of real-world choices, not a token gesture: a handful of
+  // patterns covers a large share of 4-digit PINs in every published study.
   const PIN_BLOCKLIST = new Set([
-    "password", "password1", "password!", "passw0rd", "p@ssword", "p@ssw0rd",
-    "12345678", "123456789", "1234567890", "qwertyui", "qwerty123",
-    "iloveyou", "trustno1", "letmein1", "welcome1", "admin123", "changeme",
+    "0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888",
+    "9999", "1234", "2345", "3456", "4567", "5678", "6789", "0123", "4321",
+    "3210", "9876", "8765", "7654", "1212", "2121", "1122", "2211", "1313",
+    "6969", "1010", "2020", "2000", "1004", "2580", "0852", "1379", "1397",
+    "7410", "0987", "1230", "1023",
   ]);
-
-  function isSequential(s) {
-    if (s.length < PIN_MIN_LEN) return false;
-    let ascending = true;
-    let identical = true;
-    for (let i = 1; i < s.length; i += 1) {
-      if (s.charCodeAt(i) !== s.charCodeAt(i - 1) + 1) ascending = false;
-      if (s.charCodeAt(i) !== s.charCodeAt(i - 1)) identical = false;
-    }
-    return ascending || identical;
-  }
 
   // Returns null when the PIN passes, or the reason it does not.
   function pinProblem(pin) {
     const p = normalizePin(pin);
-    if (p.length < PIN_MIN_LEN) {
-      return "PIN — at least " + PIN_MIN_LEN + " characters.";
+    if (!PIN_RE.test(p)) {
+      return "PIN — exactly " + PIN_DIGITS + " digits, numbers only.";
     }
-    const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((re) =>
-      re.test(p),
-    ).length;
-    if (classes < PIN_MIN_CLASSES) {
-      return "PIN — mix at least three of: lowercase, uppercase, digits, symbols.";
-    }
-    if (PIN_BLOCKLIST.has(p.toLowerCase()) || isSequential(p)) {
-      return "PIN — too guessable. This one is on every list.";
+    if (PIN_BLOCKLIST.has(p)) {
+      return "PIN — too common. Pick four digits nobody would try first.";
     }
     return null;
   }

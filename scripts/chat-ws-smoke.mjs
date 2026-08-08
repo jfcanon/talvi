@@ -57,7 +57,7 @@ function parseArgv(argv) {
     pair: null,
     gateTest: false,
     e2eTest: false,
-    pin: "Correct-Horse-9!",
+    pin: "4729",
   };
   // Flags that take a value must CONSUME it. Without the `i += 1` the value
   // fell through to the positional branch on the next pass and overwrote the
@@ -327,7 +327,7 @@ async function gateTest(a) {
   // relay step below has to speak the channel's actual shape.
   const encKey = await talvi.encKey(master, name);
   const badGate = await talvi.gateHex(
-    await talvi.deriveMasterHex(a.pin + "-wrong", name),
+    await talvi.deriveMasterHex("8153", name),
     name,
   );
 
@@ -593,7 +593,7 @@ async function e2eTest(a) {
     // And a member who lacks the PIN gets nothing readable out of it, even
     // holding the raw envelope.
     const wrongKey = await talvi.encKey(
-      await talvi.deriveMasterHex(a.pin + "-wrong", name),
+      await talvi.deriveMasterHex("8153", name),
       name,
     );
     expect("wrong PIN cannot open the captured envelope",

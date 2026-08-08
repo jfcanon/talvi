@@ -1699,6 +1699,22 @@ a {
   margin: 0;
 }
 
+/* The in-room join form. Same instrument-panel language as the landing, with
+   a rule under it so it reads as a gate in front of the transcript rather than
+   another field in it. */
+.chat__join {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-bottom: 0.9rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.chat__join[hidden] {
+  display: none;
+}
+
 /* Who is in the room. Reads as an instrument label, not a sidebar: the room
    holds at most 64 people and a full panel would cost more space than it is
    worth next to the transcript. */
