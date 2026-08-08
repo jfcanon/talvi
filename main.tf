@@ -40,33 +40,11 @@ variable "talvi_zone_id" {
   type = string
 }
 
-variable "clerk_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "clerk_publishable_key" {
-  type      = string
-  sensitive = true
-}
-
-# Optional: PEM from Clerk dashboard Keys section. When set, enables local
-# (networkless) __session verification in the Worker. When empty, Clerk's SDK
-# fetches the verification key from the API on first use and caches it — auth
-# works either way, jwtKey is a performance optimization, not a requirement.
-variable "clerk_jwt_key" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-# Owner email allowed to sign in via the custom sign-in page. Plain variable
-# (an identifier, not a credential).
-variable "talvi_owner_email" {
-  type    = string
-  default = "jangofett86@gmail.com"
-}
-
+# Green release (2026-08-08): Clerk removed from the public Worker. Upload
+# protection is Cloudflare Access on /api/upload (email-PIN, below). The Clerk
+# variables/bindings lived here and were removed with the gate; the Clerk code
+# is preserved in git history (branch clerk-custom-signin-clean) for the blue
+# release on a separate host.
 resource "cloudflare_d1_database" "talvi_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-meta"
@@ -174,16 +152,6 @@ resource "cloudflare_workers_script" "talvi_web" {
     { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_meta.id },
     { type = "r2_bucket", name = "BUCKET", bucket_name = cloudflare_r2_bucket.talvi_drop.name },
 
-    # Clerk auth secrets (Step 8 — auth gates / and /api/upload).
-    # Distributed to the Worker so authenticateRequest() can verify __session
-    # cookies locally without a network round trip.
-    { type = "secret_text", name = "CLERK_SECRET_KEY", text = var.clerk_secret_key },
-    { type = "secret_text", name = "CLERK_PUBLISHABLE_KEY", text = var.clerk_publishable_key },
-    { type = "secret_text", name = "CLERK_JWT_KEY", text = var.clerk_jwt_key },
-    # Owner email for the custom sign-in page. Not a secret — it's an
-    # identifier, supplied as a plain variable so it's readable in plan diffs.
-    { type = "plain_text", name = "ALLOWED_EMAIL", text = var.talvi_owner_email },
-
     # Workers-native rate limiting (Step 6). Chosen over cloudflare_rate_limit
     # because that resource is zone-scoped, and this account controls no zone
     # for *.workers.dev. These bindings work on workers.dev directly — the same
@@ -286,4 +254,40 @@ resource "cloudflare_workers_script_subdomain" "talvi_web_subdomain" {
   script_name      = cloudflare_workers_script.talvi_web.script_name
   enabled          = true
   previews_enabled = false
+}
+
+# Green release upload gate (2026-08-08). Cloudflare Access email-PIN protects
+# the write endpoint only — /api/upload. /:slug and /:slug/d stay public
+# (sharing is the product), and the "/" upload page renders for everyone (the
+# POST is what requires the PIN). Mirrors ivlat's proven Access pattern.
+resource "cloudflare_zero_trust_access_identity_provider" "talvi_email_otp" {
+  account_id = var.cloudflare_account_id
+  name       = "talvi — Email one-time PIN"
+  type       = "onetimepin"
+  config     = {}
+}
+
+resource "cloudflare_zero_trust_access_application" "talvi_upload" {
+  zone_id      = var.talvi_zone_id
+  name         = "talvi — upload"
+  domain       = "talvi.ygdcbtmc4u.uk/api/upload"
+  type         = "self_hosted"
+  allowed_idps = [cloudflare_zero_trust_access_identity_provider.talvi_email_otp.id]
+  policies = [
+    {
+      id         = cloudflare_zero_trust_access_policy.talvi_owner_email.id
+      precedence = 1
+    },
+  ]
+}
+
+resource "cloudflare_zero_trust_access_policy" "talvi_owner_email" {
+  account_id = var.cloudflare_account_id
+  name       = "Allow account owner"
+  decision   = "allow"
+  include = [{
+    email = {
+      email = "jangofett86@gmail.com"
+    }
+  }]
 }
