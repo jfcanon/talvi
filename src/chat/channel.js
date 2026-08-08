@@ -69,6 +69,14 @@ const ALLOWED_ORIGINS = new Set([
 
 const encoder = new TextEncoder();
 
+// A join frame is an ANSWER only if it actually carries a gate field. Absent
+// is "not yet"; present-but-wrong is a failed attempt. Keeping that one
+// distinction in a named helper is deliberate — conflating the two is what
+// turns honest joiners into lockout fodder.
+function answered(frame) {
+  return frame.gate !== undefined;
+}
+
 export class ChatChannel {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -224,38 +232,55 @@ export class ChatChannel {
     return true;
   }
 
-  // D7 challenge-response + D8 lockout. Every refusal below closes with the
-  // SAME code and the SAME reason: a caller cannot distinguish a wrong PIN
-  // from a malformed frame from a locked-out channel.
+  // D7 challenge-response + D8 lockout. Every refusal closes with the SAME
+  // code, the SAME reason, and — see below — the same amount of work, so a
+  // caller cannot distinguish a wrong PIN from a malformed frame from a
+  // locked-out channel by any means.
   async passesGate(ws, session, frame) {
-    if (Date.now() < this.lockedUntil) {
-      this.refuseGate(ws);
-      return false;
-    }
+    const locked = Date.now() < this.lockedUntil;
 
-    // A join frame carrying NO gate field at all is not a failed attempt — it
-    // is a client that has not seen a challenge yet. Two ways that happens:
-    // the socket connected before the gate existed (never challenged), or its
-    // join frame and our challenge crossed on the wire, which is the ordinary
-    // case since the client sends join as soon as it opens. Answer with a
-    // challenge and charge nothing.
+    // A join frame carrying NO gate field is not a failed attempt — it is a
+    // client that has not answered yet. Two ways that happens: the socket
+    // connected before the gate existed (never challenged), or its join frame
+    // and our challenge crossed on the wire, which is the ORDINARY case, since
+    // the client sends join the moment it opens.
     //
-    // A WRONG answer is a different thing entirely and does count (below).
-    // The distinction is safe: replaying this path teaches a caller only that
-    // the channel is gated, which the challenge itself already says, and it
-    // neither resets nor evades the lockout counter.
-    if (frame.gate === undefined || !session.nonce) {
-      this.challenge(ws, session);
+    // Challenge only if this socket has never been challenged. Re-issuing a
+    // nonce to a socket that already has one outstanding would overwrite
+    // session.nonce and invalidate the answer the client is at that moment
+    // computing for the FIRST nonce — so its correct answer would arrive,
+    // compare against the replacement, and be counted a failure. Every honest
+    // join to a gated channel would fail that way, and five of them would lock
+    // the channel with no attacker involved at all.
+    if (!answered(frame) && !locked) {
+      if (!session.nonce) this.challenge(ws, session);
       return false;
     }
 
-    if (!isGateHex(frame.gate)) {
-      this.failGate(ws);
-      return false;
-    }
-    const expected = await hmacHex(this.gate, session.nonce);
-    if (!timingSafeEqualHex(frame.gate, expected)) {
-      this.failGate(ws);
+    // From here every path either admits or refuses, and every one pays for
+    // the same HMAC first — including the paths that do not need it.
+    //
+    // The close code and reason were already uniform; the DURATION was not. A
+    // locked-out channel returned instantly while a wrong answer paid for a
+    // WebCrypto importKey+sign, so an attacker timing the difference could
+    // tell "the channel is locked" from "my guess was wrong" and pace guessing
+    // around the 60 s backoff instead of wasting attempts inside it. Same
+    // reasoning as the constant-time compare below: uniform answers are worth
+    // nothing if the clock still tells them apart.
+    const expected = await hmacHex(this.gate, session.nonce ?? randomNonce());
+
+    const ok =
+      !locked &&
+      session.nonce !== null &&
+      isGateHex(frame.gate) &&
+      timingSafeEqualHex(frame.gate, expected);
+
+    if (!ok) {
+      // A locked channel refuses without deepening its own lockout — only a
+      // real attempt counts against the budget, or an attacker could hold a
+      // channel shut indefinitely by hammering it while it is already closed.
+      if (locked) this.refuseGate(ws);
+      else this.failGate(ws);
       return false;
     }
 

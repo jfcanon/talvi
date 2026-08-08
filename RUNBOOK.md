@@ -326,8 +326,24 @@ two members derive different keys from what looks like the same PIN.
 
 A join frame carrying **no** `gate` field is not a failed attempt — it is a
 client whose join crossed our challenge on the wire, which is the normal case.
-It gets re-challenged and costs nothing. Only a *present but wrong* answer
-counts against the lockout.
+It costs nothing. Only a *present but wrong* answer counts against the lockout.
+
+> **One nonce per socket, and never replace it.** A gate-less join challenges
+> the socket only if it has never been challenged. Issuing a fresh nonce to a
+> socket that already has one outstanding overwrites `session.nonce` and
+> invalidates the answer the client is at that moment computing for the first
+> one — its *correct* answer then compares against the replacement, fails, and
+> counts against the lockout. Every honest join to a gated channel breaks that
+> way, and five of them lock the channel with no attacker involved. Caught by
+> security review before deploy; regression-tested in
+> `scripts/chat-channel-test.mjs` ("no second challenge is issued").
+
+Refusals are uniform in **duration** as well as code: every path that can
+refuse computes the same HMAC first, including the locked-out and malformed
+paths that do not need it. Without that, a locked channel returned instantly
+while a wrong answer paid for a WebCrypto sign, and timing alone separated
+"locked" from "wrong" — letting a guesser pace around the backoff instead of
+wasting attempts inside it.
 
 **The upgrade always succeeds.** Whether a channel exists, is gated, or is
 locked out is never visible at the HTTP layer — otherwise this endpoint would
@@ -370,6 +386,12 @@ node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/$(ope
 # PIN channel. Run this BEFORE merging; the alternative is finding out after
 # Terraform has applied.
 node scripts/chat-gate-test.mjs
+
+# The join/gate state machine, offline: drives the real ChatChannel against a
+# fake WebSocket. Terraform cannot run locally here, so "push and see" costs a
+# PR, a plan, an apply and a live channel — this is the cheap way to catch a
+# gate bug before any of that.
+node scripts/chat-channel-test.mjs
 
 # Two-invocation relay test with the PR2 protocol (join/ready handshake)
 node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws ws/a --send "hello" --expect "pong"
