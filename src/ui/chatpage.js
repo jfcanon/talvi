@@ -62,8 +62,12 @@ export function chatLandingPage() {
     "people you would let back in." +
     "</p>" +
     '<p class="chat__fineprint">' +
-    "The PIN controls who gets in. It does not yet scramble what you type — " +
-    "messages cross the wire readable by whatever carries them." +
+    "With a PIN, messages are encrypted in your browser before they leave it, " +
+    "and this app cannot read them — it only passes the sealed text along. Be " +
+    "clear about the edge of that: the server that carries it terminates the " +
+    "connection's encryption and can see who talks to whom and when, and " +
+    "anyone holding the PIN reads everything and can post as anyone. Without " +
+    "a PIN there is no scrambling at all." +
     "</p>" +
     "</div>" +
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
@@ -92,19 +96,28 @@ export function chatRoomPage(name) {
     'maxlength="1000" autocomplete="off" aria-label="Message">' +
     '<button class="btn" type="button" id="send" disabled>SEND</button>' +
     "</div>" +
-    '<p class="chat__fineprint">Nobody reads this but the room. Still: ' +
-    "anyone in it posts as anyone — no moderation, no way to eject. Messages " +
-    "are relayed as you typed them, not scrambled; a PIN decides who gets in, " +
-    "not what the wire can see.</p>" +
+    // Whether this channel is encrypted is a property of the live object, not
+    // of the URL — the Worker rendering this page does not know it, and asking
+    // the object would both cost a round trip and turn page load into an
+    // oracle for which channels are gated. So the page ships without a claim
+    // and the client fills one in once the handshake has actually told it
+    // which kind of room this is. A wrong claim here is worse than a late one.
+    '<p class="chat__fineprint" id="mode">Connecting…</p>' +
+    '<p class="chat__fineprint">Anyone in the room posts as anyone — no ' +
+    "moderation, no way to eject, and no way to prove who wrote a line.</p>" +
     "</div>" +
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
     "is an empty frame without it.</p></noscript>";
 
   return renderPage("talvi — chat/" + name, {
+    // No encryption claim in the lede either, for the same reason: this string
+    // is rendered before anyone knows whether the room has a gate. "Nothing is
+    // stored" is true of both kinds and is the part worth saying up front.
     lede:
       "IN " +
       escapeHtml(name).toUpperCase() +
-      ". Plaintext relay — what you type, they read. Nothing is stored.",
+      ". Nothing is stored, nothing is logged, and the room ends when the " +
+      "last person leaves.",
     content,
     script: true,
   });

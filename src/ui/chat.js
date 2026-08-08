@@ -190,6 +190,7 @@
     const text = $("text");
     const send = $("send");
     const msg = $("msg");
+    const mode = $("mode"); // encryption disclosure, filled in after the handshake
     if (!msgs || !text || !send) return; // not this page
 
     const gate = window.talviGate;
@@ -241,10 +242,35 @@
       msgs.scrollTop = msgs.scrollHeight;
     }
 
-    function emit() {
+    // On a gated channel this holds K_enc and every message is sealed with it
+    // before it reaches the socket. On an open channel it stays null and
+    // messages go as plaintext (D10) — which the UI says out loud.
+    let cryptoKey = null;
+
+    async function emit() {
       const t = text.value;
       if (!t.trim()) return;
-      const body = JSON.stringify({ t: "msg", d: t });
+
+      // Encrypt FIRST, then measure, then send. The ciphertext is what has to
+      // fit MAX_WIRE_BYTES, and it is bigger than the plaintext (base64 of the
+      // text plus a 16-byte tag plus the IV) — measuring the plaintext would
+      // let a message through that the server then refuses as `toolarge`,
+      // which reads to the user as the message vanishing.
+      let body;
+      if (cryptoKey) {
+        try {
+          body = JSON.stringify({ t: "msg", env: await gate.seal(cryptoKey, t) });
+        } catch {
+          // Refuse rather than fall back to plaintext. A sealed room that
+          // quietly sends one line in the clear is worse than a room that
+          // admits it cannot send.
+          say("NOT SENT — encryption failed. Nothing was sent in the clear.");
+          return;
+        }
+      } else {
+        body = JSON.stringify({ t: "msg", d: t });
+      }
+
       if (encoder.encode(body).length > MAX_WIRE_BYTES) {
         say("REFUSED — that message is too long.");
         return;
@@ -260,10 +286,6 @@
 
     const ws = new WebSocket(wsUrl);
 
-    // Send the join immediately. If the channel turns out to be gated, the
-    // server answers with a challenge instead of admitting us, and a join
-    // frame with no `gate` field costs nothing against the lockout — the two
-    // frames crossing on the wire is the ordinary case, not a failure.
     // Send the join as soon as the socket opens, carrying H_gate as `setgate`
     // whenever we hold a key. The server decides what that means:
     //
@@ -309,6 +331,58 @@
       }
     }
 
+    // Admitted. On a gated channel, derive K_enc before enabling the input —
+    // the button must not be live for a message we could not seal.
+    // Holding a key and reaching `ready` means this channel IS gated, always:
+    // with a key we always offer `setgate`, so an empty channel becomes gated,
+    // an already-gated one challenges us, and an open one with members refuses
+    // us outright with `notfirst`. There is no path to `ready` that holds a key
+    // and is not encrypted.
+    async function ready() {
+      if (keys) {
+        try {
+          cryptoKey = await gate.encKey(keys.master, channelName);
+        } catch {
+          say("KEY FAILED — this browser refused the crypto this needs.");
+          ws.close();
+          return;
+        }
+      }
+      // Say which kind of room this turned out to be, now that the handshake
+      // has settled it. The page shipped without a claim precisely so this one
+      // could be true (D13).
+      if (mode) {
+        mode.textContent = cryptoKey
+          ? "ENCRYPTED — sealed in your browser with the PIN before it is sent. " +
+            "This app relays it and cannot read it. What carries it still sees " +
+            "who is talking, and when."
+          : "NOT ENCRYPTED — no PIN on this channel, so messages are relayed " +
+            "exactly as you typed them.";
+      }
+      open = true;
+      send.disabled = false;
+      text.focus();
+    }
+
+    // Render a relayed message. `env` on gated channels, `d` on open ones —
+    // and never the other way round, because the server refuses to relay the
+    // mismatched kind at all.
+    async function show(frame) {
+      const who = frame.from ?? "?";
+      if (frame.env !== undefined) {
+        if (!cryptoKey) return; // not our channel's shape; nothing to do
+        const plain = await gate.unseal(cryptoKey, frame.env);
+        // Silent drop (blueprint §3). A failed tag means the sender used a
+        // different PIN — they are not in this conversation, and rendering a
+        // "could not decrypt" line for every frame they send would let anyone
+        // who knows the channel name spam the room with error text.
+        if (plain === null) return;
+        line("them", who, plain);
+        return;
+      }
+      if (typeof frame.d === "string") line("them", who, frame.d);
+    }
+
     ws.addEventListener("message", (event) => {
       let frame;
       try {
@@ -321,13 +395,11 @@
         return;
       }
       if (frame.t === "ready") {
-        open = true;
-        send.disabled = false;
-        text.focus();
+        ready();
         return;
       }
-      if (frame.t === "msg" && typeof frame.d === "string") {
-        line("them", frame.from ?? "?", frame.d);
+      if (frame.t === "msg") {
+        show(frame);
         return;
       }
       if (frame.t === "join" && typeof frame.nick === "string") {
@@ -376,11 +448,16 @@
     ws.addEventListener("close", closed);
     ws.addEventListener("error", () => closed(null));
 
-    send.addEventListener("click", () => {
-      if (open) emit();
-    });
+    // emit() is async now (sealing awaits WebCrypto). Nothing waits on it, so
+    // catch here or a rejection goes unhandled and the message disappears with
+    // no trace for the person who typed it.
+    function trySend() {
+      if (!open) return;
+      emit().catch(() => say("NOT SENT — something went wrong sending that."));
+    }
+    send.addEventListener("click", trySend);
     text.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && open) emit();
+      if (e.key === "Enter") trySend();
     });
   }
 

@@ -352,6 +352,44 @@ be an oracle for probing which channel names are live.
 **Nothing in the DO logs.** Not the gate, not a nonce, not a proof, not a nick.
 That is load-bearing, not tidiness: a log has a wider audience than the object.
 
+### Encryption (PR4)
+
+Gated channels are end-to-end encrypted; open channels are not, and both say so
+in the UI. `K_enc` is `H_gate`'s sibling — same `K_master`, different HKDF info
+string. The server is handed `H_gate` to verify joins and is **never** sent
+`K_enc`, cannot derive it from what it holds, and so relays ciphertext it cannot
+read.
+
+Envelope, client to client: `{ v:1, iv:base64url(12B), ct:base64url(ct ‖ 16B GCM tag) }`
+
+- **A fresh random IV per message**, from `getRandomValues` — never a counter,
+  never key- or clock-derived. IV reuse under one AES-GCM key is this cipher's
+  catastrophic failure: it leaks the XOR of the two plaintexts and can expose
+  the authentication subkey. Members share no state to coordinate a counter
+  with, so 96 random bits per message is the mechanism.
+- **Decryption failure is silent.** A failed GCM tag means the sender used a
+  different PIN — they are not in the conversation. Rendering "could not
+  decrypt" per frame would let anyone who knows the channel name fill the room
+  with error text.
+
+**The relay enforces the payload kind, and this is the part the server can
+actually guarantee.** On a gated channel only `env` is relayed and a plaintext
+`d` frame is **dropped**; on an open channel only `d` is relayed and an `env` is
+dropped. Without that, one stray plaintext frame — stale tab, hand-built frame,
+future bug — would be passed to every member looking like a normal message, and
+the room's guarantee would be quietly false for that line. The client likewise
+refuses to send rather than falling back to plaintext if sealing fails.
+
+**What encryption does NOT cover** (said plainly in the UI, D13): the hosting
+edge terminates TLS and sees who talks to whom and when; any PIN-holder reads
+everything and can post as anyone; there is no way to prove who wrote a line.
+
+The room page ships **without** an encryption claim and the client fills one in
+after the handshake. Whether a channel is gated is a property of the live
+object, not the URL — the Worker rendering the page does not know it, and asking
+would cost a round trip and make page load an oracle for which channels are
+gated. A late claim beats a wrong one.
+
 ### Gate lockout is a known nuisance vector (D12, accepted)
 
 Lockout is **per channel**, because per-socket is no bound at all — a guesser
@@ -392,6 +430,12 @@ node scripts/chat-gate-test.mjs
 # PR, a plan, an apply and a live channel — this is the cheap way to catch a
 # gate bug before any of that.
 node scripts/chat-channel-test.mjs
+
+# End-to-end encryption against the live object (PR4). Two members, one PIN,
+# real browser crypto. Asserts on what the WIRE carried — the relayed bytes must
+# contain no trace of the plaintext — and that the server refuses to relay a
+# plaintext frame on a gated channel. Use a fresh channel name.
+node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/$(openssl rand -hex 8)/ws --e2e-test
 
 # Two-invocation relay test with the PR2 protocol (join/ready handshake)
 node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws ws/a --send "hello" --expect "pong"

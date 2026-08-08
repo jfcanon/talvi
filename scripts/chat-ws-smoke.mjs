@@ -56,6 +56,7 @@ function parseArgv(argv) {
     delayNow: 0,
     pair: null,
     gateTest: false,
+    e2eTest: false,
     pin: "Correct-Horse-9!",
   };
   // Flags that take a value must CONSUME it. Without the `i += 1` the value
@@ -75,6 +76,7 @@ function parseArgv(argv) {
     else if (a === "--cap-test") out.capTest = parseInt(argv[(i += 1)], 10) || 65;
     else if (a === "--pair") out.pair = true;
     else if (a === "--gate-test") out.gateTest = true;
+    else if (a === "--e2e-test") out.e2eTest = true;
     else if (a === "--pin") out.pin = argv[(i += 1)];
     else if (out.url === null) out.url = a;
     else out.nick = a;
@@ -453,6 +455,154 @@ async function gateTest(a) {
   process.exit(0);
 }
 
+// E2E test (PR4). Two members of a gated channel, same PIN, using the REAL
+// browser crypto from src/ui/chatcrypto.js, against the LIVE object.
+//
+// The assertion that matters is not "B could read A" — that only shows the
+// crypto round-trips, which the offline tests already prove. It is what the
+// WIRE carried: the exact bytes the server relayed are captured and checked to
+// contain no trace of the plaintext. That is the "network panel shows only
+// envelopes" check from the blueprint, made exact instead of visual.
+//
+// Note on the blueprint's third-tab-with-wrong-PIN case: since PR3 a wrong PIN
+// cannot get into the channel at all — the gate closes it at 4003 before any
+// traffic flows (verified by --gate-test). So "receives ciphertext it cannot
+// decrypt" is no longer reachable from inside the room, and the meaningful
+// version of that check is the one below, against the relay itself.
+async function e2eTest(a) {
+  const { createContext, runInContext } = await import("node:vm");
+  const { readFile } = await import("node:fs/promises");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const sandbox = { window: {}, crypto, TextEncoder, TextDecoder, btoa, atob, console };
+  createContext(sandbox);
+  runInContext(await readFile(join(root, "src/ui/chatcrypto.js"), "utf8"), sandbox);
+  const talvi = sandbox.window.talviGate;
+
+  const name = new URL(a.url).pathname.replace(/^\/chat\//, "").replace(/\/ws$/, "");
+  const master = await talvi.deriveMasterHex(a.pin, name);
+  const gateHex = await talvi.gateHex(master, name);
+  const key = await talvi.encKey(master, name);
+
+  const SECRET = "the ice is thin by the north pier at 0300";
+  const failures = [];
+  const expect = (label, ok, detail) => {
+    console.log(`[e2e] ${ok ? "pass" : "FAIL"}  ${label}${detail ? " → " + detail : ""}`);
+    if (!ok) failures.push(label);
+  };
+
+  function member(nick, onRaw) {
+    return new Promise((resolve) => {
+      const ws = new WebSocket(a.url);
+      let settled = false;
+      const done = (r) => {
+        if (settled) return;
+        settled = true;
+        resolve({ ws, result: r });
+      };
+      const timer = setTimeout(() => done("timeout"), 15000);
+      ws.addEventListener("open", () =>
+        ws.send(JSON.stringify({ t: "join", nick, setgate: gateHex })),
+      );
+      ws.addEventListener("message", async (event) => {
+        if (onRaw) onRaw(String(event.data));
+        let f;
+        try {
+          f = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (f.t === "challenge") {
+          ws.send(
+            JSON.stringify({ t: "join", nick, gate: await talvi.answerHex(gateHex, f.nonce) }),
+          );
+          return;
+        }
+        if (f.t === "ready") {
+          clearTimeout(timer);
+          done("ready");
+        }
+        if (f.t === "error") {
+          clearTimeout(timer);
+          done("error:" + f.code);
+        }
+      });
+      ws.addEventListener("close", (e) => {
+        clearTimeout(timer);
+        done("closed:" + e.code);
+      });
+      ws.addEventListener("error", () => {
+        clearTimeout(timer);
+        done("error:socket");
+      });
+    });
+  }
+
+  const A = await member("e2e-a");
+  expect("A creates the gated channel", A.result === "ready", A.result);
+
+  const wire = []; // every raw frame the server sent to B
+  const B = await member("e2e-b", (raw) => wire.push(raw));
+  expect("B joins with the same PIN", B.result === "ready", B.result);
+
+  // A speaks, sealed.
+  A.ws.send(JSON.stringify({ t: "msg", env: await talvi.seal(key, SECRET) }));
+  await new Promise((r) => setTimeout(r, 2500));
+
+  const msgFrames = wire
+    .map((raw) => {
+      try {
+        return { raw, f: JSON.parse(raw) };
+      } catch {
+        return null;
+      }
+    })
+    .filter((x) => x && x.f.t === "msg");
+
+  expect("B received a message frame", msgFrames.length > 0, String(msgFrames.length));
+
+  if (msgFrames.length) {
+    const { raw, f } = msgFrames[0];
+    expect("relayed frame carries an envelope", f.env !== undefined);
+    expect("relayed frame carries NO plaintext field", f.d === undefined);
+    // The whole point: the plaintext is nowhere in what crossed the wire.
+    expect("plaintext absent from the wire bytes", !raw.includes(SECRET));
+    expect("wire bytes are not merely obfuscated", !raw.includes(SECRET.slice(0, 12)));
+    const opened = await talvi.unseal(key, f.env);
+    expect("B decrypts it to exactly what A sent", opened === SECRET);
+
+    // And a member who lacks the PIN gets nothing readable out of it, even
+    // holding the raw envelope.
+    const wrongKey = await talvi.encKey(
+      await talvi.deriveMasterHex(a.pin + "-wrong", name),
+      name,
+    );
+    expect("wrong PIN cannot open the captured envelope",
+      (await talvi.unseal(wrongKey, f.env)) === null);
+  }
+
+  // The relay refuses plaintext on a gated channel — no silent downgrade.
+  const before = wire.filter((r) => r.includes('"t":"msg"')).length;
+  A.ws.send(JSON.stringify({ t: "msg", d: "PLAINTEXT-SHOULD-NOT-RELAY" }));
+  await new Promise((r) => setTimeout(r, 2500));
+  const after = wire.filter((r) => r.includes('"t":"msg"')).length;
+  expect("server refuses to relay plaintext on a gated channel", after === before,
+    `${before} → ${after}`);
+  expect("plaintext never reached B", !wire.some((r) => r.includes("PLAINTEXT-SHOULD-NOT-RELAY")));
+
+  A.ws.close();
+  B.ws.close();
+
+  if (failures.length) {
+    console.error("\n[e2e] FAILED:\n  " + failures.join("\n  "));
+    process.exit(3);
+  }
+  console.log("\n[e2e] all E2E assertions passed");
+  process.exit(0);
+}
+
 // Cap test: `count` sockets join; the last must be refused with "full" + 1013.
 async function capTest(url, count) {
   const sockets = [];
@@ -504,12 +654,14 @@ if (!a.url) {
   console.error(
     "usage: node scripts/chat-ws-smoke.mjs <url> [nick] [--send text] [--expect text] " +
       "[--raw json] [--expect-error code] [--expect-close code] [--cap-test N] [--pair] " +
-      "[--gate-test [--pin <pin>]]",
+      "[--gate-test | --e2e-test [--pin <pin>]]",
   );
   process.exit(2);
 }
 
-if (a.gateTest) {
+if (a.e2eTest) {
+  await e2eTest(a);
+} else if (a.gateTest) {
   await gateTest(a);
 } else if (a.pair) {
   await pairTest(a);

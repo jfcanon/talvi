@@ -77,7 +77,10 @@ class MockWS {
 }
 
 // Real browser derivation, so the test speaks exactly what the client speaks.
-const sandbox = { window: {}, crypto, TextEncoder, console };
+// The browser globals chatcrypto.js legitimately uses. The sandbox is not a
+// browser, so they have to be handed in explicitly; btoa/atob/TextDecoder
+// are all natively present wherever this file actually ships.
+const sandbox = { window: {}, crypto, TextEncoder, TextDecoder, btoa, atob, console };
 createContext(sandbox);
 runInContext(await readFile(join(root, "src/ui/chatcrypto.js"), "utf8"), sandbox);
 const talvi = sandbox.window.talviGate;
@@ -187,6 +190,68 @@ async function connect(ch) {
   await settle();
   check("answer to the ORIGINAL nonce is accepted", b.has("ready"));
   check("successful join left no failure on the clock", ch.gateFails === 0);
+}
+
+// -------------------------------------------- payload kind is not negotiable
+
+// A channel carries exactly one kind of payload, decided by whether it has a
+// gate. The server cannot read an envelope, but refusing to relay anything
+// else is the one part of the room's guarantee it CAN enforce — so a stray
+// plaintext frame on a sealed channel must die at the relay rather than be
+// passed on looking like a normal message.
+{
+  const ch = newChannel();
+  const a = await connect(ch);
+  a.recv({ t: "join", nick: "a", setgate: GATE });
+  await settle();
+
+  const b = await connect(ch);
+  b.recv({ t: "join", nick: "b", gate: await talvi.answerHex(GATE, b.first("challenge").nonce) });
+  await settle();
+  check("gated: correct PIN admitted", b.has("ready"));
+
+  const key = await talvi.encKey(await talvi.deriveMasterHex(PIN, NAME), NAME);
+  a.recv({ t: "msg", env: await talvi.seal(key, "sealed hello") });
+  await settle();
+  const got = b.first("msg");
+  check("gated: envelope is relayed", got?.env !== undefined && got?.from === "a");
+  check("gated: relay does not add plaintext", got?.d === undefined);
+  check("gated: envelope survives the relay byte-for-byte",
+    (await talvi.unseal(key, got.env)) === "sealed hello");
+
+  const before = b.all("msg").length;
+  a.recv({ t: "msg", d: "plaintext leak" });
+  await settle();
+  check("gated: PLAINTEXT IS NOT RELAYED", b.all("msg").length === before);
+
+  a.recv({ t: "msg", env: { v: 2, iv: "x".repeat(16), ct: "abc" } });
+  a.recv({ t: "msg", env: { v: 1, iv: "short", ct: "abc" } });
+  a.recv({ t: "msg", env: { v: 1, iv: "x".repeat(16), ct: "" } });
+  a.recv({ t: "msg", env: "not-an-object" });
+  await settle();
+  check("gated: malformed envelopes are not relayed", b.all("msg").length === before);
+}
+
+{
+  // ...and the converse: an open channel does not carry envelopes. Nobody on
+  // it holds a key, so relaying one would only put undecryptable noise in
+  // front of every member.
+  const ch = newChannel();
+  const a = await connect(ch);
+  a.recv({ t: "join", nick: "a" });
+  await settle();
+  const b = await connect(ch);
+  b.recv({ t: "join", nick: "b" });
+  await settle();
+
+  const key = await talvi.encKey(await talvi.deriveMasterHex(PIN, NAME), NAME);
+  a.recv({ t: "msg", env: await talvi.seal(key, "why is this here") });
+  await settle();
+  check("open: envelope is NOT relayed", !b.has("msg"));
+
+  a.recv({ t: "msg", d: "plain hello" });
+  await settle();
+  check("open: plaintext still relays", b.first("msg")?.d === "plain hello");
 }
 
 // ------------------------------------------------------------- gate refusal

@@ -102,6 +102,81 @@
     return hkdfHex(masterHex, "talvi/v1/gate/" + name);
   }
 
+  // ------------------------------------------------------------ AES-256-GCM
+
+  // K_enc is H_gate's sibling: same K_master, different HKDF info string. The
+  // server is handed H_gate and can verify joins with it; it is never sent
+  // K_enc and cannot derive it from what it holds, which is the whole basis of
+  // the claim that it relays ciphertext it cannot read.
+  async function encKey(masterHex, name) {
+    const raw = fromHex(await hkdfHex(masterHex, "talvi/v1/enc/" + name));
+    return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, [
+      "encrypt",
+      "decrypt",
+    ]);
+  }
+
+  const IV_BYTES = 12; // GCM standard; 96 bits is the size AES-GCM is built for
+
+  function b64urlEncode(bytes) {
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function b64urlDecode(s) {
+    const pad = s.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(pad + "=".repeat((4 - (pad.length % 4)) % 4));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  // Envelope: { v:1, iv:base64url(12B), ct:base64url(ciphertext ‖ 16B tag) }.
+  //
+  // A FRESH random IV per message, from getRandomValues — never a counter,
+  // never derived from the key, never from the clock. Reusing an IV under one
+  // AES-GCM key is the catastrophic failure mode for this cipher: it leaks the
+  // XOR of the two plaintexts and can expose the authentication subkey. 96
+  // random bits per message is the standard way to make that collision
+  // negligible without any shared state between members, which matters here
+  // because members have no shared state to coordinate a counter with.
+  async function seal(key, plaintext) {
+    const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+    const ct = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      enc.encode(plaintext),
+    );
+    return { v: 1, iv: b64urlEncode(iv), ct: b64urlEncode(new Uint8Array(ct)) };
+  }
+
+  // Returns the plaintext, or null if this envelope is not for us.
+  //
+  // null is the ONLY failure signal, and every failure produces it: wrong
+  // shape, wrong version, wrong IV length, and — the common one — a GCM tag
+  // that does not verify because the sender used a different PIN. That last
+  // case is not an error to report, it is someone who cannot talk to us, and
+  // the caller drops it silently. Never throw: a room where one undecryptable
+  // frame breaks the client is a room anyone can break.
+  async function unseal(key, env) {
+    if (!env || env.v !== 1 || typeof env.iv !== "string" || typeof env.ct !== "string") {
+      return null;
+    }
+    try {
+      const iv = b64urlDecode(env.iv);
+      if (iv.length !== IV_BYTES) return null;
+      const pt = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        b64urlDecode(env.ct),
+      );
+      return new TextDecoder().decode(pt);
+    } catch {
+      return null; // bad base64, bad tag, wrong key — all the same to us
+    }
+  }
+
   // The answer to a server challenge (D7): HMAC-SHA256(H_gate, nonce). The
   // gate value itself crosses the wire only once, when the channel is created.
   async function answerHex(gate, nonceHex) {
@@ -192,6 +267,9 @@
     deriveMasterHex,
     gateHex,
     answerHex,
+    encKey,
+    seal,
+    unseal,
     pinProblem,
     randomSlug,
   });
