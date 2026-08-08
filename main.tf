@@ -129,6 +129,14 @@ resource "cloudflare_workers_script" "talvi_web" {
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-07-30"
 
+  # Durable Object migrations (chat sidequest, PR1). `new_classes`, NOT
+  # new_sqlite_classes: ChatChannel is deliberately ephemeral — zero
+  # state.storage writes, everything in memory, channel dies on eviction. It
+  # is additive-only; this class is never renamed or deleted.
+  migrations = {
+    new_classes = ["ChatChannel"]
+  }
+
   bindings = [
     { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_meta.id },
     { type = "r2_bucket", name = "BUCKET", bucket_name = cloudflare_r2_bucket.talvi_drop.name },
@@ -171,6 +179,17 @@ resource "cloudflare_workers_script" "talvi_web" {
         limit  = 60
         period = 60
       }
+    },
+
+    # Chat sidequest (PR1). One Durable Object per channel name; the Worker
+    # routes /chat/<name>/ws to it. class_name must match the named export of
+    # dist/index.js (src/chat/channel.js). Bounds are enforced in the object
+    # itself, not here — the ratelimit bindings above are known-inert (RUNBOOK
+    # §8) and are NOT relied on for chat abuse control (see D11/D12).
+    {
+      type       = "durable_object_namespace"
+      name       = "CHAT_CHANNELS"
+      class_name = "ChatChannel"
     },
   ]
 }

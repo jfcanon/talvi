@@ -11,6 +11,7 @@ import { notFoundPage } from "./ui/notfound.js";
 import { uploadPage } from "./ui/upload.js";
 import { viewPage } from "./ui/view.js";
 import { newSlug, isValidSlug } from "./slug.js";
+import { isValidChannelName } from "./chat/name.js";
 import { sanitiseFilename, validateContentType } from "./sanitise.js";
 import { createClerkClient } from "@clerk/backend";
 
@@ -410,6 +411,11 @@ const ROBOTS = "User-agent: *\nDisallow: /\n";
 // the phantom download bug".
 const SLUG_ROUTE = /^\/([^/]+)(\/d)?$/;
 
+// Chat (sidequest). The landing page arrives in a later PR; /chat already
+// shadows a drop whose slug is literally "chat" (decision D14): that drop's
+// view page is shadowed, but its /chat/d download still routes via SLUG_ROUTE.
+const CHAT_WS_ROUTE = /^\/chat\/([^/]+)\/ws$/;
+
 async function handleSlugRoute(match, env, request, ctx) {
   const slug = match[1];
   const wantsDownload = Boolean(match[2]);
@@ -582,6 +588,23 @@ async function route(request, method, env, ctx) {
     return handleSprite();
   }
 
+  // Chat, PR1: WebSocket upgrade path only. /chat/<name>/ws -> the channel's
+  // Durable Object. The object is created on first use (idFromName semantics);
+  // the name is validated BEFORE routing so a malformed name never reaches it.
+  const chatWs = CHAT_WS_ROUTE.exec(pathname);
+  if (chatWs) {
+    const name = chatWs[1];
+    if (!isValidChannelName(name)) return notFound();
+    const stub = env.CHAT_CHANNELS.getByName(name);
+    return stub.fetch(request);
+  }
+
+  // Landing page placeholder. PR1 ships no page yet; /chat must still shadow a
+  // slug named "chat" (D14), and a byte-identical 404 is the correct stand-in.
+  if (pathname === "/chat") {
+    return notFound();
+  }
+
   const match = SLUG_ROUTE.exec(pathname);
   if (match) {
     return handleSlugRoute(match, env, request, ctx);
@@ -615,3 +638,9 @@ export default {
     return new Response(null, { status: response.status, headers: response.headers });
   },
 };
+
+// The ChatChannel Durable Object must be a NAMED export of the deployed module
+// for the runtime to instantiate it (the CHAT_CHANNELS binding in main.tf
+// references it by class name). Re-exporting here is what makes esbuild keep it
+// in the bundle with its export visible.
+export { ChatChannel } from "./chat/channel.js";
