@@ -419,13 +419,57 @@ just reconnects. The cost: anyone who knows the channel name can wedge it shut
 for 60 s at a time by failing on purpose. Against an unguessable name (D9) that
 is a nuisance available to someone already invited, not a way in.
 
-### Origin gate nuance (PR2, recorded)
+### Origin gate — same-origin, never a hostname list (PR7)
 
-The upgrade Origin check rejects present-and-foreign origins but **allows an
-absent Origin**. Browsers always send Origin on a WS upgrade, so the browser
-cross-origin threat (CSWSH) is closed; curl/script clients that omit Origin are
-not that threat. Channel names are unguessable secrets (D9), so a cross-site
+The upgrade check compares the request's `Origin` host to **the host the request
+actually arrived on**. There is nothing to configure and no list to maintain: it
+is correct on every hostname, including ones that do not exist yet.
+
+> **Do not reintroduce a hostname allowlist here.** It was one, and it is a trap
+> with a fuse on it. The day the site gains a host the list has not been told
+> about — a public-release domain, a **blue/green staging host**, a preview URL —
+> every WebSocket upgrade from that host is refused `403` and chat dies there
+> for those users only. The pages still render, so it reads as a chat bug rather
+> than a config one. The CSP already says `connect-src 'self'`, so same-origin
+> is the rule; enforce that rule, not a snapshot of today's DNS.
+
+Absent Origin is still **allowed** (recorded, PR2). Browsers always send Origin
+on a WS upgrade, so the CSWSH threat is closed; curl and the node smoke clients
+are not that threat. Channel names are unguessable secrets (D9), so a cross-site
 script without the name has nothing to probe.
+
+### Chat and the sign-in work (recorded, PR7)
+
+Chat is **public and anonymous by design** — no accounts, no Clerk, guest nicks
+only. Its only secrets are the channel name and (optionally) the PIN. It does
+not read `__session` and does not care whether Clerk is up: chat kept working
+throughout the period Clerk was broken.
+
+If a login is ever placed in front of the **whole site**, `/chat` ends up behind
+it. That may be wanted, but it is a deliberate choice and not a default — decide
+it explicitly rather than discovering it. Note that gating chat behind sign-in
+removes the anonymity that is the point of it, and that the PIN gate is a
+different mechanism serving a different purpose (who is in this room), not a
+substitute for site auth (who may use this site).
+
+### Verifying chat on any host — including before a blue/green cutover
+
+```bash
+npm run verify:chat                                   # the live worker
+npm run verify:chat -- https://green.example          # a candidate, BEFORE cutover
+npm run verify:chat -- https://green.example --full   # adds the 65-socket cap test
+npm run test:chat                                     # offline suites, no network
+```
+
+Exit code is the gate: `0` all passed, `1` something failed. Each case runs on a
+freshly named channel and leaves nothing behind — a Durable Object is created on
+first use and dies with its last member.
+
+**Run it against the green deployment before pointing traffic at it.** Chat was
+silently broken in production once already: a sign-in refactor dropped `ctx` from
+scope in `routePage`, every UI route including `/chat` returned 500, and nothing
+caught it because the chat checks only ran when chat code changed. The failure
+had nothing to do with chat and everything to do with the building around it.
 
 ### Live verification
 

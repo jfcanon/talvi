@@ -56,16 +56,54 @@ const MAX_WIRE_BYTES = 4096;
 const MAX_MEMBERS = 64; // joined sockets per channel
 const MAX_SOCKETS = 128; // any open socket (incl. never-joining) — bounds memory
 
-// Origin gate (D11, LOW finding). Browsers always send Origin on a WS
-// upgrade; a cross-origin page must be refused. Non-browser clients (curl,
-// node smoke scripts) may omit Origin — that is not the browser cross-origin
-// threat this check exists for, so absent Origin is allowed, present-and-
-// foreign is rejected. Channel names are unguessable secrets (D9), so a
-// cross-site script that does not know the name has nothing to probe here.
-const ALLOWED_ORIGINS = new Set([
-  "https://talvi.ygdcbtmc4u.uk",
-  "https://talvi-web.ygdcbtmc4u.workers.dev",
-]);
+// Origin gate (D11, LOW finding). Browsers always send Origin on a WS upgrade,
+// so a cross-origin page must be refused. Channel names are unguessable secrets
+// (D9), so a cross-site script that does not know the name has nothing to probe
+// here anyway — this closes the case where it somehow does.
+//
+// Same-origin is checked STRUCTURALLY, against the host the request actually
+// arrived on — not against a list of hostnames.
+//
+// This used to be a hardcoded Set of the two hosts talvi was served from, and
+// that was a trap with a fuse on it: the moment the site gains a hostname the
+// list does not know about — a public-release domain, a blue/green staging
+// host, a preview URL — every WebSocket upgrade from that host is refused 403
+// and chat dies there, silently, for those users only. Pages render fine, so
+// it looks like a chat bug rather than a config one.
+//
+// There is nothing to configure here. The CSP already says `connect-src
+// 'self'`, so a legitimate browser client's Origin is ALWAYS the site's own
+// origin; comparing Origin's host to the request's own host enforces exactly
+// that and is correct on every hostname, forever, including ones nobody has
+// bought yet.
+//
+// Absent Origin stays allowed — the recorded decision from PR2. Browsers
+// always send Origin on a WS upgrade, so the cross-origin threat this exists
+// for is closed; curl and the node smoke clients simply are not that threat.
+export function sameOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+
+  let originHost;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return false; // unparseable Origin is not a same-origin request
+  }
+
+  // Host header first (what the browser addressed), request.url as the
+  // fallback. The Worker forwards the original Request to the stub, so both
+  // are the client's, not something rewritten in between.
+  let host = request.headers.get("Host");
+  if (!host) {
+    try {
+      host = new URL(request.url).host;
+    } catch {
+      return false; // no host to compare against — refuse rather than guess
+    }
+  }
+  return originHost === host;
+}
 
 const encoder = new TextEncoder();
 
@@ -125,8 +163,7 @@ export class ChatChannel {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("expected websocket", { status: 426 });
     }
-    const origin = request.headers.get("Origin");
-    if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    if (!sameOrigin(request)) {
       return new Response("forbidden", { status: 403 });
     }
     // Hard cap on open sockets, join or not. A flood of connecting-but-never-

@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
 
-import { ChatChannel } from "../src/chat/channel.js";
+import { ChatChannel, sameOrigin } from "../src/chat/channel.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -103,6 +103,59 @@ async function connect(ch) {
   await settle();
   return ws;
 }
+
+// ------------------------------------------------------- same-origin gate
+
+// The upgrade check must follow the host the request ARRIVED on, never a list
+// of known hostnames. The list version worked right up until the site gained a
+// hostname it had not been told about — a release domain, a blue/green staging
+// host, a preview URL — and then refused every upgrade from there while the
+// pages themselves rendered fine, which reads as a chat bug rather than a
+// config one.
+function req(url, origin, host) {
+  return {
+    url,
+    headers: {
+      get: (k) =>
+        k === "Origin" ? (origin ?? null) : k === "Host" ? (host ?? null) : null,
+    },
+  };
+}
+
+const WS = "https://talvi.example/chat/x/ws";
+
+check("same host is allowed",
+  sameOrigin(req(WS, "https://talvi.example", "talvi.example")));
+check("foreign origin is refused",
+  !sameOrigin(req(WS, "https://evil.example", "talvi.example")));
+check("absent Origin is allowed (curl, smoke clients — recorded decision)",
+  sameOrigin(req(WS, null, "talvi.example")));
+check("unparseable Origin is refused",
+  !sameOrigin(req(WS, "not-a-url", "talvi.example")));
+check("Origin 'null' (sandboxed iframe) is refused",
+  !sameOrigin(req(WS, "null", "talvi.example")));
+
+// Falls back to the request URL when no Host header is present.
+check("falls back to request URL host",
+  sameOrigin(req(WS, "https://talvi.example", null)));
+check("fallback still refuses a foreign origin",
+  !sameOrigin(req(WS, "https://evil.example", null)));
+
+// THE regression this replaces: hostnames nobody has configured must just work.
+for (const host of [
+  "talvi.ygdcbtmc4u.uk",
+  "talvi-web.ygdcbtmc4u.workers.dev",
+  "talvi-green.ygdcbtmc4u.uk", // blue/green
+  "staging.talvi.example", // preview
+  "some-domain-nobody-bought-yet.test", // public release
+]) {
+  check(`unlisted host works: ${host}`,
+    sameOrigin(req(`https://${host}/chat/x/ws`, `https://${host}`, host)));
+}
+
+// Port and scheme are part of the host comparison where they matter.
+check("differing port is refused",
+  !sameOrigin(req("https://talvi.example/chat/x/ws", "https://talvi.example:8443", "talvi.example")));
 
 // -------------------------------------------------------------- open channel
 
