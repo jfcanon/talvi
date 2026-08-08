@@ -279,7 +279,12 @@
       };
 
       xhr.onerror = () => {
-        fail("UPLINK LOST. Nothing was stored. Try again.");
+        // An XHR POST cannot follow the Cloudflare Access 302 to the
+        // cross-origin PIN page — the browser blocks reading it and this
+        // handler fires. The fix is a full-page navigation to /api/upload:
+        // Access shows the email PIN, sets its cookie, and redirects back.
+        // After that, a retry carries the cookie and uploads normally.
+        window.location.href = "/api/upload";
       };
 
       xhr.onload = () => {

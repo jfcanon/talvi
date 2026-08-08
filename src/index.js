@@ -660,6 +660,14 @@ async function routePage(request, env, ctx, pathname) {
     return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
   }
 
+  // GET /api/upload — where Cloudflare Access redirects the browser back after
+  // the email PIN (client.js navigates here on XHR interception). There is no
+  // GET handler for this path; redirect to the upload page so the owner lands
+  // somewhere useful, now authenticated, and can retry the upload.
+  if (pathname === "/api/upload") {
+    return Response.redirect(new URL("/", request.url).toString(), 302);
+  }
+
   return routeStatic(request, env, ctx, pathname);
 }
 
