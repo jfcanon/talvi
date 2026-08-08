@@ -8,7 +8,7 @@ this page — fix it here.
 
 ---
 
-## 0. Two rules that override everything below
+## 0. Three rules that override everything below
 
 1. **Terraform NEVER runs locally.** Open a PR → CI runs `plan`. Merge → CI runs
    `apply`. There is no `terraform apply` on a laptop in this project, ever,
@@ -18,6 +18,10 @@ this page — fix it here.
    hand, pasted from memory, or committed. `wrangler` has no credentials of its
    own here — it reads `CLOUDFLARE_API_TOKEN` from the environment, and that
    value comes out of Bitwarden immediately before use.
+3. **Step 8 (auth): "/" and "/api/upload" require Clerk sign-in.** Users without
+   a `__session` cookie are redirected to `amazed-cougar-41.accounts.dev/sign-in`.
+   The portal handles authentication; the Worker verifies the cookie locally. All
+   `/:slug/*` routes stay public (unsigned sharing unchanged).
 
 ### Getting a token into your shell
 
