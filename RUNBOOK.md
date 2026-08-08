@@ -438,6 +438,42 @@ on a WS upgrade, so the CSWSH threat is closed; curl and the node smoke clients
 are not that threat. Channel names are unguessable secrets (D9), so a cross-site
 script without the name has nothing to probe.
 
+### Cloudflare injects a beacon on the proxied zone — do NOT fix it in the CSP
+
+On `talvi.ygdcbtmc4u.uk` (the proxied zone, **not** workers.dev) Cloudflare
+injects its Browser Insights beacon into HTML at the edge:
+
+```
+Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/…'
+violates the following Content Security Policy directive: "script-src 'self'".
+The action has been blocked.
+```
+
+**The CSP is working. Nothing is broken and nothing is leaking** — the script
+never executes. But every real visitor to that domain gets a console error, and
+Cloudflare Web Analytics collects nothing, so the feature is on and inert.
+
+It only appears for requests that look like real browser navigations
+(`Sec-Fetch-Dest: document`), which is why plain `curl` sees nothing and the
+browser test does. To reproduce from a shell:
+
+```bash
+curl -sS -A "Mozilla/5.0 … Chrome/131.0.0.0 Safari/537.36" \
+  -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' \
+  https://talvi.ygdcbtmc4u.uk/chat | grep -c cloudflareinsights   # → 1
+```
+
+> **The fix is to turn the zone feature OFF** (Cloudflare dashboard → Web
+> Analytics / Speed → Browser Insights), never to add
+> `static.cloudflareinsights.com` to `script-src`. The CSP has never been
+> weakened in this project, and this is exactly how that streak would end —
+> someone making a red line go green. A third-party analytics script injected
+> into a page whose entire premise is that it ships no third-party code is not
+> a CSP problem to accommodate; it is a setting to switch off.
+
+`scripts/chat-browser-test.mjs` reports this as its own named failure, separate
+from page violations, so the two are never confused.
+
 ### Chat and the sign-in work (recorded, PR7)
 
 Chat is **public and anonymous by design** — no accounts, no Clerk, guest nicks

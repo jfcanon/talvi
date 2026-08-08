@@ -92,6 +92,20 @@ async function launch() {
 
 const browser = await launch();
 const violations = [];
+const injected = [];
+
+// Cloudflare injects its Browser Insights beacon into HTML at the edge on the
+// proxied zone — but only for requests that look like real browser navigations
+// (`Sec-Fetch-Dest: document`), which is why curl sees nothing and this test
+// does. The CSP blocks it, correctly.
+//
+// It is reported SEPARATELY from our own violations because the two demand
+// opposite responses. A violation from our own page is a bug in our page. This
+// is a third-party script the site never asked for, arriving from the edge, and
+// the fix is to turn the zone feature off — NEVER to add the host to
+// `script-src`. Conflating them is how a CSP that has never been weakened gets
+// weakened, by someone making a red line go green.
+const EDGE_INJECTED = /cloudflareinsights\.com|\/cdn-cgi\/(scripts|challenge-platform)/i;
 
 // Separate CONTEXTS, not tabs: sessionStorage is per-context, and each member
 // has to go through the landing to get their own nick and derived key.
@@ -114,7 +128,7 @@ async function openContext(label) {
   page.on("console", (m) => {
     const t = m.text();
     if (/Content Security Policy|Refused to (load|execute|connect)/i.test(t)) {
-      violations.push(`[${label}] ${t}`);
+      (EDGE_INJECTED.test(t) ? injected : violations).push(`[${label}] ${t}`);
     }
   });
   page.on("pageerror", (e) => violations.push(`[${label}] pageerror: ${e.message}`));
@@ -228,8 +242,16 @@ check("roster is rebuilt after reconnect",
 
 // ---- the CSP has still never been weakened ---------------------------------
 
-check("no CSP violations or page errors anywhere", violations.length === 0,
-  violations.length ? violations.slice(0, 3).join(" | ") : "clean");
+check("no CSP violations or page errors from the page itself", violations.length === 0,
+  violations.length ? violations.slice(0, 2).join(" | ") : "clean");
+
+// Separate check, separate fix. This one is about the edge, not the page.
+check("no third-party script injected by the edge", injected.length === 0,
+  injected.length
+    ? "Cloudflare Browser Insights beacon injected on this zone and blocked by " +
+      "CSP (correctly). Fix by DISABLING the zone feature — Web Analytics / " +
+      "Browser Insights — never by adding the host to script-src."
+    : "clean");
 
 await browser.close();
 
