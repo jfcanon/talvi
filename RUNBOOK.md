@@ -453,6 +453,17 @@ node scripts/chat-gate-test.mjs
 # gate bug before any of that.
 node scripts/chat-channel-test.mjs
 
+# The full journey in a REAL browser — the only check that executes
+# src/ui/chat.js at all (everything else tests the protocol) and the only one
+# that can prove the page raises no CSP violations. Playwright is deliberately
+# NOT a dependency; install it ad hoc:
+#   npm i --no-save playwright-core
+#   npx playwright install chromium     # only if no browser is cached
+#   node scripts/chat-browser-test.mjs
+# Exits 2 with instructions if playwright-core is absent, so a missing
+# dependency never reads as a failing test.
+node scripts/chat-browser-test.mjs
+
 # End-to-end encryption against the live object (PR4). Two members, one PIN,
 # real browser crypto. Asserts on what the WIRE carried — the relayed bytes must
 # contain no trace of the plaintext — and that the server refuses to relay a
