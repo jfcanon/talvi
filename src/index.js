@@ -4,6 +4,7 @@
 // hostile client rather than a friendly form). Step 4 added the read paths.
 // Step 5 adds the UI: "/" now serves an upload page instead of falling through
 // to the 404, and /s.css and /s.js serve real content.
+// Step 8 adds Clerk auth: "/" and "/api/upload" gate on email, /:slug/* stay public.
 import { STYLE_CSS, CLIENT_JS, SPRITE_PNG_B64 } from "./generated/assets.js";
 import { closedPage, limitedPage } from "./ui/errorpage.js";
 import { notFoundPage } from "./ui/notfound.js";
@@ -11,6 +12,7 @@ import { uploadPage } from "./ui/upload.js";
 import { viewPage } from "./ui/view.js";
 import { newSlug, isValidSlug } from "./slug.js";
 import { sanitiseFilename, validateContentType } from "./sanitise.js";
+import { createClerkClient } from "@clerk/backend";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB — see blueprint B.6
 const MAX_DAILY_BYTES = 250 * 1024 * 1024; // 250 MiB/day — bounds storage inside R2 free tier, B.8
@@ -20,6 +22,23 @@ const MAX_DAILY_BYTES = 250 * 1024 * 1024; // 250 MiB/day — bounds storage ins
 // expire them (RUNBOOK §4).
 const TTL_DAYS = new Set([1, 7, 30]);
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Clerk auth (Step 8). Portal lives at amazed-cougar-41.accounts.dev; unauthenticated
+// requests to gated routes redirect there. __session cookie verified locally via jwtKey.
+function getClerkClient(env) {
+  return createClerkClient({
+    secretKey: env.CLERK_SECRET_KEY,
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    jwtKey: env.CLERK_JWT_KEY,
+  });
+}
+
+function redirectToClerkPortal(request) {
+  const returnUrl = new URL(request.url).pathname;
+  const portalUrl = new URL("https://amazed-cougar-41.accounts.dev/sign-in");
+  portalUrl.searchParams.set("redirect_url", `https://${new URL(request.url).hostname}${returnUrl}`);
+  return Response.redirect(portalUrl.toString(), 302);
+}
 
 // CREATE TABLE IF NOT EXISTS at the top of any handler touching D1 — the
 // relay's idiom, deliberately kept so this project needs no migration tooling.
@@ -500,6 +519,13 @@ async function route(request, method, env, ctx) {
   if (method !== "GET") {
     // The only non-GET route in the app.
     if (pathname === "/api/upload" && method === "POST") {
+      // Step 8: gate on auth before rate limit or upload logic.
+      const { isAuthenticated } = await getClerkClient(env).authenticateRequest(request, {
+        authorizedParties: ["talvi.ygdcbtmc4u.uk", "talvi-web.ygdcbtmc4u.workers.dev"],
+      });
+      if (!isAuthenticated) {
+        return json({ error: "unauthorized; sign in at the portal" }, 401);
+      }
       // JSON, not the themed HTML page: this is an API endpoint and its
       // caller is the uploader script, which renders its own in-theme
       // message from the status code.
@@ -534,8 +560,14 @@ async function route(request, method, env, ctx) {
     return new Response(closedPage(), { status: 503, headers: HTML_HEADERS });
   }
 
-  // "/" — the upload page (Step 5). Until now this fell through to the 404.
+  // "/" — the upload page (Step 5). Step 8: gated on auth.
   if (pathname === "/") {
+    const { isAuthenticated } = await getClerkClient(env).authenticateRequest(request, {
+      authorizedParties: ["talvi.ygdcbtmc4u.uk", "talvi-web.ygdcbtmc4u.workers.dev"],
+    });
+    if (!isAuthenticated) {
+      return redirectToClerkPortal(request);
+    }
     return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
   }
 
