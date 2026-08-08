@@ -310,7 +310,9 @@ async function gateTest(a) {
   const { fileURLToPath } = await import("node:url");
 
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-  const sandbox = { window: {}, crypto, TextEncoder, console };
+  // The browser globals chatcrypto.js uses. The sandbox is not a browser, so
+  // they are handed in explicitly; all are native wherever it really ships.
+  const sandbox = { window: {}, crypto, TextEncoder, TextDecoder, btoa, atob, console };
   createContext(sandbox);
   runInContext(await readFile(join(root, "src/ui/chatcrypto.js"), "utf8"), sandbox);
   const talvi = sandbox.window.talviGate;
@@ -318,7 +320,12 @@ async function gateTest(a) {
   // /chat/<name>/ws → <name>. The name is the KDF salt, so it must match what
   // the browser would use for this URL exactly.
   const name = new URL(a.url).pathname.replace(/^\/chat\//, "").replace(/\/ws$/, "");
-  const goodGate = await talvi.gateHex(await talvi.deriveMasterHex(a.pin, name), name);
+  const master = await talvi.deriveMasterHex(a.pin, name);
+  const goodGate = await talvi.gateHex(master, name);
+  // Since PR4 a gated channel relays ONLY sealed envelopes — a plaintext `d`
+  // frame is dropped by the server on purpose (no silent downgrade). So the
+  // relay step below has to speak the channel's actual shape.
+  const encKey = await talvi.encKey(master, name);
   const badGate = await talvi.gateHex(
     await talvi.deriveMasterHex(a.pin + "-wrong", name),
     name,
@@ -394,7 +401,11 @@ async function gateTest(a) {
       ws.addEventListener("message", (ev) => {
         try {
           const f = JSON.parse(ev.data);
-          if (f.t === "msg") heardFromA = f.d;
+          if (f.t === "msg" && f.env) {
+            talvi.unseal(encKey, f.env).then((plain) => {
+              if (plain !== null) heardFromA = plain;
+            });
+          }
         } catch {
           /* ignore */
         }
@@ -416,7 +427,11 @@ async function gateTest(a) {
       ws.addEventListener("message", (ev) => {
         try {
           const f = JSON.parse(ev.data);
-          if (f.t === "msg") heardFromA = f.d;
+          if (f.t === "msg" && f.env) {
+            talvi.unseal(encKey, f.env).then((plain) => {
+              if (plain !== null) heardFromA = plain;
+            });
+          }
         } catch {
           /* ignore */
         }
@@ -427,10 +442,12 @@ async function gateTest(a) {
 
   // 3. gated channel still relays
   if (bSocket) {
-    held[0]?.send(JSON.stringify({ t: "msg", d: "gated-hello" }));
-    await new Promise((r) => setTimeout(r, 2000));
+    held[0]?.send(
+      JSON.stringify({ t: "msg", env: await talvi.seal(encKey, "gated-hello") }),
+    );
+    await new Promise((r) => setTimeout(r, 2500));
   }
-  expect("gated channel relays", heardFromA, "gated-hello");
+  expect("gated channel relays a sealed message", heardFromA, "gated-hello");
 
   // 4. wrong PIN refused
   const rC = await attempt("gate-c", badGate);
