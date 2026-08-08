@@ -14,6 +14,7 @@ import { chatLandingPage, chatRoomPage } from "./ui/chatpage.js";
 import { newSlug, isValidSlug } from "./slug.js";
 import { isValidChannelName } from "./chat/name.js";
 import { sanitiseFilename, validateContentType } from "./sanitise.js";
+import { sniffImageKind, imageMime } from "./sniff.js";
 import { createClerkClient } from "@clerk/backend";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB — see blueprint B.6
@@ -394,6 +395,96 @@ async function handleDownload(env, row, ctx) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// "as markdown" (markdown sidequest). GET /:slug/md — an OCR/description
+// conversion of an uploaded image, served as a downloadable .md and cached in
+// R2 so one image is never converted twice. Design and decisions:
+// plans/talvi-markdown-blueprint.md.
+// ---------------------------------------------------------------------------
+
+const MD_HEAD_BYTES = 16; // every supported signature fits in 16 bytes
+
+// Sniff the object's OWN first bytes — never the client-declared content type
+// (B.7 item 1). Returns a kind string ("jpeg", "png", ...) or null.
+async function imageKindOf(env, r2Key) {
+  const head = await env.BUCKET.get(r2Key, { range: { length: MD_HEAD_BYTES } });
+  if (head === null) return null;
+  return sniffImageKind(await head.arrayBuffer());
+}
+
+// Derived filename for the .md attachment. The original filename was already
+// scrubbed at intake (sanitiseFilename); strip any trailing image extension
+// and swap in .md. The result is always plain [A-Za-z0-9._-], so it needs no
+// RFC 5987 counterpart and cannot inject a header.
+function mdAttachmentName(row) {
+  const ascii =
+    row.filename.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 100) || "file";
+  const stem = ascii.replace(/\.[A-Za-z0-9]{1,5}$/, "") || "transcript";
+  return stem + ".md";
+}
+
+// OCR output is hostile text and is served with the SAME no-render discipline
+// as downloads: attachment, nosniff, sandbox CSP. text/markdown (RFC 7763) so
+// the file arrives as a real .md; attachment so nothing ever renders on this
+// origin. The markdown is never served as HTML and never rendered inline.
+function markdownResponse(body, row) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/markdown; charset=utf-8",
+      "content-disposition": `attachment; filename="${mdAttachmentName(row)}"`,
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "default-src 'none'; sandbox",
+      "x-robots-tag": "noindex, nofollow",
+      "cache-control": "private, max-age=0, no-store",
+    },
+  });
+}
+
+async function handleMarkdown(env, row) {
+  // The route exists only for images — decided by the object's own bytes,
+  // never the declared type. A non-image gets the byte-identical 404 (B.7 item
+  // 5), so a viewer cannot tell "not an image" from "no such file".
+  const kind = await imageKindOf(env, row.r2_key);
+  if (!kind) return notFound();
+
+  // Derived cache at <r2_key>.md — same prefix, so the existing lifecycle
+  // rules expire it with the same TTL as the original object (blueprint §4).
+  // This is what makes "one image is converted once, ever" true.
+  const cacheKey = row.r2_key + ".md";
+  const cached = await env.BUCKET.get(cacheKey);
+  if (cached) return markdownResponse(cached.body, row);
+
+  if (!env.AI) {
+    return json({ error: "conversion unavailable" }, 502);
+  }
+
+  const object = await env.BUCKET.get(row.r2_key);
+  if (object === null) return notFound();
+
+  let md;
+  try {
+    const results = await env.AI.toMarkdown({
+      name: "image." + kind,
+      blob: new Blob([await object.arrayBuffer()], { type: imageMime(kind) }),
+    });
+    const result = Array.isArray(results) ? results[0] : results;
+    if (!result || result.format === "error") {
+      return json({ error: "conversion failed" }, 502);
+    }
+    md = String(result.data ?? "");
+  } catch {
+    // A failed conversion caches nothing, so a retry is a fresh attempt.
+    return json({ error: "conversion failed" }, 502);
+  }
+
+  await env.BUCKET.put(cacheKey, md, {
+    httpMetadata: { contentType: "text/markdown; charset=utf-8" },
+  });
+
+  return markdownResponse(md, row);
+}
+
 // Real assets (Step 5). Step 4 served stubs with `no-store` deliberately, so
 // that nobody who loaded a page then would be stuck with an empty stylesheet
 // for a year. Now that there is real content, the cache is immutable and
@@ -493,9 +584,10 @@ function limitedHtml() {
 // is invisible to anyone auditing the site's intent.
 const ROBOTS = "User-agent: *\nDisallow: /\n";
 
-// /:slug and /:slug/d. Split out of fetch() to keep the router's cognitive
-// complexity under the quality gate's ceiling — the whole read path is one
-// decision ("is this a live drop?") and reads better as its own function.
+// /:slug, /:slug/d, and /:slug/md. Split out of fetch() to keep the router's
+// cognitive complexity under the quality gate's ceiling — the whole read path
+// is one decision ("is this a live drop?") and reads better as its own
+// function.
 //
 // NOTE for anyone debugging a 404 here: every miss below, and any unmatched
 // path in fetch(), returns a BYTE-IDENTICAL 404 — the same bytes for "expired",
@@ -504,7 +596,7 @@ const ROBOTS = "User-agent: *\nDisallow: /\n";
 // indistinguishable from broken storage. That exact confusion cost a full
 // debugging cycle on this project; see the commit "docs: correct the record on
 // the phantom download bug".
-const SLUG_ROUTE = /^\/([^/]+)(\/d)?$/;
+const SLUG_ROUTE = /^\/([^/]+)(\/(d|md))?$/;
 
 // Chat (sidequest). The landing page arrives in a later PR; /chat already
 // shadows a drop whose slug is literally "chat" (decision D14): that drop's
@@ -516,10 +608,11 @@ const CHAT_ROOM_ROUTE = /^\/chat\/([^/]+)$/;
 
 async function handleSlugRoute(match, env, request, ctx) {
   const slug = match[1];
-  const wantsDownload = Boolean(match[2]);
+  const action = match[2] ?? ""; // "", "/d", or "/md"
 
-  // Read limit covers view pages, downloads, AND 404 probing — the last is the
-  // reason it exists, since it is what bounds slug guessing.
+  // Read limit covers view pages, downloads, markdown conversion, AND 404
+  // probing — the last is the reason it exists, since it is what bounds slug
+  // guessing.
   if (!(await withinLimit(env.RL_READ, request))) return limitedHtml();
 
   // Validate shape BEFORE any lookup — a malformed slug never reaches D1.
@@ -528,7 +621,8 @@ async function handleSlugRoute(match, env, request, ctx) {
   const row = await getLiveDrop(env, slug);
   if (!row) return notFound();
 
-  return wantsDownload ? handleDownload(env, row, ctx) : handleView(row, slug);
+  if (action === "/md") return handleMarkdown(env, row);
+  return action === "/d" ? handleDownload(env, row, ctx) : handleView(row, slug);
 }
 
 // ---------------------------------------------------------------------------
@@ -734,9 +828,11 @@ async function routeStatic(request, env, ctx, pathname) {
   // download path for a drop whose slug is literally "chat", and that
   // download must keep working — so name "d" falls through to SLUG_ROUTE
   // below. A channel named "d" is an antipattern anyway (secret, high-entropy
-  // names, D9); recorded in src/chat/name.js and RUNBOOK §9.
+  // names, D9); recorded in src/chat/name.js and RUNBOOK §9. "md" gets the
+  // same treatment so /chat/md reaches the markdown conversion of that same
+  // drop (markdown sidequest, PR2).
   const room = CHAT_ROOM_ROUTE.exec(pathname);
-  if (room && room[1] !== "d") {
+  if (room && room[1] !== "d" && room[1] !== "md") {
     const name = room[1];
     if (!isValidChannelName(name)) return notFound();
     return new Response(chatRoomPage(name), { status: 200, headers: HTML_HEADERS });

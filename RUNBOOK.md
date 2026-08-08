@@ -48,6 +48,10 @@ npx wrangler d1 execute talvi-meta --remote --command \
 # 2. Delete the object (r2_key looks like d1/<slug>, d7/<slug>, ...).
 npx wrangler r2 object delete talvi-drop/<R2_KEY>
 
+# 2b. If the file was ever converted "as markdown", its derived cache lives at
+#     <R2_KEY>.md (same prefix, same lifecycle TTL) and must go too.
+npx wrangler r2 object delete talvi-drop/<R2_KEY>.md
+
 # 3. Delete the row.
 npx wrangler d1 execute talvi-meta --remote --command \
   "DELETE FROM drops WHERE slug = '<SLUG>'"
@@ -58,7 +62,8 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://talvi-web.ygdcbtmc4u.workers.d
 
 **Order matters.** Delete the object first. If you delete the row first you have
 lost the `r2_key` and the object is orphaned in the bucket until its lifecycle
-rule expires it.
+rule expires it. The `<R2_KEY>.md` cache (step 2b) is derived content of the
+same file — delete it in the same breath or the takedown leaks the file's text.
 
 ### Delete everything currently stored
 
