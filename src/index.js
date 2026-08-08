@@ -25,10 +25,11 @@ const MAX_DAILY_BYTES = 250 * 1024 * 1024; // 250 MiB/day — bounds storage ins
 const TTL_DAYS = new Set([1, 7, 30]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Clerk auth (Step 8). Portal lives at amazed-cougar-41.accounts.dev; unauthenticated
-// requests to gated routes redirect there. __session cookie verified via jwtKey when
-// present (local, networkless); otherwise Clerk's SDK fetches the key from the API
-// and caches it — auth works either way.
+// Clerk auth (Step 8). Production instance — portal lives at
+// accounts.ygdcbtmc4u.uk, same-zone as the app, so the redirect back to talvi
+// is same-origin and Clerk accepts it (no /default-redirect dead end). __session
+// cookie verified via jwtKey when present (local, networkless); otherwise
+// Clerk's SDK fetches the key from the API and caches it — auth works either way.
 function getClerkClient(env) {
   const opts = {
     secretKey: env.CLERK_SECRET_KEY,
@@ -40,7 +41,7 @@ function getClerkClient(env) {
 
 function redirectToClerkPortal(request) {
   const returnUrl = new URL(request.url).pathname;
-  const portalUrl = new URL("https://amazed-cougar-41.accounts.dev/sign-in");
+  const portalUrl = new URL("https://accounts.ygdcbtmc4u.uk/sign-in");
   portalUrl.searchParams.set("redirect_url", `https://${new URL(request.url).hostname}${returnUrl}`);
   return Response.redirect(portalUrl.toString(), 302);
 }
