@@ -104,6 +104,7 @@ export function uploadPage() {
     "</div>" +
     '<div class="result__actions">' +
     '<button class="btn btn--ghost" type="button" id="copy">COPY LINK</button>' +
+    '<a class="btn btn--ghost" href="https://amazed-cougar-41.accounts.dev/sign-out">SIGN OUT</a>' +
     "</div>" +
     "</div>";
 
