@@ -390,6 +390,23 @@ object, not the URL — the Worker rendering the page does not know it, and aski
 would cost a round trip and make page load an oracle for which channels are
 gated. A late claim beats a wrong one.
 
+### Room behaviour (PR5)
+
+- **Member list** is rebuilt from scratch on every connect. The server replays
+  the full roster to a newcomer, so after a reconnect that replay is the truth
+  and anything remembered from the previous socket is stale by definition.
+- **Reconnect is a button, never a timer.** An automatic retry against a gated
+  channel spends a lockout attempt every time (D8), so a room that refused you
+  once would be hammered shut by its own client. After a `4003` the button says
+  TRY AGAIN, and the message explains the wait.
+- **A reconnect draws a rule in the transcript, and never clears it.** The room
+  kept no history, so what is on screen is that tab's only copy — clearing it
+  would destroy the sole record. The rule marks the seam so nobody reads across
+  the gap as one continuous conversation.
+- **Reduced motion is honoured.** Chat lines are removed from the animation
+  entirely rather than shortened: a message list is the one place motion is
+  genuinely in the way, and a 1 ms fade is still a flash.
+
 ### Gate lockout is a known nuisance vector (D12, accepted)
 
 Lockout is **per channel**, because per-socket is no bound at all — a guesser

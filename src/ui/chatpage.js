@@ -89,6 +89,7 @@ export function chatRoomPage(name) {
     '<span class="chat__channel">' +
     escapeHtml(name) +
     "</span></div>" +
+    '<p class="chat__members" id="members" aria-live="polite"></p>' +
     '<ol class="chat__msgs" id="msgs" aria-live="polite"></ol>' +
     '<p class="msg hidden" id="msg"></p>' +
     '<div class="chat__form">' +
@@ -96,6 +97,10 @@ export function chatRoomPage(name) {
     'maxlength="1000" autocomplete="off" aria-label="Message">' +
     '<button class="btn" type="button" id="send" disabled>SEND</button>' +
     "</div>" +
+    // Hidden until a socket actually drops. Reconnecting is a button and not a
+    // timer on purpose: an automatic retry against a gated channel spends a
+    // lockout attempt each time (D8).
+    '<button class="btn btn--ghost" type="button" id="reconnect" hidden>RECONNECT</button>' +
     // Whether this channel is encrypted is a property of the live object, not
     // of the URL — the Worker rendering this page does not know it, and asking
     // the object would both cost a round trip and turn page load into an
