@@ -77,6 +77,29 @@ function answered(frame) {
   return frame.gate !== undefined;
 }
 
+// Envelope shape check (blueprint §3). The server cannot read an envelope and
+// never tries — it only refuses to relay anything that is not shaped like one,
+// so a member's client is handed either a decryptable envelope or nothing.
+// Verifying the payload is the receiving CLIENT's job, and GCM does it.
+//
+// The ceiling is the same MAX_WIRE_BYTES the whole frame is already held to;
+// this second, tighter check on `ct` alone keeps a single envelope from being
+// padded out to fill the frame with fields nobody reads.
+const MAX_CT_CHARS = 4096;
+
+function isEnvelope(env) {
+  return (
+    env !== null &&
+    typeof env === "object" &&
+    env.v === 1 &&
+    typeof env.iv === "string" &&
+    env.iv.length === 16 && // 12 bytes, base64url, unpadded
+    typeof env.ct === "string" &&
+    env.ct.length > 0 &&
+    env.ct.length <= MAX_CT_CHARS
+  );
+}
+
 export class ChatChannel {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -179,11 +202,26 @@ export class ChatChannel {
         });
       return;
     }
-    if (frame?.t === "msg" && typeof frame.d === "string") {
-      if (frame.d.length === 0) return;
+    if (frame?.t !== "msg") return; // anything else from a member is dropped
+
+    // A channel carries exactly ONE kind of payload, decided by whether it has
+    // a gate, and the mismatched kind is DROPPED rather than relayed.
+    //
+    // This is the "never silently downgrade" rule in code. On a gated channel
+    // the members' whole expectation is that the wire holds ciphertext; a
+    // stray plaintext `d` — from a stale tab, a hand-built frame, a future
+    // bug — would be relayed to everyone and would look exactly like a normal
+    // message, quietly making the room's guarantee false for that line. The
+    // server cannot read `env`, but it can refuse to carry anything else, and
+    // that refusal is the only part of the guarantee it is able to enforce.
+    if (this.gate) {
+      if (!isEnvelope(frame.env)) return;
+      this.broadcast({ t: "msg", from: session.nick, env: frame.env }, ws);
+      return;
+    }
+    if (typeof frame.d === "string" && frame.d.length > 0) {
       this.broadcast({ t: "msg", from: session.nick, d: frame.d }, ws);
     }
-    // Anything else from a joined socket is dropped.
   }
 
   async join(ws, session, frame) {

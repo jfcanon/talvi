@@ -43,7 +43,10 @@ function check(name, cond) {
 }
 
 // Load the browser module under a fake window.
-const sandbox = { window: {}, crypto, TextEncoder, console };
+// The browser globals chatcrypto.js legitimately uses. The sandbox is not a
+// browser, so they have to be handed in explicitly; btoa/atob/TextDecoder
+// are all natively present wherever this file actually ships.
+const sandbox = { window: {}, crypto, TextEncoder, TextDecoder, btoa, atob, console };
 createContext(sandbox);
 runInContext(await readFile(join(root, "src/ui/chatcrypto.js"), "utf8"), sandbox);
 const client = sandbox.window.talviGate;
@@ -143,6 +146,56 @@ check(
   (await client.deriveMasterHex("Café-Ab3!", NAME)) ===
     (await client.deriveMasterHex("Café-Ab3!", NAME)),
 );
+
+// ---------------------------------------------------------- AES-GCM (PR4)
+
+const key = await client.encKey(master, NAME);
+const otherKey = await client.encKey(
+  await client.deriveMasterHex("Different-Horse-9!", NAME),
+  NAME,
+);
+
+const env = await client.seal(key, "hello room");
+check("envelope is v1", env.v === 1);
+check("envelope iv is 12 bytes b64url", env.iv.length === 16 && !/[+/=]/.test(env.iv));
+check("envelope ct is b64url", !/[+/=]/.test(env.ct));
+check("round-trips", (await client.unseal(key, env)) === "hello room");
+
+// The catastrophic AES-GCM failure is IV reuse under one key. Two seals of the
+// SAME plaintext must differ in both IV and ciphertext.
+const env2 = await client.seal(key, "hello room");
+check("IV is fresh per message", env.iv !== env2.iv);
+check("same plaintext seals differently", env.ct !== env2.ct);
+const ivs = new Set();
+for (let i = 0; i < 200; i += 1) ivs.add((await client.seal(key, "x")).iv);
+check("200 seals produce 200 distinct IVs", ivs.size === 200);
+
+// A wrong PIN yields a key that cannot open the envelope — and unseal must
+// say so by returning null, never by throwing.
+check("wrong key cannot decrypt", (await client.unseal(otherKey, env)) === null);
+
+// Tampering must fail the GCM tag, not silently return altered text.
+const flipped = { ...env, ct: (env.ct[0] === "A" ? "B" : "A") + env.ct.slice(1) };
+check("tampered ciphertext is rejected", (await client.unseal(key, flipped)) === null);
+const wrongIv = { ...env, iv: (env.iv[0] === "A" ? "B" : "A") + env.iv.slice(1) };
+check("wrong IV is rejected", (await client.unseal(key, wrongIv)) === null);
+
+// Malformed envelopes are dropped, never thrown on — anyone who knows the
+// channel name can send these.
+check("rejects wrong version", (await client.unseal(key, { ...env, v: 2 })) === null);
+check("rejects missing iv", (await client.unseal(key, { v: 1, ct: env.ct })) === null);
+check("rejects short iv", (await client.unseal(key, { ...env, iv: "AAAA" })) === null);
+check("rejects non-base64 ct", (await client.unseal(key, { ...env, ct: "!!!!" })) === null);
+check("rejects null", (await client.unseal(key, null)) === null);
+check("rejects non-object", (await client.unseal(key, "nope")) === null);
+
+// K_enc and H_gate are siblings — the server is handed one and must not be
+// able to arrive at the other.
+const rawEnc = await client.encKey(master, NAME);
+check("K_enc is a non-extractable CryptoKey", rawEnc instanceof CryptoKey && rawEnc.extractable === false);
+
+check("unicode survives the round trip",
+  (await client.unseal(key, await client.seal(key, "héllo — 🧊 ok"))) === "héllo — 🧊 ok");
 
 // ------------------------------------------------------------- slugs D9
 
