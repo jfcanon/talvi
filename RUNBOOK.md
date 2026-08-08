@@ -511,6 +511,105 @@ curl -sS -A "Mozilla/5.0 … Chrome/131.0.0.0 Safari/537.36" \
 `scripts/chat-browser-test.mjs` reports this as its own named failure, separate
 from page violations, so the two are never confused.
 
+### Chat is PUBLIC — the auth model moved twice, this is where it landed
+
+Verified live 2026-08-08 on both hosts: `/`, `/chat` and `/chat/<name>` all
+return **200 signed-out**. The only gate on the site is **Cloudflare Access
+(one-time PIN) in front of `/api/upload`** (PR #65, which removed the Clerk
+gate).
+
+That is the intended shape: **auth to upload, anyone downloads with a link.**
+
+> An earlier version of this section said the opposite — that chat sat behind
+> the Clerk login "confirmed intended". That was true for a few hours between
+> PR9 and PR #65 and is now wrong. Recorded rather than deleted, because the
+> boundary has already moved twice and the next person to read this needs to
+> know it moves, and to check rather than trust.
+
+**Check, do not assume:**
+
+```bash
+for p in / /chat /chat/x /api/upload; do
+  printf "%-14s %s\n" "$p" "$(curl -sS -o /dev/null -w '%{http_code}' https://talvi.ygdcbtmc4u.uk$p)"
+done
+# expect: 200 200 200 302(→cloudflareaccess.com)
+```
+
+**What has not changed, and must not:**
+
+- **Chat reads no session of any kind.** Not Clerk, not Access. It kept working
+  through the entire Clerk outage precisely because it never asks. If chat ever
+  starts failing when the site's auth fails, something has coupled them and that
+  is the regression.
+- **The chat PIN is not site auth.** It answers *may you enter this room*. Site
+  auth answers *may you use this site*. Neither substitutes for the other, and a
+  future gate in front of chat is an owner decision, not a refactor.
+- **Guest nicks stay guest nicks.** Chat must not start showing account
+  identities beside messages — the room's own disclosure says anyone in it posts
+  as anyone, and attaching real identities would make that disclosure a lie.
+
+### Gate lockout is a known nuisance vector (D12, accepted)
+
+Lockout is **per channel**, because per-socket is no bound at all — a guesser
+just reconnects. The cost: anyone who knows the channel name can wedge it shut
+for 60 s at a time by failing on purpose. Against an unguessable name (D9) that
+is a nuisance available to someone already invited, not a way in.
+
+### Origin gate — same-origin, never a hostname list (PR7)
+
+The upgrade check compares the request's `Origin` host to **the host the request
+actually arrived on**. There is nothing to configure and no list to maintain: it
+is correct on every hostname, including ones that do not exist yet.
+
+> **Do not reintroduce a hostname allowlist here.** It was one, and it is a trap
+> with a fuse on it. The day the site gains a host the list has not been told
+> about — a public-release domain, a **blue/green staging host**, a preview URL —
+> every WebSocket upgrade from that host is refused `403` and chat dies there
+> for those users only. The pages still render, so it reads as a chat bug rather
+> than a config one. The CSP already says `connect-src 'self'`, so same-origin
+> is the rule; enforce that rule, not a snapshot of today's DNS.
+
+Absent Origin is still **allowed** (recorded, PR2). Browsers always send Origin
+on a WS upgrade, so the CSWSH threat is closed; curl and the node smoke clients
+are not that threat. Channel names are unguessable secrets (D9), so a cross-site
+script without the name has nothing to probe.
+
+### Cloudflare injects a beacon on the proxied zone — do NOT fix it in the CSP
+
+On `talvi.ygdcbtmc4u.uk` (the proxied zone, **not** workers.dev) Cloudflare
+injects its Browser Insights beacon into HTML at the edge:
+
+```
+Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/…'
+violates the following Content Security Policy directive: "script-src 'self'".
+The action has been blocked.
+```
+
+**The CSP is working. Nothing is broken and nothing is leaking** — the script
+never executes. But every real visitor to that domain gets a console error, and
+Cloudflare Web Analytics collects nothing, so the feature is on and inert.
+
+It only appears for requests that look like real browser navigations
+(`Sec-Fetch-Dest: document`), which is why plain `curl` sees nothing and the
+browser test does. To reproduce from a shell:
+
+```bash
+curl -sS -A "Mozilla/5.0 … Chrome/131.0.0.0 Safari/537.36" \
+  -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' \
+  https://talvi.ygdcbtmc4u.uk/chat | grep -c cloudflareinsights   # → 1
+```
+
+> **The fix is to turn the zone feature OFF** (Cloudflare dashboard → Web
+> Analytics / Speed → Browser Insights), never to add
+> `static.cloudflareinsights.com` to `script-src`. The CSP has never been
+> weakened in this project, and this is exactly how that streak would end —
+> someone making a red line go green. A third-party analytics script injected
+> into a page whose entire premise is that it ships no third-party code is not
+> a CSP problem to accommodate; it is a setting to switch off.
+
+`scripts/chat-browser-test.mjs` reports this as its own named failure, separate
+from page violations, so the two are never confused.
+
 ### Chat sits BEHIND the Clerk login — confirmed intended (owner, PR9)
 
 `/chat` is inside the Clerk-authenticated area, exactly like `/`. This is the
