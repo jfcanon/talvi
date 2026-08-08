@@ -297,8 +297,14 @@ The platform `ratelimit` bindings (see §8) are **not** relied on for chat.
 
 - Global per-IP connection / message rate (per-DO caps only).
 - Total concurrent channels.
-- Offline brute force of a weak PIN (mitigated client-side: entropy floor D5,
-  PBKDF2 300k D6 — PIN strength is the whole confidentiality story).
+- Offline brute force of the PIN. **Not mitigated, and it cannot be** while the
+  PIN is 4 digits (D5, revised PR9). PBKDF2 at 300k (D6) only slows a *single*
+  guess; the whole 10,000-PIN keyspace still falls in seconds to minutes on
+  ordinary hardware, and faster on a GPU. This line previously read "mitigated
+  client-side: entropy floor D5" — that was written when D5 demanded 8+
+  characters across 3 classes, and it became false the moment the PIN became 4
+  digits. See "The PIN is 4 digits — what that does and does not buy" below for
+  the full accounting.
 - Ciphertext replay / reorder / drop (inherent to a trusted relay; GCM gives
   integrity, not anti-replay).
 - Impersonation within a group: any PIN-holder posts as anyone. No moderation,
