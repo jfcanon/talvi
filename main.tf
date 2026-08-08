@@ -129,12 +129,20 @@ resource "cloudflare_workers_script" "talvi_web" {
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-07-30"
 
-  # Durable Object migrations (chat sidequest, PR1). `new_classes`, NOT
-  # new_sqlite_classes: ChatChannel is deliberately ephemeral — zero
-  # state.storage writes, everything in memory, channel dies on eviction. It
-  # is additive-only; this class is never renamed or deleted.
+  # Durable Object migrations (chat sidequest, PR1 + PR1b).
+  #
+  # PR1b: the account is on the FREE plan, and Cloudflare rejects `new_classes`
+  # outright for free plans: "In order to use Durable Objects with a free plan,
+  # you must create a namespace using a `new_sqlite_classes` migration." So the
+  # class is registered SQLite-backed. ChatChannel still writes ZERO bytes of
+  # state.storage — everything lives in memory (D2/D3) — so the "channel dies
+  # when last member leaves" property is unchanged; SQLite is the namespace
+  # backend, not a persistence we use. Recorded: blueprint PR1 originally said
+  # new_classes; that applies to paid plans only.
+  #
+  # Additive-only; this class is never renamed or deleted.
   migrations = {
-    new_classes = ["ChatChannel"]
+    new_sqlite_classes = ["ChatChannel"]
   }
 
   bindings = [
