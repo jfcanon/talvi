@@ -34,8 +34,13 @@ const spriteB64 = spritePng.toString("base64");
 
 const clientJs = await readFile(join(root, "src/ui/client.js"), "utf8");
 const ambientJs = await readFile(join(root, "src/ui/ambient.js"), "utf8");
+// chatcrypto.js publishes window.talviGate and must precede chat.js, which
+// calls into it. Both only touch it after DOMContentLoaded, so the order is
+// belt-and-braces rather than load-bearing — but a reader should not have to
+// work that out, and a future top-level call would break silently otherwise.
+const chatCryptoJs = await readFile(join(root, "src/ui/chatcrypto.js"), "utf8");
 const chatJs = await readFile(join(root, "src/ui/chat.js"), "utf8");
-const js = clientJs + "\n" + ambientJs + "\n" + chatJs;
+const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n" + chatJs;
 
 const version = createHash("sha256")
   .update(css)

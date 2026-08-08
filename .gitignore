@@ -9,3 +9,9 @@ src/generated/
 *.tfstate.*
 *.tfvars
 .DS_Store
+
+# Bytecode from scripts/clerk_redirect_urls.py. Untracked build output that
+# otherwise sits in `git status` forever, which is exactly how something rides
+# onto the wrong branch.
+__pycache__/
+*.pyc

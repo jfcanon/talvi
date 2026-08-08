@@ -302,6 +302,63 @@ The platform `ratelimit` bindings (see §8) are **not** relied on for chat.
 These are disclosed to the user in the chat UI (D13) and are true by design,
 not a bug list.
 
+### The PIN gate (PR3)
+
+A channel is **open** (no PIN, plaintext relay — D10) or **gated**. The server
+never sees the PIN and cannot: it is two KDF steps away.
+
+```
+K_master = PBKDF2(PIN, "talvi/v1/pbkdf2/"+name, 300000, SHA-256, 256)   browser
+H_gate   = HKDF(K_master, info="talvi/v1/gate/"+name)   → the server sees this
+K_enc    = HKDF(K_master, info="talvi/v1/enc/"+name)    → PR4, never sent
+```
+
+The channel name is the PBKDF2 salt: public, but unique per channel, so one
+table cannot serve two channels. PIN is trimmed + NFC-normalized first (D16) or
+two members derive different keys from what looks like the same PIN.
+
+| Step | What happens |
+|---|---|
+| Create | First joiner sends raw `H_gate` **once** as `setgate`. Refused with `notfirst` if the channel already has members — a latecomer cannot seize an open room. |
+| Join | Server sends `{t:"challenge", nonce}` (fresh 32 random bytes); client replies `{t:"join", nick, gate:HMAC-SHA256(H_gate, nonce)}`; server recomputes and compares in constant time (D7). |
+| Refusal | **Always** close `4003`, reason `"not admitted"` — wrong PIN, malformed answer, and locked-out are indistinguishable (D8). |
+| Lockout | 5 wrong answers → 60 s, per channel (D8). |
+
+A join frame carrying **no** `gate` field is not a failed attempt — it is a
+client whose join crossed our challenge on the wire, which is the normal case.
+It costs nothing. Only a *present but wrong* answer counts against the lockout.
+
+> **One nonce per socket, and never replace it.** A gate-less join challenges
+> the socket only if it has never been challenged. Issuing a fresh nonce to a
+> socket that already has one outstanding overwrites `session.nonce` and
+> invalidates the answer the client is at that moment computing for the first
+> one — its *correct* answer then compares against the replacement, fails, and
+> counts against the lockout. Every honest join to a gated channel breaks that
+> way, and five of them lock the channel with no attacker involved. Caught by
+> security review before deploy; regression-tested in
+> `scripts/chat-channel-test.mjs` ("no second challenge is issued").
+
+Refusals are uniform in **duration** as well as code: every path that can
+refuse computes the same HMAC first, including the locked-out and malformed
+paths that do not need it. Without that, a locked channel returned instantly
+while a wrong answer paid for a WebCrypto sign, and timing alone separated
+"locked" from "wrong" — letting a guesser pace around the backoff instead of
+wasting attempts inside it.
+
+**The upgrade always succeeds.** Whether a channel exists, is gated, or is
+locked out is never visible at the HTTP layer — otherwise this endpoint would
+be an oracle for probing which channel names are live.
+
+**Nothing in the DO logs.** Not the gate, not a nonce, not a proof, not a nick.
+That is load-bearing, not tidiness: a log has a wider audience than the object.
+
+### Gate lockout is a known nuisance vector (D12, accepted)
+
+Lockout is **per channel**, because per-socket is no bound at all — a guesser
+just reconnects. The cost: anyone who knows the channel name can wedge it shut
+for 60 s at a time by failing on purpose. Against an unguessable name (D9) that
+is a nuisance available to someone already invited, not a way in.
+
 ### Origin gate nuance (PR2, recorded)
 
 The upgrade Origin check rejects present-and-foreign origins but **allows an
@@ -318,6 +375,23 @@ The WS path is `/chat/<name>/ws` (the landing/room pages arrive in later PRs).
 ```bash
 # Bidirectional relay proof, single process (both directions must exit 0)
 node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws --pair
+
+# The whole PIN gate (PR3), driven by the REAL browser derivation from
+# src/ui/chatcrypto.js — create, admit the right PIN, refuse the wrong one,
+# then prove the lockout by having a KNOWN-GOOD PIN refused after 5 misses.
+# Use a FRESH channel name: it leaves that channel locked for 60 s.
+node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/$(openssl rand -hex 8)/ws --gate-test
+
+# Gate math offline — client and server must agree, or nobody can ever join a
+# PIN channel. Run this BEFORE merging; the alternative is finding out after
+# Terraform has applied.
+node scripts/chat-gate-test.mjs
+
+# The join/gate state machine, offline: drives the real ChatChannel against a
+# fake WebSocket. Terraform cannot run locally here, so "push and see" costs a
+# PR, a plan, an apply and a live channel — this is the cheap way to catch a
+# gate bug before any of that.
+node scripts/chat-channel-test.mjs
 
 # Two-invocation relay test with the PR2 protocol (join/ready handshake)
 node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws ws/a --send "hello" --expect "pong"
