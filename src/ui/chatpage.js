@@ -89,6 +89,24 @@ export function chatRoomPage(name) {
     '<span class="chat__channel">' +
     escapeHtml(name) +
     "</span></div>" +
+    // Joining happens HERE, on the room page, because a shared link is the
+    // normal way in. The channel name is deliberately absent from this form —
+    // it is already in the URL that brought you here, and asking a person to
+    // retype 20 random characters they were sent is not a form, it is a wall.
+    // Hidden by default; the client reveals it only when this tab actually
+    // needs something (a nick, or a PIN for a gated channel).
+    '<div class="chat__join" id="joinbox" hidden>' +
+    '<div class="tagline"><span class="tagline__box">nick</span></div>' +
+    '<input class="chat__field" id="roomnick" type="text" maxlength="32" ' +
+    'autocomplete="off" autocapitalize="off" spellcheck="false" ' +
+    'placeholder="NICK" aria-label="Your nick">' +
+    '<div class="tagline"><span class="tagline__box">pin</span>' +
+    '<span class="chat__optional">if this channel has one</span></div>' +
+    '<input class="chat__field" id="roompin" type="password" maxlength="128" ' +
+    'autocomplete="off" autocapitalize="off" spellcheck="false" ' +
+    'placeholder="PIN" aria-label="Channel PIN, if the channel has one">' +
+    '<button class="btn" type="button" id="roomjoin">ENTER</button>' +
+    "</div>" +
     '<p class="chat__members" id="members" aria-live="polite"></p>' +
     '<ol class="chat__msgs" id="msgs" aria-live="polite"></ol>' +
     '<p class="msg hidden" id="msg"></p>' +

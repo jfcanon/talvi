@@ -200,11 +200,16 @@
 
     // A nick is picked on the landing page. Direct visits (shared link, no
     // landing) have none — bounce once.
-    const nick = readStore(NICK_STORAGE);
-    if (!validNick(nick)) {
-      window.location.href = "/chat";
-      return;
-    }
+    // A shared room link is the PRIMARY way people arrive — that is the whole
+    // point of a channel name being the secret. So arriving without credentials
+    // is the normal case, not an error, and it is answered in place.
+    //
+    // This used to redirect to /chat, which made the link actively hostile:
+    // you clicked a link containing the channel name and were bounced to a page
+    // demanding you type that same name back in from memory. The name is 20
+    // random characters. Nobody retypes that correctly, and the person who
+    // shared it has already done the only hard part.
+    let nick = readStore(NICK_STORAGE);
 
     // Key material, if the landing derived any. It is bound to the channel it
     // was derived for: a stale blob from another channel would produce a
@@ -216,6 +221,27 @@
       if (parsed && parsed.name === channelName) keys = parsed;
     } catch {
       keys = null; // malformed blob — treat as no key
+    }
+
+    // The in-room join form. Shown whenever this tab cannot yet join: no nick,
+    // or a gated channel we hold no key for. The channel name is NOT asked for
+    // — it is already in the URL, which is how the person got here.
+    const joinbox = $("joinbox");
+    const roomnick = $("roomnick");
+    const roompin = $("roompin");
+    const roomjoin = $("roomjoin");
+
+    function showJoin(message) {
+      if (joinbox) joinbox.hidden = false;
+      if (message) say(message);
+      if (roomnick) {
+        roomnick.value = nick ?? "";
+        roomnick.focus();
+      }
+    }
+
+    function hideJoin() {
+      if (joinbox) joinbox.hidden = true;
     }
 
     const wsUrl =
@@ -285,6 +311,9 @@
 
     let open = false;
     let lastError = null;
+    // Set when the server challenges a tab that holds no key, so the close
+    // handler knows to ask for a PIN rather than report a dropped link.
+    let needsPin = false;
 
     // The socket is rebuilt on every connect, so this is a `let`. Everything
     // that sends goes through the CURRENT one.
@@ -344,10 +373,11 @@
 
     async function answerChallenge(nonce) {
       if (!keys) {
-        lastError =
-          "LOCKED — this channel needs a PIN. Go back and enter it with the " +
-          "channel name.";
-        say(lastError);
+        // Gated, and this tab has no key. Ask for the PIN right here — the
+        // person followed a link to THIS channel, so sending them back to a
+        // page that demands the channel name again is the worst possible
+        // answer to "what is the PIN?".
+        needsPin = true;
         sock.close();
         return;
       }
@@ -491,9 +521,21 @@
       // against a gated channel spends a lockout attempt every time, so a room
       // that refused you once would be hammered shut by its own client. The
       // person decides, having read why they were dropped.
-      if (reconnect) {
+      // A wrong PIN needs a different PIN, not another attempt at the same one
+      // — and every retry of the same wrong value spends a lockout attempt.
+      // So a gate refusal re-opens the form; only a plain dropped connection
+      // gets a reconnect button.
+      if (needsPin) {
+        needsPin = false;
+        showJoin("LOCKED — this channel needs a PIN. Enter it to join.");
+      } else if (refusedByGate) {
+        showJoin(
+          "REFUSED — wrong PIN, or too many attempts on this channel. " +
+            "Check the PIN and try again; if it keeps failing, wait a minute.",
+        );
+      } else if (reconnect) {
         reconnect.hidden = false;
-        reconnect.textContent = refusedByGate ? "TRY AGAIN" : "RECONNECT";
+        reconnect.textContent = "RECONNECT";
       }
       lastError = null;
     }
@@ -513,6 +555,70 @@
       if (e.key === "Enter") trySend();
     });
 
+    // Joining from the room page itself. The channel name is never asked for —
+    // it is in the URL. Only what this tab is missing: a nick, and a PIN if the
+    // channel turns out to be gated.
+    async function submitJoin() {
+      const who = roomnick ? roomnick.value.trim() : "";
+      const secret = roompin ? roompin.value : "";
+
+      if (!validNick(who)) {
+        say("NICK — one word, no spaces, up to 32 characters.");
+        return;
+      }
+      // D5 floor applies here exactly as on the landing: this join may turn out
+      // to be the one that CREATES the gate, if the channel is empty.
+      if (secret) {
+        const problem = gate.pinProblem(secret);
+        if (problem) {
+          say(problem);
+          return;
+        }
+      }
+      if (!writeStore(NICK_STORAGE, who)) {
+        say("STORAGE BLOCKED — this browser refuses sessionStorage, which chat " +
+          "needs to hold your nick.");
+        return;
+      }
+      nick = who;
+
+      if (secret) {
+        if (roomjoin) roomjoin.disabled = true;
+        say("DERIVING KEY — a moment.");
+        try {
+          const master = await gate.deriveMasterHex(secret, channelName);
+          keys = { name: channelName, master };
+          writeStore(GATE_STORAGE, JSON.stringify(keys));
+        } catch {
+          say("KEY FAILED — this browser refused the crypto this needs.");
+          if (roomjoin) roomjoin.disabled = false;
+          return;
+        }
+        if (roomjoin) roomjoin.disabled = false;
+      } else {
+        // No PIN offered: clear any stale key so we do not answer a challenge
+        // with the wrong value and spend a lockout attempt doing it.
+        keys = null;
+        try {
+          window.sessionStorage.removeItem(GATE_STORAGE);
+        } catch {
+          /* nothing to clear */
+        }
+      }
+
+      hideJoin();
+      connect();
+    }
+
+    if (roomjoin) roomjoin.addEventListener("click", () => submitJoin());
+    for (const el of [roomnick, roompin]) {
+      if (el) {
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submitJoin();
+        });
+      }
+    }
+
     if (reconnect) {
       reconnect.hidden = true;
       reconnect.addEventListener("click", () => {
@@ -528,7 +634,14 @@
       });
     }
 
-    connect();
+    // Arrived with a nick already (came via the landing, or joined earlier in
+    // this tab) → straight in. Otherwise ask, here, on this page.
+    if (validNick(nick)) {
+      hideJoin();
+      connect();
+    } else {
+      showJoin();
+    }
   }
 
   function boot() {

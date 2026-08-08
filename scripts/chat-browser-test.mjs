@@ -220,6 +220,63 @@ check("refused member cannot send", await C.page.isDisabled("#send"));
 check("refused member saw no messages",
   !((await C.page.textContent("#msgs")) ?? "").includes(SECRET));
 
+// ---- the shared-link flow (PR9) -------------------------------------------
+
+// The way people actually arrive: someone sends you a link, you click it. A
+// fresh context has no sessionStorage, so this is the cold path — and it used
+// to bounce to /chat and demand you retype a 20-character random channel name
+// you had just clicked.
+const D = await openContext("D");
+await D.page.goto(`${BASE}/chat/${channel}`, { waitUntil: "domcontentloaded" });
+await D.page.waitForFunction(
+  () => { const j = document.querySelector("#joinbox"); return j && !j.hidden; },
+  { timeout: 20000 },
+);
+check("shared link stays on the room page", D.page.url().includes(`/chat/${channel}`));
+check("shared link shows a join form", true);
+check("join form does NOT ask for the channel name again",
+  (await D.page.locator("#joinbox #channel").count()) === 0);
+
+await D.page.fill("#roomnick", "carol");
+await D.page.fill("#roompin", PIN);
+await D.page.click("#roomjoin");
+await D.page.waitForFunction(sendable, { timeout: 30000 });
+check("joins straight from the shared link", true);
+check("join form is dismissed once in", await D.page.isHidden("#joinbox"));
+check("URL never bounced", D.page.url().includes(`/chat/${channel}`));
+check("shared-link joiner sees ENCRYPTED",
+  /^ENCRYPTED/.test(((await D.page.textContent("#mode")) ?? "").trim()));
+
+// And they can actually talk.
+const REPLY = "carol got here from the link";
+await D.page.fill("#text", REPLY);
+await D.page.click("#send");
+await B.page.waitForFunction(
+  (s) => document.querySelector("#msgs")?.innerText.includes(s),
+  REPLY,
+  { timeout: 15000 },
+);
+check("shared-link joiner can send to the room", true);
+
+// A wrong PIN from a shared link must re-offer the form, not a dead end.
+const E = await openContext("E");
+await E.page.goto(`${BASE}/chat/${channel}`, { waitUntil: "domcontentloaded" });
+await E.page.waitForFunction(
+  () => { const j = document.querySelector("#joinbox"); return j && !j.hidden; },
+  { timeout: 20000 },
+);
+await E.page.fill("#roomnick", "trudy");
+await E.page.fill("#roompin", "Wrong-Horse-9!");
+await E.page.click("#roomjoin");
+await E.page.waitForFunction(
+  () => /REFUSED|LOCKED/.test(document.querySelector("#msg")?.textContent ?? ""),
+  { timeout: 30000 },
+);
+check("wrong PIN from a link is refused", true);
+check("form is re-offered so the PIN can be corrected",
+  await E.page.isVisible("#joinbox"));
+check("refused joiner cannot send", await E.page.isDisabled("#send"));
+
 // ---- reconnect (PR5) -------------------------------------------------------
 
 await A.page.evaluate(() => window.__ws.close());
