@@ -24,13 +24,16 @@ const TTL_DAYS = new Set([1, 7, 30]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Clerk auth (Step 8). Portal lives at amazed-cougar-41.accounts.dev; unauthenticated
-// requests to gated routes redirect there. __session cookie verified locally via jwtKey.
+// requests to gated routes redirect there. __session cookie verified via jwtKey when
+// present (local, networkless); otherwise Clerk's SDK fetches the key from the API
+// and caches it — auth works either way.
 function getClerkClient(env) {
-  return createClerkClient({
+  const opts = {
     secretKey: env.CLERK_SECRET_KEY,
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    jwtKey: env.CLERK_JWT_KEY,
-  });
+  };
+  if (env.CLERK_JWT_KEY) opts.jwtKey = env.CLERK_JWT_KEY;
+  return createClerkClient(opts);
 }
 
 function redirectToClerkPortal(request) {
