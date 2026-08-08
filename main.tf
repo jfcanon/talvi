@@ -40,6 +40,21 @@ variable "talvi_zone_id" {
   type = string
 }
 
+variable "clerk_secret_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "clerk_publishable_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "clerk_jwt_key" {
+  type      = string
+  sensitive = true
+}
+
 resource "cloudflare_d1_database" "talvi_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-meta"
@@ -112,6 +127,13 @@ resource "cloudflare_workers_script" "talvi_web" {
   bindings = [
     { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_meta.id },
     { type = "r2_bucket", name = "BUCKET", bucket_name = cloudflare_r2_bucket.talvi_drop.name },
+
+    # Clerk auth secrets (Step 8 — auth gates / and /api/upload).
+    # Distributed to the Worker so authenticateRequest() can verify __session
+    # cookies locally without a network round trip.
+    { type = "secret_text", name = "CLERK_SECRET_KEY", text = var.clerk_secret_key },
+    { type = "secret_text", name = "CLERK_PUBLISHABLE_KEY", text = var.clerk_publishable_key },
+    { type = "secret_text", name = "CLERK_JWT_KEY", text = var.clerk_jwt_key },
 
     # Workers-native rate limiting (Step 6). Chosen over cloudflare_rate_limit
     # because that resource is zone-scoped, and this account controls no zone
