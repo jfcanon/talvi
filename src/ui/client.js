@@ -309,6 +309,24 @@
     if (!iso) return;
     const rel = relative(iso);
     when.textContent = absolute(iso) + (rel ? " — " + rel : "");
+
+    // "as markdown" feedback (markdown sidequest). A plain link that navigates
+    // to /:slug/md works with JS off; with it on, the click relabels the button
+    // while the server converts. A successful conversion downloads (attachment)
+    // so the page stays; the label reverts on a timer because a navigation-based
+    // download offers no completion event to hook.
+    const md = document.querySelector("a[data-md]");
+    if (md) {
+      const label = md.textContent;
+      md.addEventListener("click", () => {
+        md.textContent = "converting…";
+        md.setAttribute("aria-busy", "true");
+        window.setTimeout(() => {
+          md.textContent = label;
+          md.removeAttribute("aria-busy");
+        }, 10000);
+      });
+    }
   }
 
   // ------------------------------------------------------- typed reveal
