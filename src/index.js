@@ -10,6 +10,7 @@ import { closedPage, limitedPage } from "./ui/errorpage.js";
 import { notFoundPage } from "./ui/notfound.js";
 import { uploadPage } from "./ui/upload.js";
 import { viewPage } from "./ui/view.js";
+import { chatLandingPage, chatRoomPage } from "./ui/chatpage.js";
 import { newSlug, isValidSlug } from "./slug.js";
 import { isValidChannelName } from "./chat/name.js";
 import { sanitiseFilename, validateContentType } from "./sanitise.js";
@@ -415,6 +416,9 @@ const SLUG_ROUTE = /^\/([^/]+)(\/d)?$/;
 // shadows a drop whose slug is literally "chat" (decision D14): that drop's
 // view page is shadowed, but its /chat/d download still routes via SLUG_ROUTE.
 const CHAT_WS_ROUTE = /^\/chat\/([^/]+)\/ws$/;
+// Room page: exactly /chat/<name>, one trailing segment. Deliberately
+// distinct from CHAT_WS_ROUTE (which ends in /ws) so the two never collide.
+const CHAT_ROOM_ROUTE = /^\/chat\/([^/]+)$/;
 
 async function handleSlugRoute(match, env, request, ctx) {
   const slug = match[1];
@@ -599,10 +603,28 @@ async function route(request, method, env, ctx) {
     return stub.fetch(request);
   }
 
-  // Landing page placeholder. PR1 ships no page yet; /chat must still shadow a
-  // slug named "chat" (D14), and a byte-identical 404 is the correct stand-in.
+  // Chat landing page (PR2). /chat shadows a slug named "chat" (D14): the
+  // view page is shadowed, but its /chat/d download still routes via
+  // SLUG_ROUTE below.
   if (pathname === "/chat") {
-    return notFound();
+    return new Response(chatLandingPage(), { status: 200, headers: HTML_HEADERS });
+  }
+
+  // Room page /chat/<name> (PR2). Name is validated BEFORE the page renders so
+  // a malformed name gets the byte-identical 404 like everything else. The
+  // ws upgrade path is handled above; this regex (one trailing segment, no
+  // /ws) cannot collide with it.
+  //
+  // EXCEPTION (D14): a channel named "d" has no room page. /chat/d is the
+  // download path for a drop whose slug is literally "chat", and that
+  // download must keep working — so name "d" falls through to SLUG_ROUTE
+  // below. A channel named "d" is an antipattern anyway (secret, high-entropy
+  // names, D9); recorded in src/chat/name.js and RUNBOOK §9.
+  const room = CHAT_ROOM_ROUTE.exec(pathname);
+  if (room && room[1] !== "d") {
+    const name = room[1];
+    if (!isValidChannelName(name)) return notFound();
+    return new Response(chatRoomPage(name), { status: 200, headers: HTML_HEADERS });
   }
 
   const match = SLUG_ROUTE.exec(pathname);

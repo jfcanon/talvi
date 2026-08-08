@@ -1540,3 +1540,97 @@ a {
     padding: 1.1rem 1.15rem;
   }
 }
+
+/* ------------------------------------------------------------------ chat
+   Landing + room (PR2). Same instrument language: a panel with a wireframe
+   box, the console voice, the phosphor green. The message list is the one
+   place the design relaxes — a scrollable column rather than a static line
+   — because chat is a feed, not a readout. */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.chat__field {
+  background: transparent;
+  border: 1px solid var(--hud-line-soft);
+  border-radius: 0;
+  color: var(--phosphor);
+  font: inherit;
+  padding: 0.6rem 0.7rem;
+  width: 100%;
+}
+
+.chat__field:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.chat__field::placeholder {
+  color: var(--hud-line-soft);
+}
+
+.chat__channel {
+  margin-left: 0.5rem;
+  text-transform: uppercase;
+}
+
+.chat__msgs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hud-line-soft);
+  height: 40vh;
+  min-height: 12rem;
+  overflow-y: auto;
+  background: var(--hud-fill);
+}
+
+.chat__line {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--hud-line-soft);
+  font-size: 0.92em;
+}
+
+.chat__line:last-child {
+  border-bottom: none;
+}
+
+.chat__who {
+  color: var(--cyan);
+  flex: none;
+}
+
+.chat__line--me .chat__who {
+  color: var(--amber);
+}
+
+.chat__line--join .chat__who,
+.chat__line--leave .chat__who {
+  color: var(--phosphor-dim);
+}
+
+.chat__text {
+  color: var(--phosphor);
+  word-break: break-word;
+}
+
+.chat__form {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.chat__input {
+  flex: 1;
+}
+
+.chat__fineprint {
+  color: var(--phosphor-dim);
+  font-size: 0.78em;
+  line-height: 1.5;
+  margin: 0;
+}

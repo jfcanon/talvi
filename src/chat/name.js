@@ -12,3 +12,15 @@ const CHANNEL_RE = /^[a-z0-9-]{1,64}$/;
 export function isValidChannelName(s) {
   return typeof s === "string" && CHANNEL_RE.test(s);
 }
+
+// Nicks (D11): one visible token, no whitespace, no control chars, <= 32
+// UTF-16 units. Display-only — the client renders them with textContent, so
+// they never reach HTML. Uniqueness is cosmetic (D12): duplicates are
+// allowed and shown as-is; the channel has no notion of identity to protect.
+const NICK_RE = /^[^\s\u0000-\u001f\u007f]+$/u;
+
+export function isValidNick(s) {
+  return (
+    typeof s === "string" && s.length >= 1 && s.length <= 32 && NICK_RE.test(s)
+  );
+}

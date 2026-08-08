@@ -240,3 +240,85 @@ are the record of how this was built.
   correct against Cloudflare's documented API, but `limit()` returns
   `{success: true}` indefinitely and the cause is unresolved. Do not read the
   presence of `RL_UPLOAD`/`RL_READ` as protection.
+
+---
+
+## 9. Chat (sidequest)
+
+Chat lives behind `/chat` and `/chat/<name>`. See
+`plans/talvi-chat-blueprint.md` for the full design and decision register; this
+section is the operational record.
+
+### How it works
+
+- One Durable Object per channel name (`ChatChannel`, `src/chat/channel.js`).
+  The Worker routes `/chat/<name>/ws` to `env.CHAT_CHANNELS.getByName(name)`.
+- The object is **non-hibernatable** (D2) and writes **zero** bytes of
+  `state.storage` (D3). While anyone is connected the object stays resident;
+  when the last member leaves it is evicted and the channel — and its PIN gate
+  (PR3) — is gone. A channel name can then be reclaimed (D4).
+- PR1b (recorded): the account is on the **free plan**, which forces the DO
+  namespace to be created with a `new_sqlite_classes` migration. ChatChannel
+  never writes to that SQLite storage — it is the namespace backend the API
+  requires, not persistence we use. The ephemeral property is unchanged.
+
+### Bounds (D11, enforced in-DO)
+
+| Bound | Value | Enforced | On breach |
+|---|---|---|---|
+| Members per channel | 64 | at join | `{t:"error", code:"full"}` + close **1013** |
+| Open sockets per channel (incl. never-joining) | 128 | at upgrade | 429 before accept |
+| Wire frame | 4096 B | every frame | `{t:"error", code:"toolarge"}` (msg kept dropped, socket stays up) |
+| Nick | 1–32 chars, no whitespace | at join | `{t:"error", code:"badnick"}` + close **1008** |
+| Channel name | lowercase `[a-z0-9-]`, ≤64 | before routing | byte-identical 404 |
+| Origin on WS upgrade | talvi hosts only | at upgrade | 403 |
+
+The platform `ratelimit` bindings (see §8) are **not** relied on for chat.
+
+### What is NOT bounded (D12, accepted and recorded)
+
+- Global per-IP connection / message rate (per-DO caps only).
+- Total concurrent channels.
+- Offline brute force of a weak PIN (mitigated client-side: entropy floor D5,
+  PBKDF2 300k D6 — PIN strength is the whole confidentiality story).
+- Ciphertext replay / reorder / drop (inherent to a trusted relay; GCM gives
+  integrity, not anti-replay).
+- Impersonation within a group: any PIN-holder posts as anyone. No moderation,
+  no way to eject.
+
+These are disclosed to the user in the chat UI (D13) and are true by design,
+not a bug list.
+
+### Origin gate nuance (PR2, recorded)
+
+The upgrade Origin check rejects present-and-foreign origins but **allows an
+absent Origin**. Browsers always send Origin on a WS upgrade, so the browser
+cross-origin threat (CSWSH) is closed; curl/script clients that omit Origin are
+not that threat. Channel names are unguessable secrets (D9), so a cross-site
+script without the name has nothing to probe.
+
+### Live verification
+
+The WS path is `/chat/<name>/ws` (the landing/room pages arrive in later PRs).
+`node` ≥22 is required — the client uses the native `WebSocket`.
+
+```bash
+# Bidirectional relay proof, single process (both directions must exit 0)
+node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws --pair
+
+# Two-invocation relay test with the PR2 protocol (join/ready handshake)
+node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws ws/a --send "hello" --expect "pong"
+node scripts/chat-ws-smoke.mjs wss://talvi-web.ygdcbtmc4u.workers.dev/chat/alpha/ws ws/b --send "pong" --expect "hello"
+
+# Oversize frame rejected (socket stays up)
+node scripts/chat-ws-smoke.mjs wss://…/chat/alpha/ws ws/c \
+  --raw "$(node -e 'process.stdout.write(JSON.stringify({t:"msg",d:"x".repeat(5000)}))')" \
+  --expect-error toolarge
+
+# Cap: 64 join, the 65th refused with full + close 1013
+node scripts/chat-ws-smoke.mjs wss://…/chat/alpha/ws cap --cap-test 65
+```
+
+Filter the apply by your own HEAD sha:
+`gh run list --workflow terraform.yml` → the run whose
+`headSha == $(git rev-parse HEAD)` → `gh run view <id>`.
