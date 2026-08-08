@@ -60,6 +60,13 @@ variable "clerk_jwt_key" {
   default   = ""
 }
 
+# Owner email allowed to sign in via the custom sign-in page. Plain variable
+# (an identifier, not a credential).
+variable "talvi_owner_email" {
+  type    = string
+  default = "jangofett86@gmail.com"
+}
+
 resource "cloudflare_d1_database" "talvi_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-meta"
@@ -173,6 +180,9 @@ resource "cloudflare_workers_script" "talvi_web" {
     { type = "secret_text", name = "CLERK_SECRET_KEY", text = var.clerk_secret_key },
     { type = "secret_text", name = "CLERK_PUBLISHABLE_KEY", text = var.clerk_publishable_key },
     { type = "secret_text", name = "CLERK_JWT_KEY", text = var.clerk_jwt_key },
+    # Owner email for the custom sign-in page. Not a secret — it's an
+    # identifier, supplied as a plain variable so it's readable in plan diffs.
+    { type = "plain_text", name = "ALLOWED_EMAIL", text = var.talvi_owner_email },
 
     # Workers-native rate limiting (Step 6). Chosen over cloudflare_rate_limit
     # because that resource is zone-scoped, and this account controls no zone

@@ -352,10 +352,57 @@
     }
   }
 
+  // ------------------------------------------------------------ sign-in page
+
+  // Custom sign-in (Option B): POST email to /api/sign-in, which sets the
+  // __session cookie then redirects. Button-driven XHR, same as upload.
+  function initSignIn() {
+    const email = $("email");
+    const send = $("send");
+    const msg = $("msg");
+    if (!email || !send) return; // not this page
+
+    send.addEventListener("click", () => {
+      const value = (email.value || "").trim();
+      if (!value) {
+        if (msg) { msg.textContent = "enter an email"; msg.classList.remove("hidden"); }
+        return;
+      }
+      send.disabled = true;
+      send.textContent = "SENDING";
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/sign-in", true);
+      xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          // Server set the __session cookie and returned { ok, redirect }.
+          // Navigate to the upload page; the cookie rides along automatically.
+          let dest = "/";
+          try { dest = JSON.parse(xhr.responseText).redirect || "/"; } catch (e) {}
+          window.location.href = dest;
+          return;
+        }
+        let err = "sign-in failed";
+        try { err = JSON.parse(xhr.responseText).error || err; } catch (e) {}
+        if (msg) { msg.textContent = err; msg.classList.remove("hidden"); }
+        send.disabled = false;
+        send.textContent = "Send link";
+      };
+      xhr.onerror = () => {
+        if (msg) { msg.textContent = "network error"; msg.classList.remove("hidden"); }
+        send.disabled = false;
+        send.textContent = "Send link";
+      };
+      xhr.send("email=" + encodeURIComponent(value) + "&redirect_url=" + encodeURIComponent(location.pathname));
+    });
+  }
+
   function boot() {
     initUpload();
     initView();
     initTyping();
+    initSignIn();
   }
 
   if (document.readyState === "loading") {

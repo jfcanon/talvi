@@ -5,7 +5,7 @@
 // Step 5 adds the UI: "/" now serves an upload page instead of falling through
 // to the 404, and /s.css and /s.js serve real content.
 // Step 8 adds Clerk auth: "/" and "/api/upload" gate on email, /:slug/* stay public.
-import { STYLE_CSS, CLIENT_JS, SPRITE_PNG_B64 } from "./generated/assets.js";
+import { STYLE_CSS, CLIENT_JS, SPRITE_PNG_B64, ASSET_VERSION } from "./generated/assets.js";
 import { closedPage, limitedPage } from "./ui/errorpage.js";
 import { notFoundPage } from "./ui/notfound.js";
 import { uploadPage } from "./ui/upload.js";
@@ -39,11 +39,104 @@ function getClerkClient(env) {
   return createClerkClient(opts);
 }
 
+// Shared auth check for the gated routes. Extracted out of `route` so the
+// cognitive complexity stays under the SonarQube gate (S3776).
+async function isAuthenticated(request, env) {
+  const { isAuthenticated } = await getClerkClient(env).authenticateRequest(request, {
+    authorizedParties: ["talvi.ygdcbtmc4u.uk", "talvi-web.ygdcbtmc4u.workers.dev"],
+  });
+  return isAuthenticated;
+}
+
 function redirectToClerkPortal(request) {
-  const returnUrl = new URL(request.url).pathname;
-  const portalUrl = new URL("https://accounts.ygdcbtmc4u.uk/sign-in");
-  portalUrl.searchParams.set("redirect_url", `https://${new URL(request.url).hostname}${returnUrl}`);
-  return Response.redirect(portalUrl.toString(), 302);
+  // Custom sign-in (Option B): point at OUR OWN /sign-in page, not Clerk's
+  // hosted portal. The portal cannot hand a session back to a backend-only app
+  // (no clerk-js); serving sign-in ourselves keeps the whole flow same-origin
+  // and CSP intact (rule 10).
+  const url = new URL(request.url);
+  const returnUrl = url.pathname + (url.search || "");
+  const dest = new URL("/sign-in", request.url);
+  dest.searchParams.set("redirect_url", returnUrl);
+  return Response.redirect(dest.toString(), 302);
+}
+
+// Custom sign-in page — themed, strict CSP, no clerk-js, no inline script.
+// form-action is 'none' so this is a button-driven XHR form like the upload
+// page; the POST goes to /api/sign-in and the response sets the __session
+// cookie then redirects.
+function signInPage(env) {
+  const error = env.SIGNIN_ERROR ? `<p class="msg" id="msg">${env.SIGNIN_ERROR}</p>` : '<p class="msg hidden" id="msg"></p>';
+  return new Response(
+    '<!doctype html><html><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>talvi — sign in</title>' +
+      '<link rel="stylesheet" href="/s.css?v=' + ASSET_VERSION + '"></head>' +
+      '<body><div class="panel">' +
+      '<div class="tagline"><span class="tagline__box">session</span></div>' +
+      '<p class="lede">SIGN IN to upload. Enter the owner email — a link will open a session.</p>' +
+      '<label class="term" for="email"><span aria-hidden="true">&gt;</span>' +
+      '<input class="term__input" type="email" id="email" name="email" autocomplete="email" placeholder="owner@example.com"></label>' +
+      '<button class="btn" type="button" id="send">Send link</button>' +
+      error +
+      '<div class="ambient"></div></div>' +
+      '<script src="/s.js?v=' + ASSET_VERSION + '"></script></body></html>',
+    { status: 200, headers: HTML_HEADERS },
+  );
+}
+
+// POST /api/sign-in — mint a Clerk sign-in token for the owner email and set
+// it as the __session cookie on talvi's own domain. No cross-origin handoff,
+// no portal, CSP untouched. Single-owner: the email must match ALLOWED_EMAIL.
+async function handleSignInSubmit(request, env) {
+  const form = await request.formData().catch(() => null);
+  const email = (form?.get("email") || "").toString().trim().toLowerCase();
+  const allowed = (env.ALLOWED_EMAIL || "").toString().trim().toLowerCase();
+  if (!email || email !== allowed) {
+    return new Response(JSON.stringify({ error: "email not allowed" }), {
+      status: 403,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  // Find the user by email, then mint a sign-in token. The token IS a session
+  // token: set as __session, authenticateRequest() verifies it locally.
+  const clerk = getClerkClient(env);
+  const users = await clerk.users.getUserList({ emailAddress: [email] });
+  const user = users.data?.[0];
+  if (!user) {
+    return new Response(JSON.stringify({ error: "no account for that email" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const tokenResp = await fetch("https://api.clerk.com/v1/sign_in_tokens", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.CLERK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user_id: user.id, expires_in_seconds: 3600 }),
+  });
+  if (!tokenResp.ok) {
+    return new Response(JSON.stringify({ error: "could not create session" }), {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  const { token } = await tokenResp.json();
+
+  // __session cookie on talvi's domain. Secure + HttpOnly + SameSite=Lax.
+  // Return 200 (not 302) so XHR can read the response; the client navigates.
+  const redirect = new URL(form?.get("redirect_url") || "/", request.url).pathname;
+  const cookie = `__session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600`;
+  return new Response(JSON.stringify({ ok: true, redirect }), {
+    status: 200,
+    headers: {
+      "content-type": "application/json",
+      "set-cookie": cookie,
+    },
+  });
 }
 
 // CREATE TABLE IF NOT EXISTS at the top of any handler touching D1 — the
@@ -531,14 +624,15 @@ async function route(request, method, env, ctx) {
   const { pathname } = new URL(request.url);
 
   if (method !== "GET") {
-    // The only non-GET route in the app.
+    if (pathname === "/api/sign-in" && method === "POST") {
+      // Custom sign-in submit — public (no auth gate; this IS the auth entry).
+      return handleSignInSubmit(request, env);
+    }
+    // The only other non-GET route in the app.
     if (pathname === "/api/upload" && method === "POST") {
       // Step 8: gate on auth before rate limit or upload logic.
-      const { isAuthenticated } = await getClerkClient(env).authenticateRequest(request, {
-        authorizedParties: ["talvi.ygdcbtmc4u.uk", "talvi-web.ygdcbtmc4u.workers.dev"],
-      });
-      if (!isAuthenticated) {
-        return json({ error: "unauthorized; sign in at the portal" }, 401);
+      if (!(await isAuthenticated(request, env))) {
+        return json({ error: "unauthorized; sign in" }, 401);
       }
       // JSON, not the themed HTML page: this is an API endpoint and its
       // caller is the uploader script, which renders its own in-theme
@@ -551,6 +645,13 @@ async function route(request, method, env, ctx) {
     return notFound();
   }
 
+  return routePage(request, env, pathname);
+}
+
+// GET page routes — extracted out of `route` for the cognitive-complexity gate.
+// Kept together (not merged into routeStatic) because these carry the auth
+// gate for "/" and "/sign-in".
+async function routePage(request, env, pathname) {
   if (pathname === "/healthz") {
     // Never rate limited: an uptime check that trips the limiter reports an
     // outage that is not happening.
@@ -574,17 +675,30 @@ async function route(request, method, env, ctx) {
     return new Response(closedPage(), { status: 503, headers: HTML_HEADERS });
   }
 
+  // "/sign-in" — custom sign-in page. PUBLIC (this is the auth entry, not a
+  // gated route). Redirects to "/" when already signed in.
+  if (pathname === "/sign-in") {
+    if (await isAuthenticated(request, env)) {
+      return Response.redirect(new URL("/", request.url).toString(), 302);
+    }
+    return signInPage(env);
+  }
+
   // "/" — the upload page (Step 5). Step 8: gated on auth.
   if (pathname === "/") {
-    const { isAuthenticated } = await getClerkClient(env).authenticateRequest(request, {
-      authorizedParties: ["talvi.ygdcbtmc4u.uk", "talvi-web.ygdcbtmc4u.workers.dev"],
-    });
-    if (!isAuthenticated) {
+    if (!(await isAuthenticated(request, env))) {
       return redirectToClerkPortal(request);
     }
     return new Response(uploadPage(), { status: 200, headers: HTML_HEADERS });
   }
 
+  return routeStatic(request, env, ctx, pathname);
+}
+
+// Static GET routes — extracted out of `route` so its cognitive complexity
+// stays under the SonarQube gate (S3776). No auth here: everything in this
+// function is either public or auth-handled by its own branch above.
+async function routeStatic(request, env, ctx, pathname) {
   if (pathname === "/s.css" || pathname === "/s.js") {
     return handleAsset(pathname);
   }
