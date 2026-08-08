@@ -86,10 +86,10 @@ runInContext(await readFile(join(root, "src/ui/chatcrypto.js"), "utf8"), sandbox
 const talvi = sandbox.window.talviGate;
 
 const NAME = "test-room";
-const PIN = "Correct-Horse-9!";
+const PIN = "4729";
 const GATE = await talvi.gateHex(await talvi.deriveMasterHex(PIN, NAME), NAME);
 const WRONG = await talvi.gateHex(
-  await talvi.deriveMasterHex("Wrong-Horse-9!", NAME),
+  await talvi.deriveMasterHex("8153", NAME),
   NAME,
 );
 

@@ -414,9 +414,11 @@
       // could be true (D13).
       if (mode) {
         mode.textContent = cryptoKey
-          ? "ENCRYPTED — sealed in your browser with the PIN before it is sent. " +
-            "This app relays it and cannot read it. What carries it still sees " +
-            "who is talking, and when."
+          ? "ENCRYPTED — sealed in your browser with the PIN before it is sent, " +
+            "so nothing readable crosses the wire. But four digits is ten " +
+            "thousand combinations: anyone recording the traffic can try them " +
+            "all. A lock on the door, not a safe. Who talks to whom, and when, " +
+            "is visible either way."
           : "NOT ENCRYPTED — no PIN on this channel, so messages are relayed " +
             "exactly as you typed them.";
       }

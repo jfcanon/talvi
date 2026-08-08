@@ -57,7 +57,7 @@ check("talviGate is frozen", Object.isFrozen(client));
 // ---------------------------------------------------------------- handshake
 
 const NAME = "test-channel-abc";
-const PIN = "Correct-Horse-9!";
+const PIN = "4729";
 
 const master = await client.deriveMasterHex(PIN, NAME);
 const gateHex = await client.gateHex(master, NAME);
@@ -86,7 +86,7 @@ check("client answer matches server expectation", answer === expected);
 check("answer is well-formed for the server's parser", isGateHex(answer));
 
 // A wrong PIN must not produce a passing answer.
-const wrongMaster = await client.deriveMasterHex("Wrong-Horse-9!", NAME);
+const wrongMaster = await client.deriveMasterHex("8153", NAME);
 const wrongAnswer = await client.answerHex(
   await client.gateHex(wrongMaster, NAME),
   toHex(nonce),
@@ -124,15 +124,19 @@ check("non-strings compare unequal", !timingSafeEqualHex(null, null));
 
 // ------------------------------------------------------------- PIN floor D5
 
-check("rejects short PIN", !!client.pinProblem("Ab3!"));
-check("rejects two-class PIN", !!client.pinProblem("abcdefghij"));
-check("rejects lower+digit only", !!client.pinProblem("abcdefg123"));
-check("rejects blocklisted", !!client.pinProblem("password1"));
-check("rejects blocklisted regardless of case", !!client.pinProblem("Password1"));
-check("rejects ascending sequence", !!client.pinProblem("abcdefgh"));
-check("rejects repeated char", !!client.pinProblem("aaaaaaaa"));
-check("accepts a strong PIN", client.pinProblem("Correct-Horse-9!") === null);
-check("accepts exactly 8 chars, 3 classes", client.pinProblem("Ab3!efgh") === null);
+check("rejects 3 digits", !!client.pinProblem("472"));
+check("rejects 5 digits", !!client.pinProblem("47291"));
+check("rejects letters", !!client.pinProblem("abcd"));
+check("rejects mixed letters and digits", !!client.pinProblem("47a9"));
+check("rejects symbols", !!client.pinProblem("47-9"));
+check("rejects empty", !!client.pinProblem(""));
+check("rejects repeated digits", !!client.pinProblem("1111"));
+check("rejects ascending run", !!client.pinProblem("1234"));
+check("rejects descending run", !!client.pinProblem("4321"));
+check("rejects the classic 2580 keypad line", !!client.pinProblem("2580"));
+check("accepts an ordinary 4-digit PIN", client.pinProblem("4729") === null);
+check("accepts a PIN with a leading zero", client.pinProblem("0473") === null);
+check("trims surrounding whitespace before judging", client.pinProblem("  4729  ") === null);
 
 // D16 — normalization, or two members derive different keys from the "same"
 // PIN. NFD and NFC spellings of é look identical and hash differently.
@@ -151,7 +155,7 @@ check(
 
 const key = await client.encKey(master, NAME);
 const otherKey = await client.encKey(
-  await client.deriveMasterHex("Different-Horse-9!", NAME),
+  await client.deriveMasterHex("8153", NAME),
   NAME,
 );
 

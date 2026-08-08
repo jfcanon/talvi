@@ -8,13 +8,17 @@
 //
 // Nicks and PINs never travel in the URL. A room link is shared by word of
 // mouth (D9) and anything in the query string is shared along with it — which
-// for a PIN would hand away the only secret the channel has. The landing puts
-// the nick, and the key DERIVED from the PIN, in sessionStorage; the room
-// reads them there. A direct visit with neither bounces back here.
+// for a PIN would hand away the only secret the channel has. Both the landing
+// and the room form put the nick, and the key DERIVED from the PIN, in
+// sessionStorage. A direct visit asks for them IN THE ROOM (PR9) rather than
+// bouncing to the landing, because a shared link is the normal way in and the
+// channel name is already in the URL.
 //
-// Wording rule for this file: PR3 gates entry, it does NOT encrypt. Message
-// bodies are still relayed in plaintext (D10) and the copy below says so
-// plainly. The E2E disclosures (D13) land with PR4, when they become true.
+// Wording rule for this file: say what is true of the CURRENT build and no
+// more. Gated channels are end-to-end encrypted (PR4), open ones are plaintext
+// (D10), and the PIN is 4 digits — which is a real limit on what encryption
+// can promise here, so the copy states it instead of implying a safe. D13: an
+// accurate claim beats a flattering one.
 import { renderPage } from "./layout.js";
 import { escapeHtml } from "../sanitise.js";
 
@@ -39,8 +43,9 @@ export function chatLandingPage() {
     '<div class="tagline"><span class="tagline__box">pin</span>' +
     '<span class="chat__optional">optional</span></div>' +
     '<input class="chat__field" id="pin" type="password" ' +
-    'maxlength="128" autocomplete="off" autocapitalize="off" spellcheck="false" ' +
-    'placeholder="PIN" aria-label="Channel PIN, optional">' +
+    'maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
+    'autocapitalize="off" spellcheck="false" ' +
+    'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, optional">' +
     '<p class="msg hidden" id="msg"></p>' +
     '<button class="btn" type="button" id="join">ENTER</button>' +
     '<p class="chat__fineprint">' +
@@ -48,12 +53,10 @@ export function chatLandingPage() {
     "no accounts, nothing is saved. The room dies when the last person leaves." +
     "</p>" +
     '<p class="chat__fineprint">' +
-    "A PIN locks the door: the first person in sets it, and everyone after " +
-    "needs it to get in. Leave it empty for an open channel. The PIN is the " +
-    "channel's only secret — make it strong, and use a different one per " +
-    "channel. Nothing you type is stored, but the same name and PIN always " +
-    "reopen the same door, so a PIN stays worth guarding after the room is " +
-    "gone." +
+    "A 4-digit PIN locks the door: the first person in sets it, and everyone " +
+    "after needs it to get in. Leave it empty for an open channel. Nothing you " +
+    "type is stored, but the same name and PIN always reopen the same door, so " +
+    "a PIN stays worth guarding after the room is gone." +
     "</p>" +
     '<p class="chat__fineprint">' +
     "When the last person leaves, the room forgets its PIN along with " +
@@ -63,11 +66,12 @@ export function chatLandingPage() {
     "</p>" +
     '<p class="chat__fineprint">' +
     "With a PIN, messages are encrypted in your browser before they leave it, " +
-    "and this app cannot read them — it only passes the sealed text along. Be " +
-    "clear about the edge of that: the server that carries it terminates the " +
-    "connection's encryption and can see who talks to whom and when, and " +
-    "anyone holding the PIN reads everything and can post as anyone. Without " +
-    "a PIN there is no scrambling at all." +
+    "so this app never handles readable text and nothing readable crosses the " +
+    "wire. Know the limit: four digits is only ten thousand combinations, so " +
+    "anyone who records the traffic can try them all and read along. Treat it " +
+    "as a lock on a door, not a safe. Whoever carries the traffic also sees " +
+    "who talks to whom and when, anyone holding the PIN reads everything and " +
+    "can post as anyone, and without a PIN there is no scrambling at all." +
     "</p>" +
     "</div>" +
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
@@ -102,9 +106,10 @@ export function chatRoomPage(name) {
     'placeholder="NICK" aria-label="Your nick">' +
     '<div class="tagline"><span class="tagline__box">pin</span>' +
     '<span class="chat__optional">if this channel has one</span></div>' +
-    '<input class="chat__field" id="roompin" type="password" maxlength="128" ' +
-    'autocomplete="off" autocapitalize="off" spellcheck="false" ' +
-    'placeholder="PIN" aria-label="Channel PIN, if the channel has one">' +
+    '<input class="chat__field" id="roompin" type="password" maxlength="4" ' +
+    'inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
+    'autocapitalize="off" spellcheck="false" ' +
+    'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, if the channel has one">' +
     '<button class="btn" type="button" id="roomjoin">ENTER</button>' +
     "</div>" +
     '<p class="chat__members" id="members" aria-live="polite"></p>' +

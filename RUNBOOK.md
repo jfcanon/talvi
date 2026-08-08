@@ -357,6 +357,37 @@ be an oracle for probing which channel names are live.
 **Nothing in the DO logs.** Not the gate, not a nonce, not a proof, not a nick.
 That is load-bearing, not tidiness: a log has a wider audience than the object.
 
+### The PIN is 4 digits — what that does and does not buy (owner decision, PR9)
+
+D5 originally required 8+ characters across 3 character classes. **The owner
+changed it to exactly 4 digits.** That is the decision; this section records
+what follows from it so nobody has to re-derive it, and so nobody writes a
+claim the PIN cannot support.
+
+4 digits is 10,000 possibilities — about 13 bits.
+
+| Attack | Bounded? | Reality |
+|---|---|---|
+| **Online** guessing at the gate | **Yes** | 5 wrong answers → 60 s lockout (D8). Exhausting 10,000 PINs takes on the order of a day and a half of sustained attack, against a channel whose 100-bit name you must already know. |
+| **Offline** brute force of captured ciphertext | **No, and it cannot be** | `K_enc` comes from the PIN. Anyone holding ciphertext tries all 10,000 candidates locally with no gate and no lockout in the way. At 300k PBKDF2 iterations that is minutes on one core, less spread out. |
+
+So the honest claim, and the one the UI now makes, is:
+
+- Messages **are** encrypted in the browser; nothing readable crosses the wire
+  and this app never handles readable text. That part is unchanged and true.
+- A 4-digit PIN is **a lock on a door, not a safe**. Anyone who records the
+  traffic can try all ten thousand combinations and read along.
+
+**Do not restore wording implying otherwise while the PIN is 4 digits.** The
+copy in `src/ui/chatpage.js` and the `ENCRYPTED —` line in `src/ui/chat.js` say
+this explicitly; changing the PIN length is what should change that copy.
+
+**Raising the PBKDF2 iteration count does not rescue this.** Ten million
+iterations would cost every joining member seconds of wait and still lose the
+whole keyspace in hours. The only real fix is more PIN entropy — so if this app
+is ever used for something that genuinely needs secrecy, lengthen the PIN and
+update the copy in the same PR.
+
 ### Encryption (PR4)
 
 Gated channels are end-to-end encrypted; open channels are not, and both say so
