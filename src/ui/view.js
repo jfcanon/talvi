@@ -36,12 +36,29 @@ function utcStamp(iso) {
   );
 }
 
-export function viewPage(row, slug) {
+export function viewPage(row, slug, isImage) {
   const name = escapeHtml(row.filename);
   const type = escapeHtml(row.content_type);
   const size = escapeHtml(formatSize(row.size_bytes));
   const iso = escapeHtml(row.expires_at);
   const stamp = escapeHtml(utcStamp(row.expires_at));
+
+  // Download is the only action for most files. When the object's own bytes
+  // say "image" (sniffed server-side, never the declared type), a second
+  // action — "as markdown" — sits beside it. Both are plain anchors; the
+  // markdown route serves an attachment with the same no-render discipline as
+  // /d (markdown sidequest).
+  const actions =
+    '<div class="actions">' +
+    '<a class="dl" href="/' +
+    escapeHtml(slug) +
+    '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
+    (isImage
+      ? '<a class="dl--alt" href="/' +
+        escapeHtml(slug) +
+        '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
+      : "") +
+    "</div>";
 
   const content =
     '<div class="panel">' +
@@ -75,9 +92,7 @@ export function viewPage(row, slug) {
     "</div>" +
     '<div class="hud__strip" aria-hidden="true"></div>' +
     "</div>" +
-    '<a class="dl" href="/' +
-    escapeHtml(slug) +
-    '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
+    actions +
     "</div>";
 
   return renderPage(row.filename, {
