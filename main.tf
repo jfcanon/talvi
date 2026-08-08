@@ -217,6 +217,15 @@ resource "cloudflare_workers_script" "talvi_web" {
       name       = "CHAT_CHANNELS"
       class_name = "ChatChannel"
     },
+
+    # Workers AI (markdown sidequest, PR1). Powers GET /:slug/md — the "as
+    # markdown" image conversion. No secret, no egress; usage is metered in
+    # neurons (10k/day free) and bounded by on-demand + R2 caching — see
+    # plans/talvi-markdown-blueprint.md §2 and §7.
+    {
+      type = "ai"
+      name = "AI"
+    },
   ]
 }
 
