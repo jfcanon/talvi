@@ -334,6 +334,29 @@
     }
 
     function connect() {
+      // Retire any previous socket FIRST, and detach it by nulling `ws` before
+      // closing it. Every listener in wire() bails on `sock !== ws`, so the old
+      // connection goes silent immediately rather than running its close
+      // handler and painting disconnect UI over the connection we are in the
+      // middle of making.
+      const previous = ws;
+      ws = null;
+      if (previous) {
+        try {
+          previous.close();
+        } catch {
+          /* already closing or closed */
+        }
+      }
+
+      // A new attempt never inherits the last one's flags. needsPin especially:
+      // it is one shared flag, not per-socket, and a superseded socket returns
+      // from closed() before reaching the reset — so it would stay true and the
+      // next ordinary disconnect would claim the channel needs a PIN.
+      needsPin = false;
+      lastError = null;
+      open = false;
+
       roster.clear();
       roster.add(nick);
       renderMembers();
@@ -357,6 +380,7 @@
     // So the same frame both creates and joins, and the object's real state —
     // not a guess made on the landing page — settles which happened.
     sock.addEventListener("open", () => {
+      if (sock !== ws) return; // superseded before it finished opening
       const frame = { t: "join", nick };
       if (!keys) {
         sock.send(JSON.stringify(frame));
@@ -450,6 +474,10 @@
     }
 
     sock.addEventListener("message", (event) => {
+      // An orphaned socket must not touch shared state — roster, cryptoKey,
+      // the transcript, the mode line — on its way out. Only the current
+      // connection speaks for this room.
+      if (sock !== ws) return;
       let frame;
       try {
         frame = JSON.parse(event.data);
@@ -560,7 +588,24 @@
     // Joining from the room page itself. The channel name is never asked for —
     // it is in the URL. Only what this tab is missing: a nick, and a PIN if the
     // channel turns out to be gated.
+    let submitting = false;
+
+    // Enter fires this directly, and #roomnick/#roompin are never disabled, so
+    // the button's own disabled flag guarded nothing against a second Enter
+    // during the ~300ms PBKDF2 derivation. Two runs would derive twice, both
+    // reassign `keys`, and both call connect() — opening two sockets and
+    // spending a gate attempt with whichever PIN lost the race.
     async function submitJoin() {
+      if (submitting) return;
+      submitting = true;
+      try {
+        await doSubmitJoin();
+      } finally {
+        submitting = false;
+      }
+    }
+
+    async function doSubmitJoin() {
       const who = roomnick ? roomnick.value.trim() : "";
       const secret = roompin ? roompin.value : "";
 
