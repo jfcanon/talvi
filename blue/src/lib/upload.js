@@ -112,7 +112,8 @@ export async function handleUpload(request, env) {
     // checks, not a new hole.
     const fixed = new FixedLengthStream(contentLength);
     stored = await env.BUCKET.put(r2Key, request.body.pipeThrough(fixed));
-  } catch {
+  } catch (e) {
+    console.log("UPLOAD_PUT_ERROR", String(e && e.message ? e.message : e));
     await env.BUCKET.delete(r2Key).catch(() => {}); // no orphan object
     return json({ error: "upload failed" }, 400);
   }
