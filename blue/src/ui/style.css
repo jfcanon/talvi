@@ -1821,6 +1821,10 @@ a {
   align-self: flex-start;
 }
 
+.si__code {
+  margin-bottom: 1.1rem;
+}
+
 /* The SSO row under the form (blue-3b-auth-options). Hidden until the
    bootstrap finds an advertised strategy on the instance; the row carries the
    same instrument language as the form, separated by a hairline rule. */

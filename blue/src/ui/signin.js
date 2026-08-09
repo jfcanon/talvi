@@ -80,9 +80,12 @@ function bootstrapScript(nonce, publishableKey) {
     "  var form = document.getElementById('si-form');\n" +
     "  var email = document.getElementById('si-email');\n" +
     "  var password = document.getElementById('si-pass');\n" +
+    "  var codeWrap = document.getElementById('si-code-wrap');\n" +
+    "  var code = document.getElementById('si-code');\n" +
     "  var msg = document.getElementById('si-msg');\n" +
     "  var btn = document.getElementById('si-submit');\n" +
     "  var sso = document.getElementById('si-sso');\n" +
+    "  var current = null;\n" +
     "  if (!form) return;\n" +
     "  var clerk = null;\n" +
     "  function loadClerk() {\n" +
@@ -187,14 +190,38 @@ function bootstrapScript(nonce, publishableKey) {
     "    });\n" +
     "  }\n" +
     "  wireAlternates();\n" +
-    // ---- the form: email + password, email-link fallback ----
+    // ---- the form: email + password, email-link fallback, 2FA code ----
+    "  function showCodeStep(attempt) {\n" +
+    "    current = attempt;\n" +
+    "    codeWrap.classList.remove('hidden');\n" +
+    "    code.value = '';\n" +
+    "    code.focus();\n" +
+    "    btn.disabled = false;\n" +
+    "    btn.textContent = 'VERIFY';\n" +
+    "    msg.className = 'msg';\n" +
+    "    msg.textContent = 'CHECK YOUR EMAIL — enter the verification code.';\n" +
+    "  }\n" +
     "  form.addEventListener('submit', async function (e) {\n" +
     "    e.preventDefault();\n" +
     "    msg.className = 'msg hidden';\n" +
     "    btn.disabled = true;\n" +
-    "    btn.textContent = 'SIGNING IN';\n" +
     "    try {\n" +
     "      var c = await loadClerk();\n" +
+    "      if (current && !codeWrap.classList.contains('hidden')) {\n" +
+    "        // Second step: the 2FA code the instance sent by email.\n" +
+    "        var done = await current.attemptSecondFactor({ strategy: 'email_code', code: code.value.trim() });\n" +
+    "        if (done.status === 'complete') {\n" +
+    "          await c.setActive({ session: done.createdSessionId });\n" +
+    "          window.location.href = '/';\n" +
+    "          return;\n" +
+    "        }\n" +
+    "        msg.className = 'msg msg--bad';\n" +
+    "        msg.textContent = 'REQUIRED: ' + (done.status || 'verify the code');\n" +
+    "        btn.disabled = false;\n" +
+    "        btn.textContent = 'VERIFY';\n" +
+    "        return;\n" +
+    "      }\n" +
+    "      btn.textContent = 'SIGNING IN';\n" +
     "      var attempt = await c.client.signIn.create({ identifier: email.value.trim() });\n" +
     "      if (attempt.status === 'complete') {\n" +
     "        await c.setActive({ session: attempt.createdSessionId });\n" +
@@ -207,6 +234,11 @@ function bootstrapScript(nonce, publishableKey) {
     "        if (withPass.status === 'complete') {\n" +
     "          await c.setActive({ session: withPass.createdSessionId });\n" +
     "          window.location.href = '/';\n" +
+    "          return;\n" +
+    "        }\n" +
+    "        if (withPass.status === 'needs_second_factor') {\n" +
+    "          await withPass.prepareSecondFactor({ strategy: 'email_code' });\n" +
+    "          showCodeStep(withPass);\n" +
     "          return;\n" +
     "        }\n" +
     "      }\n" +
@@ -226,7 +258,8 @@ function bootstrapScript(nonce, publishableKey) {
     "      msg.textContent = 'REFUSED — ' + detail;\n" +
     "    }\n" +
     "    btn.disabled = false;\n" +
-    "    btn.textContent = 'SIGN IN';\n" +
+    "    if (current && !codeWrap.classList.contains('hidden')) btn.textContent = 'VERIFY';\n" +
+    "    else btn.textContent = 'SIGN IN';\n" +
     "  });\n" +
     "})();" +
     "</script>"
@@ -284,6 +317,11 @@ export function signInPage({ publishableKey, nonce }) {
     '<label class="si__label" for="si-pass">password</label>' +
     '<input class="si__field" id="si-pass" type="password" name="password" ' +
     'autocomplete="current-password" required>' +
+    '<div class="si__code hidden" id="si-code-wrap">' +
+    '<label class="si__label" for="si-code">verification code</label>' +
+    '<input class="si__field" id="si-code" type="text" name="code" inputmode="numeric" ' +
+    'autocomplete="one-time-code" autocapitalize="none" spellcheck="false">' +
+    "</div>" +
     '<button class="btn" id="si-submit" type="submit">SIGN IN</button>' +
     '<p class="msg hidden" id="si-msg"></p>' +
     "</form>" +
