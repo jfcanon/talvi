@@ -1,0 +1,17 @@
+# dependencies
+/node_modules/
+
+# Next.js build output
+/.next/
+
+# OpenNext build output (built in CI; a Terraform input)
+/.open-next/
+
+# chat worker build output (built in CI; a Terraform input)
+/chat-worker/dist/
+/dist-worker/
+
+# misc
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
