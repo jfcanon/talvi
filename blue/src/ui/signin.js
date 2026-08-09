@@ -86,7 +86,17 @@ function bootstrapScript(nonce, publishableKey) {
     "  if (!form) return;\n" +
     "  var clerk = null;\n" +
     "  function loadClerk() {\n" +
-    "    if (!clerk) clerk = window.Clerk.load({ publishableKey: pub });\n" +
+    "    if (!clerk) clerk = new Promise(function (resolve, reject) {\n" +
+    "      (function wait() {\n" +
+    "        if (window.Clerk) {\n" +
+    "          window.Clerk.load({ publishableKey: pub }).then(resolve, reject);\n" +
+    "        } else if (document.readyState === 'complete') {\n" +
+    "          reject(new Error('clerk-js did not load'));\n" +
+    "        } else {\n" +
+    "          setTimeout(wait, 100);\n" +
+    "        }\n" +
+    "      })();\n" +
+    "    });\n" +
     "    return clerk;\n" +
     "  }\n" +
     "  function factorsOf(si) {\n" +
@@ -283,7 +293,7 @@ export function signInPage({ publishableKey, nonce }) {
     '<meta name="robots" content="noindex, nofollow">' +
     "<title>talvi — sign in</title>" +
     '<link rel="stylesheet" href="/s.css?v=' + v + '">' +
-    '<script nonce="' + nonce + '" defer src="' + CLERK_JS_URL + '"></script>' +
+    '<script nonce="' + nonce + '" defer src="' + CLERK_JS_URL + '" data-clerk-publishable-key="' + publishableKey + '"></script>' +
     "</head><body>" +
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="leak" aria-hidden="true"></div>' +
@@ -315,7 +325,7 @@ export function ssoCallbackPage({ publishableKey, nonce }) {
     '<meta name="robots" content="noindex, nofollow">' +
     "<title>talvi — sign in</title>" +
     '<link rel="stylesheet" href="/s.css?v=' + v + '">' +
-    '<script nonce="' + nonce + '" defer src="' + CLERK_JS_URL + '"></script>' +
+    '<script nonce="' + nonce + '" defer src="' + CLERK_JS_URL + '" data-clerk-publishable-key="' + publishableKey + '"></script>' +
     "</head><body>" +
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="leak" aria-hidden="true"></div>' +
