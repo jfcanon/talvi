@@ -64,6 +64,15 @@ export async function handleUpload(request, env) {
     return json({ error: "empty body" }, 400);
   }
 
+  // DEBUG: determine how the body is exposed through the OpenNext runtime.
+  try {
+    const t = typeof request.body;
+    const ab = await request.arrayBuffer();
+    console.log("UPLOAD_BODY_DEBUG typeof=" + t + " arrayBuffer=" + ab.byteLength + " bodyUsed=" + request.bodyUsed);
+  } catch (e) {
+    console.log("UPLOAD_BODY_DEBUG error " + String(e && e.message ? e.message : e));
+  }
+
   const filename = sanitiseFilename(request.headers.get("x-drop-filename"));
   const contentType = validateContentType(request.headers.get("x-drop-type"));
 
