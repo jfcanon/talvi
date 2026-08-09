@@ -89,7 +89,9 @@ function bootstrapScript(nonce, publishableKey) {
     "    if (!clerk) clerk = new Promise(function (resolve, reject) {\n" +
     "      (function wait() {\n" +
     "        if (window.Clerk) {\n" +
-    "          window.Clerk.load({ publishableKey: pub }).then(resolve, reject);\n" +
+    "          window.Clerk.load({ publishableKey: pub }).then(function () {\n" +
+    "            resolve(window.Clerk);\n" +
+    "          }, reject);\n" +
     "        } else if (document.readyState === 'complete') {\n" +
     "          reject(new Error('clerk-js did not load'));\n" +
     "        } else {\n" +
@@ -242,7 +244,14 @@ function callbackScript(nonce, publishableKey) {
     "  'use strict';\n" +
     "  var pub = " + JSON.stringify(publishableKey) + ";\n" +
     "  try {\n" +
-    "    var c = await window.Clerk.load({ publishableKey: pub });\n" +
+    "    var c = await new Promise(function (resolve, reject) {\n" +
+    "      (function wait() {\n" +
+    "        if (window.Clerk) resolve(window.Clerk);\n" +
+    "        else if (document.readyState === 'complete') reject(new Error('clerk-js did not load'));\n" +
+    "        else setTimeout(wait, 100);\n" +
+    "      })();\n" +
+    "    });\n" +
+    "    await c.load({ publishableKey: pub });\n" +
     "    await c.handleRedirectCallback({\n" +
     "      signInFallbackRedirectUrl: window.location.origin + '/',\n" +
     "      signUpFallbackRedirectUrl: window.location.origin + '/'\n" +
