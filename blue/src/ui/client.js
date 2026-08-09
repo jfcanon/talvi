@@ -224,6 +224,14 @@
     // Status -> message. 503 is not an error the user caused, and does not read
     // like one; 429 arrives once Step 6's rate limits exist.
     function failureText(status, body) {
+      if (status === 401) {
+        // Session missing or expired. The page was rendered signed-in but the
+        // cookie no longer verifies (e.g. it was revoked elsewhere). Send the
+        // browser to the custom sign-in page — same as the Access handshake
+        // below, a top-level navigation so the auth flow can run.
+        window.location.href = "/sign-in";
+        return "SESSION EXPIRED — signing you in.";
+      }
       if (status === 413) return "REFUSED — over the 25 MB ceiling.";
       if (status === 503) {
         return "CLOSED FOR THE DAY — the daily budget is spent. Try tomorrow.";
