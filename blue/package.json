@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "build": "next build",
+    "build": "node scripts/build-assets.mjs && next build",
     "build:cf": "opennextjs-cloudflare build",
     "dev": "next dev",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

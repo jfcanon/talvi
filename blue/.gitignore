@@ -7,6 +7,10 @@
 # OpenNext build output (built in CI; a Terraform input)
 /.open-next/
 
+# generated UI asset bundle (built by scripts/build-assets.mjs in CI, before
+# `next build`, so next build always finds it; mirrors green's src/generated/)
+/src/generated/
+
 # chat worker build output (built in CI; a Terraform input)
 /chat-worker/dist/
 /dist-worker/
@@ -15,3 +19,6 @@
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# local dev config (bindings for wrangler dev smoke tests)
+/wrangler.local.jsonc

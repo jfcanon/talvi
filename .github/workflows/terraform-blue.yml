@@ -32,6 +32,8 @@ jobs:
         working-directory: blue
       - run: npx opennextjs-cloudflare build
         working-directory: blue
+      - run: node scripts/normalize-build.mjs
+        working-directory: blue
       - run: npx wrangler deploy --dry-run --outdir=dist-worker
         working-directory: blue
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
@@ -51,6 +53,8 @@ jobs:
       - run: npm ci
         working-directory: blue
       - run: npx opennextjs-cloudflare build
+        working-directory: blue
+      - run: node scripts/normalize-build.mjs
         working-directory: blue
       - run: npx wrangler deploy --dry-run --outdir=dist-worker
         working-directory: blue
