@@ -1820,3 +1820,32 @@ a {
 #si-form .btn {
   align-self: flex-start;
 }
+
+/* The SSO row under the form (blue-3b-auth-options). Hidden until the
+   bootstrap finds an advertised strategy on the instance; the row carries the
+   same instrument language as the form, separated by a hairline rule. */
+.si__alt {
+  margin-top: 0.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--rule);
+}
+
+.si__or {
+  font-family: var(--font-console);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 0.6rem;
+}
+
+.si__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.si__row .btn--ghost {
+  flex: 1 1 9rem;
+  justify-content: center;
+}
