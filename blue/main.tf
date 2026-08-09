@@ -122,13 +122,19 @@ resource "cloudflare_dns_record" "talvi2" {
 
 # The OpenNext build emits a multi-file `.open-next/` directory; its entry
 # worker.js imports sibling modules, so it is bundled to ONE file in CI
-# (`wrangler deploy --dry-run --outdir=dist-worker`) before Terraform sees it —
-# the same single-file shape green uses (`content = file(...)`).
+# (`wrangler deploy --dry-run --outdir=dist-worker`) before Terraform sees it.
+# Content is referenced via content_file/content_sha256 (provider v5.7+), NOT
+# content: the built script is ~5MB of minified JS — a single multiline string
+# — and Terraform's plan renderer diffs string attributes with a Longest
+# Common Subsequence that is O(lines²); rendering a changed 5MB script there
+# OOM'd the plan step (fatal error: runtime: out of memory). content_file also
+# keeps the script out of state.
 resource "cloudflare_workers_script" "talvi_blue" {
   account_id          = var.cloudflare_account_id
   script_name         = "talvi-blue"
   main_module         = "index.js"
-  content             = file("${path.module}/dist-worker/worker.js")
+  content_file        = "${path.module}/dist-worker/worker.js"
+  content_sha256      = filesha256("${path.module}/dist-worker/worker.js")
   compatibility_date  = "2026-08-07"
   compatibility_flags = ["nodejs_compat"]
 
