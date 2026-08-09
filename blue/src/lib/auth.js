@@ -17,9 +17,16 @@ import { createClerkClient } from "@clerk/backend";
 // sidequest's authorizedParties rule), and it is the reason the app works on
 // the custom domain with no hostname allowlist: it is a fixed list of the
 // origins the Clerk instance itself is configured to trust.
+//
+// MUST be full origins (scheme + host): Clerk mints the session JWT with an
+// `azp` claim equal to the request origin (e.g. "https://talvi2.ygdcbtmc4u.uk"),
+// and assertAuthorizedPartiesClaim does a literal includes() against this list.
+// A bare host like "talvi2.ygdcbtmc4u.uk" never matches, so every valid session
+// is rejected — the browser sees "Session already exists" while the server
+// answers SESSION CLOSED. Fixed 2026-08-09.
 const AUTHORIZED_PARTIES = [
-  "talvi2.ygdcbtmc4u.uk",
-  "talvi-blue.ygdcbtmc4u.workers.dev",
+  "https://talvi2.ygdcbtmc4u.uk",
+  "https://talvi-blue.ygdcbtmc4u.workers.dev",
 ];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
