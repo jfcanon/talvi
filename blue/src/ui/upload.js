@@ -40,7 +40,25 @@ function ttlOptions() {
   ).join("");
 }
 
-export function uploadPage() {
+export function uploadPage({ authed = false } = {}) {
+  // The write path is gated (blueprint L5). Without a session the page shows a
+  // sign-in prompt where the drop zone would be; the sharing paths stay public.
+  if (!authed) {
+    const content =
+      '<div class="panel">' +
+      '<p class="halt">CLOSED</p>' +
+      '<p class="halt__say">SESSION CLOSED. Sign in to drop a file. Sharing ' +
+      "stays public — a link already sent keeps working.</p>" +
+      '<a class="btn" href="/sign-in">SIGN IN</a>' +
+      "</div>";
+    return renderPage("talvi — drop a file", {
+      lede:
+        "SESSION CLOSED. The upload is gated; the links stay open. Sign in to drop a file.",
+      content,
+      script: false,
+    });
+  }
+
   const content =
     '<div class="panel">' +
     // label + visually-hidden input: keyboard-reachable and screen-reader
@@ -104,7 +122,11 @@ export function uploadPage() {
     "</div>" +
     '<div class="result__actions">' +
     '<button class="btn btn--ghost" type="button" id="copy">COPY LINK</button>' +
-    '<a class="btn btn--ghost" href="https://amazed-cougar-41.accounts.dev/sign-out">SIGN OUT</a>' +
+    // Real sign-out: revoke the session server-side and drop the cookie. The
+    // old link pointed at a Clerk dev portal (amazed-cougar-41.accounts.dev)
+    // which is both a different environment and a hosted portal this app no
+    // longer uses — see src/lib/auth.js.
+    '<a class="btn btn--ghost" href="/api/signout">SIGN OUT</a>' +
     "</div>" +
     "</div>";
 

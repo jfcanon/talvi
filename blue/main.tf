@@ -36,6 +36,23 @@ variable "talvi_zone_id" {
   type = string
 }
 
+# Clerk auth (PR 3). Secret key is a secret_text binding so it never appears in
+# state; the publishable key is public by design and ships as plain text. The
+# JWT key is Clerk's public verification key (PEM) — also public, but stored in
+# Bitwarden with its peers; passing it as jwtKey makes session verification
+# networkless (green's Step 8 pattern).
+variable "clerk_secret_key" {
+  type = string
+}
+
+variable "clerk_publishable_key" {
+  type = string
+}
+
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # ---------------------------------------------------------------------------
 # Blue storage — deliberately separate from green (blueprint L4). New names,
 # so nothing is renamed or replaced.
@@ -175,6 +192,27 @@ resource "cloudflare_workers_script" "talvi_blue" {
     {
       type = "ai"
       name = "AI"
+    },
+
+    # Clerk auth (PR 3). CLERK_SECRET_KEY is a secret_text binding (never in
+    # state); CLERK_PUBLISHABLE_KEY and CLERK_JWT_KEY are public by design. The
+    # worker verifies the __session cookie locally via @clerk/backend using
+    # jwtKey (no network per request, no clerk-js on any page except /sign-in,
+    # no CSP change anywhere else).
+    {
+      type = "secret_text"
+      name = "CLERK_SECRET_KEY"
+      text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = var.clerk_jwt_key
     },
   ]
 

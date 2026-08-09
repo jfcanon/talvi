@@ -1772,3 +1772,51 @@ a {
   color: var(--phosphor-dim);
   opacity: 0.7;
 }
+
+/* ------------------------------------------------------- sign-in (PR 3)
+   The custom Clerk form. Same instrument language as everything else: a
+   panel with hud labels, console fields, and the standard button. Labels
+   straddle their fields exactly as the retention tagline does elsewhere. */
+.si__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.si__field {
+  display: block;
+  width: 100%;
+  margin-bottom: 1.1rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--hud-line-soft);
+  border-radius: 0;
+  background: var(--void);
+  color: var(--text-hi);
+  font-family: var(--font-console);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.si__field::placeholder {
+  color: var(--hud-line-soft);
+}
+
+.si__field:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+#si-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+#si-form .btn {
+  align-self: flex-start;
+}
