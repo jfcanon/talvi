@@ -126,7 +126,7 @@ function bootstrapScript(nonce, publishableKey) {
     "    var shown = false;\n" +
     "    try {\n" +
     "      var c = await loadClerk();\n" +
-    "      var probe = await c.client.signIn.create();\n" +
+    "      var probe = await c.client.signIn.create({});\n" +
     "      var factors = factorsOf(probe);\n" +
     "      var web3 = null;\n" +
     "      for (var i = 0; i < factors.length; i++) {\n" +
