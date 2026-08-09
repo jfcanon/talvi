@@ -132,6 +132,46 @@ resource "cloudflare_workers_script" "talvi_blue" {
   compatibility_date  = "2026-08-07"
   compatibility_flags = ["nodejs_compat"]
 
+  # PR 2: the write/read path bindings. Same shapes as green (main.tf), fresh
+  # resources: D1 talvi-blue-meta, R2 talvi-blue-drop, and rate-limit
+  # namespace ids 2101/2102 (green uses 2001/2002 — per-script identifiers,
+  # chosen to stay visibly distinct from the relay's 1001/1002).
+  bindings = [
+    { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_blue_meta.id },
+    { type = "r2_bucket", name = "BUCKET", bucket_name = cloudflare_r2_bucket.talvi_blue_drop.name },
+
+    # Workers-native rate limiting (green Step 6). Chosen over
+    # cloudflare_rate_limit because that resource is zone-scoped. See the
+    # KNOWN UNRESOLVED caveat in src/lib/rate.js — on green these never
+    # fired; the code is correct against the documented API and inert.
+    {
+      type         = "ratelimit"
+      name         = "RL_UPLOAD"
+      namespace_id = "2101"
+      simple = {
+        limit  = 3
+        period = 60
+      }
+    },
+    {
+      type         = "ratelimit"
+      name         = "RL_READ"
+      namespace_id = "2102"
+      simple = {
+        limit  = 60
+        period = 60
+      }
+    },
+
+    # Workers AI (markdown sidequest). Powers GET /:slug/md — the "as
+    # markdown" image conversion. No secret, no egress; usage is metered in
+    # neurons and bounded by on-demand + R2 caching.
+    {
+      type = "ai"
+      name = "AI"
+    },
+  ]
+
   # OpenNext static assets (public/ + _next/static). The provider uploads the
   # directory and wires the ASSETS binding (provider v5.11+).
   assets = {

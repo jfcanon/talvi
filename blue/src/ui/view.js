@@ -1,0 +1,103 @@
+// The recipient page — "/:slug".
+//
+// This is the app's ONLY stored-XSS sink: filename and content-type are
+// client-supplied, sanitised at intake (src/sanitise.js) and escaped again
+// here at render (B.7 item 3). Both, not either.
+//
+// Hierarchy: the download button is the brightest and largest thing on the
+// page. Everything else is a label on the thing you came to collect.
+import { escapeHtml } from "../sanitise.js";
+import { renderPage } from "./layout.js";
+
+export function formatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// Server-side absolute expiry, in UTC, without the raw ISO T/Z. client.js
+// upgrades this to the reader's locale plus "in 29 days" — but with JS off the
+// page still states exactly when the file dies.
+function utcStamp(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    d.getUTCFullYear() +
+    "-" +
+    pad(d.getUTCMonth() + 1) +
+    "-" +
+    pad(d.getUTCDate()) +
+    " " +
+    pad(d.getUTCHours()) +
+    ":" +
+    pad(d.getUTCMinutes()) +
+    " UTC"
+  );
+}
+
+export function viewPage(row, slug, isImage) {
+  const name = escapeHtml(row.filename);
+  const type = escapeHtml(row.content_type);
+  const size = escapeHtml(formatSize(row.size_bytes));
+  const iso = escapeHtml(row.expires_at);
+  const stamp = escapeHtml(utcStamp(row.expires_at));
+
+  // Download is the only action for most files. When the object's own bytes
+  // say "image" (sniffed server-side, never the declared type), a second
+  // action — "as markdown" — sits beside it. Both are plain anchors; the
+  // markdown route serves an attachment with the same no-render discipline as
+  // /d (markdown sidequest).
+  const actions =
+    '<div class="actions">' +
+    '<a class="dl" href="/' +
+    escapeHtml(slug) +
+    '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
+    (isImage
+      ? '<a class="dl--alt" href="/' +
+        escapeHtml(slug) +
+        '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
+      : "") +
+    "</div>";
+
+  const content =
+    '<div class="panel">' +
+    '<div class="tagline"><span class="tagline__box">record</span></div>' +
+    '<div class="hud">' +
+    // The filename gets its own full-width row and is NOT uppercased — it is
+    // the one value on this page read character by character.
+    '<div class="hud__row">' +
+    '<div class="hud__cell hud__cell--tag"><span class="hud__label">file</span></div>' +
+    '<div class="hud__cell"><span class="hud__value hud__value--verbatim">' +
+    name +
+    "</span></div>" +
+    "</div>" +
+    '<div class="hud__row">' +
+    '<div class="hud__cell"><span class="hud__label">size</span>' +
+    '<span class="hud__value">' +
+    size +
+    "</span></div>" +
+    '<div class="hud__cell"><span class="hud__label">type</span>' +
+    '<span class="hud__value">' +
+    type +
+    "</span></div>" +
+    "</div>" +
+    '<div class="hud__row">' +
+    '<div class="hud__cell"><span class="hud__label">expires</span>' +
+    '<span class="hud__value meta__expiry" id="expires" data-expires="' +
+    iso +
+    '">' +
+    stamp +
+    "</span></div>" +
+    "</div>" +
+    '<div class="hud__strip" aria-hidden="true"></div>' +
+    "</div>" +
+    actions +
+    "</div>";
+
+  return renderPage(row.filename, {
+    lede: "INCOMING. One file is being held for you. Collect it before it expires.",
+    content,
+    script: true,
+  });
+}
