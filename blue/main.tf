@@ -111,6 +111,7 @@ resource "cloudflare_dns_record" "talvi2" {
   content = "192.0.2.1"
   type    = "A"
   proxied = true
+  ttl     = 1 # 1 = automatic; required by the provider and only valid when proxied
 }
 
 # ---------------------------------------------------------------------------
