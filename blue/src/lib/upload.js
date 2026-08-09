@@ -64,65 +64,42 @@ export async function handleUpload(request, env) {
     return json({ error: "empty body" }, 400);
   }
 
-  // DEBUG: determine how the body is exposed through the OpenNext runtime.
-  try {
-    const t = typeof request.body;
-    const ab = await request.arrayBuffer();
-    console.log("UPLOAD_BODY_DEBUG typeof=" + t + " arrayBuffer=" + ab.byteLength + " bodyUsed=" + request.bodyUsed);
-  } catch (e) {
-    console.log("UPLOAD_BODY_DEBUG error " + String(e && e.message ? e.message : e));
-  }
-
   const filename = sanitiseFilename(request.headers.get("x-drop-filename"));
   const contentType = validateContentType(request.headers.get("x-drop-type"));
 
   const slug = newSlug();
   const r2Key = "d" + ttl + "/" + slug;
 
-  // --- stream to R2 (B.6) ---
-  // Cloudflare's documented pattern, verbatim: hand request.body straight to
-  // put(). Never request.arrayBuffer()/formData()/text() — buffering a 25 MiB
-  // body defeats the memory ceiling.
+  // --- buffer the body, then put to R2 ---
+  // In OpenNext the request body is NOT available as a stream to the route
+  // handler: the Next runtime reads it before dispatch, so `request.body` is
+  // undefined and `bodyUsed` is already true (verified live). The bytes are
+  // only reachable via `request.arrayBuffer()`. Since the runtime has already
+  // buffered the whole body, streaming to R2 would save nothing — so put() is
+  // handed the buffer directly, which also sidesteps the FixedLengthStream
+  // "unknown length" problem entirely. The green worker streams request.body
+  // straight to put() because there the worker IS the first reader; blue is
+  // different by construction.
   //
-  // This replaced a counting TransformStream + FixedLengthStream rig. To be
-  // accurate about why, because the first version of this comment was not:
-  // that rig WORKED. Objects it wrote are still in the bucket and still
-  // download correctly. It was removed for being unnecessary, not for being
-  // broken. Its premise — "R2 needs a known length, pipeThrough(counter)
-  // destroys the length, so restore it with FixedLengthStream" — is wrong at
-  // the first step: put() takes a plain ReadableStream, and FixedLengthStream
-  // is documented for setting Content-Length on an OUTBOUND Request/Response.
-  // The length constraint only existed because the counter introduced it.
-  //
-  // Size enforcement without the counter, in layers:
-  //   1. Content-Length > MAX_BYTES is rejected above, before a single byte
-  //      is read. This is the cheap path and catches every honest client.
+  // Size enforcement stays layered, in the same order as green:
+  //   1. Content-Length > MAX_BYTES is rejected above, before any read. This
+  //      is the cheap path and catches every honest client.
   //   2. The Cloudflare edge holds the body to its declared Content-Length,
   //      so a client that declares 5 bytes cannot smuggle 5 GB past it. This
-  //      is the control that actually stops a lying client — it is enforced
-  //      upstream of this Worker, not by us.
-  //   3. put() returns the object's TRUE stored size. Checked below and the
-  //      object deleted if it somehow exceeds the cap. Belt to (2)'s braces,
-  //      and a better number than a self-maintained counter: it is what R2
-  //      recorded, not what we believe we passed along.
+  //      is the control that actually stops a lying client.
+  //   3. The arrayBuffer is re-measured below and compared against the
+  //      declared length; put() returns the object's TRUE stored size, which
+  //      is checked against the cap and the object deleted if it exceeds it.
   let stored;
   try {
-    // In OpenNext the request body reaching a route handler is NOT the
-    // worker's original request body — it is a stream reconstructed by the
-    // Next runtime, with no known length. workerd's R2 put() rejects a stream
-    // of unknown length:
-    //   "Provided readable stream must have a known length (request/response
-    //    body or readable half of FixedLengthStream)"
-    // The green worker streams request.body straight to put() because there it
-    // IS the original request body (known length). Green also trialled a
-    // FixedLengthStream rig and removed it as unnecessary — for blue it is
-    // load-bearing. The length is the edge-verified Content-Length computed
-    // above, so a lying client errors the pipe; this is belt to the size
-    // checks, not a new hole.
-    const fixed = new FixedLengthStream(contentLength);
-    stored = await env.BUCKET.put(r2Key, request.body.pipeThrough(fixed));
+    const bytes = await request.arrayBuffer();
+    if (bytes.byteLength !== contentLength) {
+      // The runtime buffered a different length than the edge-verified header
+      // promised. Refuse rather than store a body of unknown provenance.
+      return json({ error: "body length mismatch" }, 400);
+    }
+    stored = await env.BUCKET.put(r2Key, bytes);
   } catch (e) {
-    console.log("UPLOAD_PUT_ERROR", String(e && e.message ? e.message : e));
     await env.BUCKET.delete(r2Key).catch(() => {}); // no orphan object
     return json({ error: "upload failed" }, 400);
   }
