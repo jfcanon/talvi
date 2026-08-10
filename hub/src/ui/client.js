@@ -1,14 +1,31 @@
-// talvi hub — the blade (v5). The 3D world is gone; this is a 2D front door.
-// The only behaviour left is the blade retraction.
+// talvi hub — boots the 3D world and drives the blade (blueprint A2/A5).
 //
-// Self-booting plain script (concatenated by scripts/build-assets.mjs — no
-// module loader, no import). The blade is a class toggle on .blade (is-open)
-// driven by a real <button>. No inline handlers anywhere (CSP: script-src
-// 'self' — which is WHY the toggle is a button + addEventListener, not an
-// onclick attribute). The retract state is remembered in localStorage so the
-// rail stays the way the visitor left it.
+// This file is the client entry and IS bundled by scripts/build-assets.mjs
+// (esbuild: three.js + the scene modules + this file → the /h.js payload), so
+// unlike the old raw-concatenated client it can use imports and an ES module
+// graph. It owns its own DOMContentLoaded hook.
+//
+// Two jobs:
+//   1. Boot the world if WebGL exists (the page still works without it: the
+//      captions and the film overlays sit on the plain dark ground).
+//   2. The blade: a class toggle on .blade (is-open) driven by a real
+//      <button>. No inline handlers anywhere (CSP: script-src 'self' — which
+//      is WHY the toggle is a button + addEventListener, not an onclick
+//      attribute). The retract state is remembered in localStorage so the rail
+//      stays the way the visitor left it.
+import { bootScene } from "../scene/main.js";
+
 (function () {
   "use strict";
+
+  function bootWorld() {
+    if (window.WebGLRenderingContext) bootScene();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootWorld);
+  } else {
+    bootWorld();
+  }
 
   const STORAGE_KEY = "talvi.hub.blade";
   const BLADE = document.querySelector(".blade");
