@@ -6,12 +6,10 @@
 # plain WebSocket route, and chat reads no session. Shares green's D1/R2 for
 # the nightly purge (blueprint L8).
 #
-# ⚠ THE TWO-PR MIGRATIONS DANCE — read before touching this file:
-# The ChatChannel namespace on THIS worker is a NEW namespace (the free plan
-# requires new_sqlite_classes). PR C1 ships WITH the migrations block below so
-# the apply creates the namespace. PR C2 REMOVES the block. After the class
-# has live objects, re-declaring migrations is code 10074 (provider v5 marks
-# it WriteOnly, re-sends it every apply). The block must NEVER linger.
+# ⚠ MIGRATIONS DANCE COMPLETE: the ChatChannel namespace was created by PR C1
+# (new_sqlite_classes = ["ChatChannel"]) and this PR (C2) REMOVED the argument.
+# It must never be re-declared while the class has live objects (code 10074 —
+# see the note on the worker resource below). The two-PR dance is done.
 terraform {
   required_providers {
     cloudflare = {
@@ -84,14 +82,14 @@ resource "cloudflare_workers_script" "talvi_chat" {
     { type = "r2_bucket", name = "BUCKET", bucket_name = data.cloudflare_r2_bucket.talvi_drop.name },
   ]
 
-  # ⚠ MIGRATIONS DANCE, PR C1: create the SQLite-backed ChatChannel namespace.
-  #   PR C2 REMOVES THIS ARGUMENT. It must never linger once the class has live
-  #   objects (code 10074 — see the header comment and green's main.tf).
-  #   NOTE: in provider v5 this is an ARGUMENT (`migrations = {...}`), not a
-  #   block — a block form is "Blocks of type migrations are not expected here".
-  migrations = {
-    new_sqlite_classes = ["ChatChannel"]
-  }
+  # NO `migrations` ARGUMENT — deliberate, and it must stay that way. PR C1
+  # shipped `new_sqlite_classes = ["ChatChannel"]` to create the SQLite-backed
+  # namespace; the C1 apply ran and the class now has live objects. Provider
+  # v5 marks `migrations` WriteOnly, so Terraform re-sends it on EVERY apply and
+  # Cloudflare rejects it once the class is depended on by live Durable Objects
+  # (code 10074 — the same trap that cost green hours; fixed there in PR #51).
+  # Omitting the argument is how Terraform sends null. Add it again ONLY to
+  # declare a genuinely NEW class, and remove it in the very next PR.
 }
 
 # Nightly purge — the chat worker owns it (plain Worker, scheduled handler).
