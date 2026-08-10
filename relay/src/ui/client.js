@@ -252,7 +252,7 @@
       }
     }
 
-    send.addEventListener("click", () => {
+    send.addEventListener("click", async () => {
       if (!file || busy) return;
       busy = true;
       clearMsg();
@@ -262,6 +262,26 @@
       fill.style.width = "0%";
       pct.textContent = "0%";
 
+      // Optional download PIN (Workstream E): derive H_gate from the PIN and
+      // send only the proof. The PIN itself never leaves the page. chatcrypto
+      // is present because /s.js now concatenates it.
+      let pinGate = null;
+      const pin = $("pin");
+      if (pin && pin.value) {
+        const problem = window.talviGate?.pinProblem(pin.value);
+        if (problem) {
+          busy = false;
+          send.disabled = false;
+          send.textContent = "SEND IT";
+          prog.className = "prog hidden";
+          say(problem, true);
+          return;
+        }
+        const name = "relay"; // must match the derivation name on the view page
+        const master = await window.talviGate.deriveMasterHex(pin.value, name);
+        pinGate = window.talviGate.gateHex(master, name);
+      }
+
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/relay/api/upload", true);
       xhr.setRequestHeader("x-drop-ttl", ttlDays());
@@ -270,6 +290,9 @@
       xhr.setRequestHeader("x-drop-filename", encodeURIComponent(file.name));
       if (file.type) {
         xhr.setRequestHeader("x-drop-type", file.type);
+      }
+      if (pinGate) {
+        xhr.setRequestHeader("x-drop-pin-gate", pinGate);
       }
 
       xhr.upload.onprogress = (e) => {
@@ -338,6 +361,84 @@
     }
   }
 
+  // ------------------------------------------------------- download PIN gate
+
+  // A gated drop (Workstream E): the server rendered a PIN prompt instead of
+  // the download buttons. On UNLOCK, derive H_gate from the PIN (same KDF chat
+  // uses, published by chatcrypto.js on window.talviGate), prove it over the
+  // challenge-response endpoint, and on success reveal the download links. The
+  // server's Set-Cookie does the actual granting — this JS only drives the
+  // round trip and flips the visibility.
+  function initGate() {
+    const unlock = $("unlock");
+    const pin = $("pin");
+    if (!unlock || !pin || !window.talviGate) return;
+
+    const slug = window.location.pathname.split("/").filter(Boolean).pop();
+    const msg = $("pinmsg");
+
+    function say(text, isError) {
+      if (!msg) return;
+      msg.textContent = text;
+      msg.classList.toggle("hidden", false);
+      msg.classList.toggle("msg--err", Boolean(isError));
+    }
+
+    unlock.addEventListener("click", async () => {
+      unlock.disabled = true;
+      say("CHECKING…", false);
+      try {
+        const problem = window.talviGate.pinProblem(pin.value);
+        if (problem) {
+          say(problem, true);
+          unlock.disabled = false;
+          return;
+        }
+        const name = "relay"; // must match the derivation name used at upload
+        const master = await window.talviGate.deriveMasterHex(pin.value, name);
+        const gate = window.talviGate.gateHex(master, name);
+
+        // Challenge.
+        const ch = await fetch("/relay/" + slug + "/gate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "challenge" }),
+        });
+        if (!ch.ok) {
+          say("LOCKED — try again later.", true);
+          unlock.disabled = false;
+          return;
+        }
+        const { nonce } = await ch.json();
+
+        // Answer.
+        const answer = await window.talviGate.answerHex(gate, nonce);
+        const ans = await fetch("/relay/" + slug + "/gate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "answer", nonce, answer }),
+        });
+        if (!ans.ok) {
+          say("PIN NOT ACCEPTED.", true);
+          unlock.disabled = false;
+          return;
+        }
+
+        // Admitted — reveal the download actions (the gate cookie is set).
+        say("OPEN.", false);
+        const dl = document.querySelector(".dl");
+        if (dl) dl.classList.remove("hidden");
+        const md = document.querySelector(".dl--alt");
+        if (md) md.classList.remove("hidden");
+        const gateBox = document.querySelector(".gate");
+        if (gateBox) gateBox.classList.add("hidden");
+      } catch {
+        say("GATE ERROR — try again.", true);
+        unlock.disabled = false;
+      }
+    });
+  }
+
   // ------------------------------------------------------- typed reveal
 
   // Types out elements marked [data-type]. Progressive enhancement done
@@ -382,6 +483,7 @@
   function boot() {
     initUpload();
     initView();
+    initGate();
     initTyping();
   }
 

@@ -18,6 +18,17 @@ import { newSlug, isValidSlug } from "./slug.js";
 import { sanitiseFilename, validateContentType } from "./sanitise.js";
 import { sniffImageKind, imageMime } from "./sniff.js";
 import { PREFIX } from "./prefix.js";
+import {
+  GATE_MAX_FAILS,
+  GATE_LOCKOUT_MS,
+  NONCE_BYTES,
+  randomNonce,
+  toHex,
+  isGateHex,
+  fromHex,
+  hmacHex,
+  timingSafeEqualHex,
+} from "./chat/gate.js";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB — see blueprint B.6
 const MAX_DAILY_BYTES = 250 * 1024 * 1024; // 250 MiB/day — bounds storage inside R2 free tier, B.8
@@ -30,6 +41,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // CREATE TABLE IF NOT EXISTS at the top of any handler touching D1 — the
 // relay's idiom, deliberately kept so this project needs no migration tooling.
+//
+// Workstream E adds the download-PIN gate columns. They are additive and
+// nullable (A8) and GREEN IGNORES THEM: green shares this D1, its SELECT *
+// returns the extra fields it never reads, and its explicit-column INSERTs
+// leave them NULL. ALTER is guarded so an existing green-created table gains
+// the columns without error, and a fresh table gets them via CREATE.
 async function ensureSchema(db) {
   await db.batch([
     db.prepare(
@@ -41,12 +58,34 @@ async function ensureSchema(db) {
         size_bytes     INTEGER NOT NULL,
         uploaded_at    TEXT NOT NULL,
         expires_at     TEXT NOT NULL,
-        download_count INTEGER NOT NULL DEFAULT 0
+        download_count INTEGER NOT NULL DEFAULT 0,
+        pin_gate       TEXT,
+        pin_gate_fails INTEGER NOT NULL DEFAULT 0,
+        pin_gate_locked_until TEXT,
+        pin_gate_nonce TEXT,
+        pin_gate_nonce_expires TEXT,
+        pin_gate_token TEXT,
+        pin_gate_token_expires TEXT
       )`,
     ),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_drops_expires_at  ON drops(expires_at)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_drops_uploaded_at ON drops(uploaded_at)`),
   ]);
+  // A pre-existing (green-created) table already exists, so CREATE IF NOT
+  // EXISTS above is a no-op for it. ALTER the gate columns in — each guarded
+  // so a re-run (or a green-created table) is a no-op, never an error.
+  const addColumn = (name, def) =>
+    db
+      .prepare(`ALTER TABLE drops ADD COLUMN ${name} ${def}`)
+      .run()
+      .catch(() => {}); // duplicate column → already present, fine
+  await addColumn("pin_gate", "TEXT");
+  await addColumn("pin_gate_fails", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn("pin_gate_locked_until", "TEXT");
+  await addColumn("pin_gate_nonce", "TEXT");
+  await addColumn("pin_gate_nonce_expires", "TEXT");
+  await addColumn("pin_gate_token", "TEXT");
+  await addColumn("pin_gate_token_expires", "TEXT");
 }
 
 function json(body, status = 200) {
@@ -113,6 +152,17 @@ async function handleUpload(request, env) {
   const filename = sanitiseFilename(request.headers.get("x-drop-filename"));
   const contentType = validateContentType(request.headers.get("x-drop-type"));
 
+  // Download-PIN gate (Workstream E). The uploader optionally sets a 4-digit
+  // PIN; the BROWSER derives H_gate (the proof value) and sends only that —
+  // the PIN itself never crosses the wire. The server stores just the proof
+  // (A6: the PIN is a gate, never key material). isGateHex is checked here so
+  // a malformed proof is refused before a single byte is stored.
+  const pinGateRaw = request.headers.get("x-drop-pin-gate");
+  const pinGate = pinGateRaw ? pinGateRaw.trim() : null;
+  if (pinGate !== null && !isGateHex(pinGate)) {
+    return json({ error: "invalid pin gate" }, 400);
+  }
+
   const slug = newSlug();
   const r2Key = "d" + ttl + "/" + slug;
 
@@ -178,10 +228,10 @@ async function handleUpload(request, env) {
 
   await env.DB.prepare(
     `INSERT INTO drops
-       (slug, r2_key, filename, content_type, size_bytes, uploaded_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (slug, r2_key, filename, content_type, size_bytes, uploaded_at, expires_at, pin_gate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(slug, r2Key, filename, contentType, counted, uploadedAt, expiresAt)
+    .bind(slug, r2Key, filename, contentType, counted, uploadedAt, expiresAt, pinGate)
     .run();
 
   const url = new URL(request.url);
@@ -241,7 +291,7 @@ async function getLiveDrop(env, slug) {
 // (sniffed here, a 16-byte range read) — never the declared content type.
 async function handleView(env, row, slug) {
   const kind = await imageKindOf(env, row.r2_key);
-  return new Response(viewPage(row, slug, kind !== null), {
+  return new Response(viewPage(row, slug, kind !== null, Boolean(row.pin_gate)), {
     status: 200,
     headers: HTML_HEADERS,
   });
@@ -478,6 +528,157 @@ function limitedHtml() {
 // is invisible to anyone auditing the site's intent.
 const ROBOTS = "User-agent: *\nDisallow: /\n";
 
+// ---------------------------------------------------------------------------
+// Download-PIN gate (Workstream E). Protocol, from blueprint §4/A6:
+//
+//   - The PIN is a GATE on fetching, never an encryption key. The server holds
+//     only H_gate — the proof value the browser derives from the PIN and sends
+//     once, at upload. The raw PIN never crosses the wire.
+//   - Challenge-response, same shape as chat's gate.js: the client requests a
+//     nonce, then answers with HMAC-SHA256(H_gate, nonce). The server recomputes
+//     the same HMAC from the stored proof and constant-time compares.
+//   - Lockout: GATE_MAX_FAILS consecutive failures → GATE_LOCKOUT_MS backoff,
+//     persisted in D1 (unlike chat's in-memory DO state, a file is a persistent
+//     artifact and the gate must survive worker restarts).
+//   - Honest copy: the PIN stops a leaked link being enough on its own; it does
+//     NOT encrypt the file or stop someone who has both link and PIN.
+//
+// The gate cookie is short-lived (GATE_COOKIE_MS) and scoped to the exact slug
+// path, so a captured cookie unlocks one drop for a few minutes, not the site.
+// ---------------------------------------------------------------------------
+
+const GATE_COOKIE_MS = 30 * 60 * 1000; // grant valid for 30 min after proof
+const GATE_NONCE_MS = 5 * 60 * 1000; // a challenge nonce is fresh for 5 min
+const GATE_COOKIE_NAME = "relay_gate"; // value is a per-drop random token
+
+function gateCookieHeader(value) {
+  return (
+    GATE_COOKIE_NAME +
+    "=" +
+    value +
+    "; HttpOnly; Secure; SameSite=Strict; Path=" +
+    PREFIX +
+    "; Max-Age=" +
+    Math.floor(GATE_COOKIE_MS / 1000)
+  );
+}
+
+// True when the drop is currently in its lockout backoff window.
+function gateLocked(row) {
+  if (!row.pin_gate_locked_until) return false;
+  return new Date(row.pin_gate_locked_until).getTime() > Date.now();
+}
+
+// Issue a fresh challenge nonce for a gated drop. Stores it (and its expiry)
+// in D1 so the answer round-trip can be verified against the same value, then
+// returns the nonce as plain hex. Refused while locked out.
+async function gateChallenge(env, row) {
+  if (gateLocked(row)) {
+    return json({ error: "locked out; try again later" }, 423);
+  }
+  const nonce = toHex(randomNonce());
+  const expires = new Date(Date.now() + GATE_NONCE_MS).toISOString();
+  await env.DB.prepare(
+    `UPDATE drops SET pin_gate_nonce = ?, pin_gate_nonce_expires = ? WHERE slug = ?`,
+  )
+    .bind(nonce, expires, row.slug)
+    .run();
+  return json({ nonce });
+}
+
+// Verify a client's answer to a challenge. Recomputes HMAC-SHA256(H_gate,
+// nonce) from the stored proof and constant-time compares — a wrong answer and
+// a malformed one are indistinguishable. On success, stores a fresh gate token
+// in D1 and returns it as the cookie value. On failure, counts toward the
+// lockout; at GATE_MAX_FAILS the drop is locked for GATE_LOCKOUT_MS.
+async function gateAnswer(env, row, body) {
+  if (gateLocked(row)) {
+    return json({ error: "locked out; try again later" }, 423);
+  }
+  if (!body || typeof body.nonce !== "string" || typeof body.answer !== "string") {
+    return json({ error: "bad gate request" }, 400);
+  }
+  // The nonce must be the one this drop was issued, and fresh.
+  if (row.pin_gate_nonce !== body.nonce) {
+    return json({ error: "stale nonce" }, 400);
+  }
+  const expiresAt = new Date(row.pin_gate_nonce_expires || 0).getTime();
+  if (expiresAt < Date.now()) {
+    return json({ error: "stale nonce" }, 400);
+  }
+
+  const expected = await hmacHex(fromHex(row.pin_gate), fromHex(body.nonce));
+  if (!timingSafeEqualHex(expected, body.answer)) {
+    // Wrong answer (or malformed one — same refusal). Count toward lockout and
+    // consume the nonce: a failed answer must not be retryable with the same
+    // nonce (single-use, replay protection).
+    const fails = (row.pin_gate_fails || 0) + 1;
+    let lockedUntil = null;
+    if (fails >= GATE_MAX_FAILS) {
+      lockedUntil = new Date(Date.now() + GATE_LOCKOUT_MS).toISOString();
+    }
+    await env.DB.prepare(
+      `UPDATE drops SET pin_gate_fails = ?, pin_gate_locked_until = COALESCE(?, pin_gate_locked_until),
+        pin_gate_nonce = NULL, pin_gate_nonce_expires = NULL WHERE slug = ?`,
+    )
+      .bind(lockedUntil ? 0 : fails, lockedUntil, row.slug)
+      .run();
+    return json({ error: "not admitted" }, 403);
+  }
+
+  // Admitted. Issue a fresh one-time token as the gate cookie; clear the nonce
+  // and failure state.
+  const token = toHex(randomNonce());
+  const grantExpires = new Date(Date.now() + GATE_COOKIE_MS).toISOString();
+  await env.DB.prepare(
+    `UPDATE drops SET pin_gate_nonce = NULL, pin_gate_nonce_expires = NULL,
+       pin_gate_fails = 0, pin_gate_locked_until = NULL WHERE slug = ?`,
+  )
+    .bind(row.slug)
+    .run();
+  // The token lives in D1 so /d can verify the cookie is the one we issued.
+  await env.DB.prepare(
+    `UPDATE drops SET pin_gate_token = ?, pin_gate_token_expires = ? WHERE slug = ?`,
+  )
+    .bind(token, grantExpires, row.slug)
+    .run();
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "set-cookie": gateCookieHeader(token),
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+// Validate the gate cookie for a gated drop's fetch: the cookie value must be
+// the exact token we issued, unexpired, stored in D1 for that drop. Constant-
+// time compare so a forged value reads like any other mismatch.
+async function gateCookieValid(env, request, row) {
+  const cookie = request.headers.get("cookie") || "";
+  const match = cookie.match(new RegExp("(?:^|;)\\s*" + GATE_COOKIE_NAME + "=([^;]+)"));
+  const value = match?.[1];
+  if (!value) return false;
+  if (!row.pin_gate_token || row.pin_gate_token !== value) return false;
+  const expires = new Date(row.pin_gate_token_expires || 0).getTime();
+  return expires >= Date.now();
+}
+
+// POST /:slug/gate — the challenge/answer endpoint. Body is JSON with an
+// "action" of "challenge" or "answer".
+async function handleGate(env, row, request) {
+  let body = null;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "bad gate request" }, 400);
+  }
+  if (body?.action === "challenge") return gateChallenge(env, row);
+  if (body?.action === "answer") return gateAnswer(env, row, body);
+  return json({ error: "bad gate request" }, 400);
+}
+
 // /:slug, /:slug/d, and /:slug/md. Split out of fetch() to keep the router's
 // cognitive complexity under the quality gate's ceiling — the whole read path
 // is one decision ("is this a live drop?") and reads better as its own
@@ -491,6 +692,10 @@ const ROBOTS = "User-agent: *\nDisallow: /\n";
 // debugging cycle on this project; see the commit "docs: correct the record on
 // the phantom download bug".
 const SLUG_ROUTE = /^\/([^/]+)(\/(d|md))?$/;
+// POST /<slug>/gate — the download-PIN challenge/answer endpoint (Workstream E).
+// One trailing segment, so it cannot collide with SLUG_ROUTE (which is used
+// only for GET).
+const GATE_ROUTE = /^\/([^/]+)\/gate$/;
 
 async function handleSlugRoute(match, env, request, ctx) {
   const slug = match[1];
@@ -506,6 +711,17 @@ async function handleSlugRoute(match, env, request, ctx) {
 
   const row = await getLiveDrop(env, slug);
   if (!row) return notFound();
+
+  // Download-PIN gate (Workstream E). A gated drop's fetch (/d, /md) requires
+  // a valid gate cookie (set by POST /:slug/gate after a successful
+  // challenge-response). The view page itself is public — it renders the
+  // record and the PIN prompt; the file bytes are what the gate protects.
+  if (row.pin_gate && (action === "/d" || action === "/md")) {
+    if (!(await gateCookieValid(env, request, row))) {
+      // Redirect to the view page so a visitor lands on the PIN prompt.
+      return Response.redirect(new URL(PREFIX + "/" + slug, request.url).toString(), 302);
+    }
+  }
 
   if (action === "/md") return handleMarkdown(env, row);
   return action === "/d" ? handleDownload(env, row, ctx) : handleView(env, row, slug);
@@ -611,8 +827,7 @@ async function route(request, method, env, ctx) {
   const stripped = pathname.slice(PREFIX.length) || "/";
 
   if (method !== "GET") {
-    // The only non-GET route in the app. Upload protection is at the edge via
-    // Cloudflare Access on /relay/api/upload — no in-Worker gate.
+    // POST /api/upload — the write path (edge-gated by Access).
     if (stripped === "/api/upload" && method === "POST") {
       // JSON, not the themed HTML page: this is an API endpoint and its
       // caller is the uploader script, which renders its own in-theme
@@ -622,6 +837,20 @@ async function route(request, method, env, ctx) {
       }
       return handleUpload(request, env);
     }
+
+    // POST /<slug>/gate — the download-PIN challenge/answer endpoint
+    // (Workstream E). No write to storage beyond the gate's own nonce/fail
+    // bookkeeping, so it is not behind the upload Access gate — a downloader
+    // proving a PIN must be able to reach it.
+    const gateMatch = GATE_ROUTE.exec(stripped);
+    if (gateMatch && method === "POST") {
+      const gateSlug = gateMatch[1];
+      if (!isValidSlug(gateSlug)) return notFound();
+      const row = await getLiveDrop(env, gateSlug);
+      if (!row || !row.pin_gate) return notFound(); // ungated or unknown → 404
+      return handleGate(env, row, request);
+    }
+
     return notFound();
   }
 

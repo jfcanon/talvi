@@ -25,12 +25,14 @@ const spritePng = await readFile(join(root, "src/ui/sprites/figure.png"));
 const spriteB64 = spritePng.toString("base64");
 
 // /s.js is a CONCATENATION, not a bundle: these are plain browser scripts,
-// each self-booting and sharing nothing. The relay serves client.js (upload
-// behaviour) + ambient.js (the drifting pad). NO chat scripts — chat lives on
-// green until Workstream C.
+// each self-booting and sharing nothing. The relay serves client.js (upload +
+// view behaviour) + ambient.js (the drifting pad) + chatcrypto.js (the
+// download-PIN gate derivation, Workstream E — same KDF chat uses, moved
+// byte-identical). NO chat UI scripts.
 const clientJs = await readFile(join(root, "src/ui/client.js"), "utf8");
 const ambientJs = await readFile(join(root, "src/ui/ambient.js"), "utf8");
-const js = clientJs + "\n" + ambientJs + "\n";
+const chatCryptoJs = await readFile(join(root, "src/ui/chatcrypto.js"), "utf8");
+const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n";
 
 const version = createHash("sha256")
   .update(css)

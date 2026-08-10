@@ -37,7 +37,7 @@ function utcStamp(iso) {
   );
 }
 
-export function viewPage(row, slug, isImage) {
+export function viewPage(row, slug, isImage, gated) {
   const name = escapeHtml(row.filename);
   const type = escapeHtml(row.content_type);
   const size = escapeHtml(formatSize(row.size_bytes));
@@ -49,16 +49,53 @@ export function viewPage(row, slug, isImage) {
   // action — "as markdown" — sits beside it. Both are plain anchors; the
   // markdown route serves an attachment with the same no-render discipline as
   // /d (markdown sidequest).
+  //
+  // A GATED drop (Workstream E): the buttons are rendered but hidden behind a
+  // PIN prompt. The client proves the gate, the server sets a short-lived
+  // cookie, and the buttons are revealed. The record (name/size/type/expiry)
+  // stays visible — the PIN gates the FILE BYTES, not the metadata, and the
+  // copy below says exactly that (§4 discipline: state what it adds and what
+  // it does not).
   const actions =
     '<div class="actions">' +
-    '<a class="dl" href="' + PREFIX + "/" +
-    escapeHtml(slug) +
-    '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
-    (isImage
-      ? '<a class="dl--alt" href="' + PREFIX + "/" +
+    (gated
+      ? '<div class="gate">' +
+        '<div class="tagline"><span class="tagline__box">pin</span></div>' +
+        '<input class="chat__field" id="pin" type="password" maxlength="4" ' +
+        'inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
+        'autocapitalize="off" spellcheck="false" ' +
+        'placeholder="4 DIGITS" aria-label="Download PIN, 4 digits">' +
+        '<button class="btn" type="button" id="unlock">UNLOCK</button>' +
+        '<p class="msg hidden" id="pinmsg"></p>' +
+        '<p class="chat__fineprint">This file is protected by a 4-digit PIN. ' +
+        "The PIN stops a leaked link being enough on its own — but it does not " +
+        "encrypt the file, and anyone with both the link and the PIN can " +
+        "download. Four digits is a lock on a door, not a safe.</p>" +
+        "</div>" +
+        '<a class="dl hidden" href="' +
+        PREFIX +
+        "/" +
         escapeHtml(slug) +
-        '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
-      : "") +
+        '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
+        (isImage
+          ? '<a class="dl--alt hidden" href="' +
+            PREFIX +
+            "/" +
+            escapeHtml(slug) +
+            '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
+          : "")
+      : '<a class="dl" href="' +
+        PREFIX +
+        "/" +
+        escapeHtml(slug) +
+        '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
+        (isImage
+          ? '<a class="dl--alt" href="' +
+            PREFIX +
+            "/" +
+            escapeHtml(slug) +
+            '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
+          : "")) +
     "</div>";
 
   const content =
