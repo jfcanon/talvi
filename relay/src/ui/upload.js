@@ -65,6 +65,19 @@ export function uploadPage() {
     ttlOptions() +
     "</div>" +
     "</fieldset>" +
+    // Optional download PIN (Workstream E). The browser derives H_gate from
+    // this PIN and sends only the proof with the upload; the PIN itself never
+    // leaves this page. Honest copy: a gate, not encryption.
+    '<div class="tagline"><span class="tagline__box">pin</span>' +
+    '<span class="chat__optional">optional</span></div>' +
+    '<input class="chat__field" id="pin" type="password" maxlength="4" ' +
+    'inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
+    'autocapitalize="off" spellcheck="false" ' +
+    'placeholder="4 DIGITS" aria-label="Download PIN, 4 digits, optional">' +
+    '<p class="chat__fineprint">Set a PIN to gate this download. The PIN stops ' +
+    "a leaked link being enough on its own — it does not encrypt the file, and " +
+    "anyone with both the link and the PIN can download. Four digits is a lock " +
+    "on a door, not a safe.</p>" +
     '<button class="btn" type="button" id="send" disabled>Send it</button>' +
     '<div class="prog hidden" id="prog">' +
     '<div class="prog__track"><span class="prog__fill" id="fill"></span></div>' +
