@@ -146,19 +146,28 @@ export function hubPage() {
     // it, exactly as they sit above talvi's page (A5c). aria-hidden throughout.
     '<canvas id="scene" aria-hidden="true"></canvas>' +
     '<nav class="blade" aria-label="apps">' +
-    '<span class="blade__tag">apps</span>' +
     '<div class="blade__nav">' +
     bladeItems() +
     "</div>" +
-    '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="blade">' +
-    "expand" +
+    // Icon-only toggle: the glyph says what the NEXT click does (» = expand,
+    // « = collapse). client.js keeps the aria-label and aria-pressed honest.
+    '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="blade" aria-label="expand rail">' +
+    "»" +
+    "</button>" +
+    // Login control at the bottom (placeholder — auth on app.* is Cloudflare
+    // Access at the edge; when Clerk lands this becomes the real gate).
+    '<button class="blade__login" type="button" aria-label="sign in">' +
+    "⏻" +
     "</button>" +
     "</nav>" +
     '<main class="chapters">' +
-    // 01 / SIGN — hero
+    // 01 / SIGN — the world's opening prompt: just the terminal mark, `>_`,
+    // with a glitching intermittent caret. No copy — the world speaks first.
     '<section class="chapter" id="sign">' +
-    '<p class="chapter__label">01 / sign</p>' +
-    '<p class="chapter__line">one front door for what comes next.</p>' +
+    '<p class="chapter__prompt" aria-label="ready">' +
+    '<span class="prompt__gt" aria-hidden="true">&gt;</span>' +
+    '<span class="prompt__caret" aria-hidden="true">_</span>' +
+    "</p>" +
     "</section>" +
     // one instrument per app
     instruments +

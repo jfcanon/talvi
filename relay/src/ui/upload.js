@@ -85,21 +85,11 @@ export function uploadPage() {
     "</div>" +
     '<p class="msg hidden" id="msg"></p>' +
     "</div>" +
-    // The drone patrols the gap between the machine and the small print, and
-    // the sound toggle sits beside it. Both are decoration with a control
+    // The sound toggle sits below the machine. Decoration with a control
     // attached, so the control is a real <button> and the decoration is
-    // aria-hidden.
+    // aria-hidden. (v2: the walking pixel sprite is gone — it clashed with the
+    // quiet 3D world behind the glass. The world is the figure now.)
     '<div class="ambient">' +
-    // Four-frame walk cycle, supplied as a strip. The <img> is the full strip
-    // and the wrapper is a one-frame window over it — the animation slides the
-    // strip, the window crops. Doing it this way rather than as a CSS
-    // background-image is what lets the URL carry ?v=<hash>: the stylesheet is
-    // a static file and cannot interpolate the asset version, but markup can.
-    '<span class="figure" aria-hidden="true">' +
-    '<img class="figure__strip" src="' + PREFIX + '/s.png?v=' +
-    encodeURIComponent(ASSET_VERSION) +
-    '" alt="" width="372" height="96">' +
-    "</span>" +
     '<button class="btn btn--ghost btn--quiet" type="button" id="sound" aria-pressed="false">SOUND OFF</button>' +
     "</div>" +
     // Result panel, in the same HUD frame as the view page's file record —

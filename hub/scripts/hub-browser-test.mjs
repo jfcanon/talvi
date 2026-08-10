@@ -111,6 +111,17 @@ try {
     check(`blade ${name} links ${href}`, target === 1);
   }
   check("future slot is not a link", (await page.locator(".blade__item.is-slot").count()) === 1);
+  // v2 blade: no "apps" tag, an icon-only toggle, a login control at the foot.
+  check("no apps tag", (await page.locator(".blade__tag").count()) === 0);
+  check("blade has login control", (await page.locator(".blade__login").count()) === 1);
+  check("toggle is icon-only", (await page.locator(".blade__toggle").textContent()).trim() === "»");
+
+  // v2 hero: the terminal prompt `>_`, no copy.
+  const prompt = await page.evaluate(() => {
+    const p = document.querySelector("#sign .chapter__prompt");
+    return p ? p.textContent : null;
+  });
+  check("hero terminal prompt >_", prompt === ">_", String(prompt));
 
   const blade = page.locator(".blade");
   const toggle = page.locator(".blade__toggle");

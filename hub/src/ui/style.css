@@ -155,6 +155,63 @@ body {
   color: var(--phosphor-dim);
 }
 
+/* The world's opening prompt — just the terminal mark, `>_`, with a glitching
+   intermittent caret. The underscore is mostly idle; occasionally it faults
+   for a frame (the talvi glitch register, applied to a caret). */
+.chapter__prompt {
+  margin: 0;
+  font-family: var(--font-console);
+  font-size: clamp(2.4rem, 10vw, 4.2rem);
+  line-height: 1;
+  color: var(--phosphor);
+  text-shadow:
+    0 0 2px rgba(198, 255, 232, 0.5),
+    0 0 10px rgba(107, 255, 168, 0.4),
+    0 0 26px rgba(53, 217, 152, 0.25);
+  filter: blur(var(--soft));
+}
+
+.prompt__gt {
+  color: var(--phosphor-dim);
+}
+
+.prompt__caret {
+  display: inline-block;
+  margin-left: 0.15em;
+  animation: caret-glitch 4.5s steps(1, end) infinite;
+}
+
+@keyframes caret-glitch {
+  0%,
+  74%,
+  100% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.1;
+    transform: translateX(1px);
+  }
+  76% {
+    opacity: 1;
+    transform: none;
+  }
+  84% {
+    opacity: 0;
+  }
+  85%,
+  93% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+  95% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * The instrument plates — one real <a> per app (blueprint A3). The 3D panel
  * behind it is atmosphere; this anchor is the control: keyboard-reachable,
@@ -290,6 +347,13 @@ body {
   outline-offset: 3px;
 }
 
+/* One focus ring for the whole page — amber is the one sign colour no resting
+   state uses, so it stays legible against both phosphor and the world. */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
 .btn:active {
   filter: brightness(0.92);
   transform: translateY(1px);
@@ -308,12 +372,17 @@ body {
   transform: translateY(-50%);
   width: var(--blade-collapsed);
   z-index: 5;
-  border: 1px solid var(--hud-line);
-  background: linear-gradient(
-    180deg,
-    var(--hud-fill),
-    rgba(10, 16, 24, 0.85)
-  );
+  /* v2: soft chrome over the world — no hard corners, no hard border. A
+     translucent fill + backdrop blur so it sits IN the scene the way the
+     frosted app panels do (P2), with a faint inner highlight for edge. */
+  border: none;
+  border-radius: 1.1rem;
+  background: rgba(10, 16, 24, 0.55);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
+  box-shadow:
+    0 0 22px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(125, 255, 196, 0.08);
   display: flex;
   flex-direction: column;
   transition: width 160ms ease;
@@ -324,51 +393,37 @@ body {
   width: var(--blade-expanded);
 }
 
-/* Tag label straddling the top border (instrument signature: overlap is the
-   point). Opaque background so the border shows through around it. */
-.blade__tag {
-  position: absolute;
-  top: 0;
-  left: 1rem;
-  transform: translateY(-50%);
-  background: var(--void);
-  padding: 0 0.4rem;
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  border: 1px solid var(--rule);
-}
-
 .blade__nav {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 2rem 0.5rem 0.5rem;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem 0.5rem;
   flex: 1;
   overflow: hidden;
 }
 
-/* Each item: icon rail on the left of an <a>; the label is hidden in the
-   collapsed rail and shown when the blade opens. The anchor is the whole
-   row — keyboard-reachable for free. */
+/* Each item: a plain <a> row. Collapsed, the glyph is centred in the rail;
+   expanded, glyph + label read left to right. Keyboard-reachable for free. */
 .blade__item {
-  display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
   padding: 0.5rem 0.4rem;
+  border-radius: 0.7rem;
   color: var(--text-lo);
   text-decoration: none;
-  border: 1px solid transparent;
   white-space: nowrap;
+}
+
+.blade.is-open .blade__item {
+  justify-content: flex-start;
 }
 
 .blade__item:hover,
 .blade__item:focus-visible {
   color: var(--phosphor);
-  background: var(--hud-fill-lit);
-  border-color: var(--hud-line-soft);
+  background: rgba(28, 66, 60, 0.45);
 }
 
 .blade__item:visited {
@@ -381,32 +436,46 @@ body {
 }
 
 .blade__item:active {
-  background: var(--hud-fill);
+  background: rgba(18, 43, 40, 0.55);
 }
 
+/* The glyph carries the world's own green (the lede colour), not a second
+   accent — the rail blends with the scene instead of fighting it. */
 .blade__glyph {
   text-align: center;
-  font-size: 1.1rem;
-  color: var(--cyan);
-  text-shadow: var(--glow-cyan);
-}
-
-.blade__item:hover .blade__glyph,
-.blade__item:focus-visible .blade__glyph {
+  font-size: 1.15rem;
+  line-height: 1;
   color: var(--phosphor);
-  text-shadow: none;
+  text-shadow: 0 0 6px rgba(125, 255, 196, 0.35);
 }
 
+/* The label lives only in the expanded rail; the collapsed rail is pure
+   icons. */
 .blade__label {
+  display: none;
   font-size: 0.78rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  opacity: 0;
-  transition: opacity 120ms ease;
+}
+
+.blade.is-open .blade__label {
+  display: block;
+  animation: blade-label-in 140ms ease both;
 }
 
 .blade__item:focus-visible .blade__label {
-  opacity: 1;
+  display: block;
+}
+
+@keyframes blade-label-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .blade__item.is-slot {
@@ -414,29 +483,34 @@ body {
   pointer-events: none;
 }
 
-.blade.is-open .blade__label {
-  opacity: 1;
-}
-
-.blade__toggle {
-  margin: 0 0.5rem 0.5rem;
-  padding: 0.4rem 0.5rem;
+/* Icon controls at the blade's foot: the retract toggle and the login
+   placeholder. Icon-only — the aria-label carries the words. */
+.blade__toggle,
+.blade__login {
+  margin: 0.25rem 0.4rem;
+  padding: 0.35rem 0.4rem;
   background: transparent;
   color: var(--text-dim);
-  border: 1px solid var(--rule);
+  border: none;
+  border-radius: 0.6rem;
   font-family: var(--font-console);
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 0.95rem;
+  line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
 .blade__toggle:hover,
-.blade__toggle:focus-visible {
+.blade__toggle:focus-visible,
+.blade__login:hover,
+.blade__login:focus-visible {
   color: var(--phosphor);
-  border-color: var(--hud-line-soft);
+  background: rgba(28, 66, 60, 0.45);
+}
+
+.blade__login {
+  margin-bottom: 0.5rem;
 }
 
 /* ========================================================== wear and film */
@@ -537,6 +611,13 @@ body {
   .blade__label {
     transition: none;
   }
+  /* The caret keeps reading as a prompt but stops faulting. */
+  .prompt__caret {
+    animation: none;
+  }
+  .blade__label {
+    animation: none;
+  }
 }
 
 /* ================================================================== mobile */
@@ -552,22 +633,18 @@ body {
     width: auto;
     transform: none;
     flex-direction: row;
-    align-items: stretch;
+    align-items: center;
   }
   .blade.is-open {
     width: auto;
   }
-  .blade__tag {
-    display: none;
-  }
   .blade__nav {
     flex-direction: row;
-    padding: 0.5rem;
-    gap: 0.25rem;
+    padding: 0.4rem;
+    gap: 0.15rem;
   }
   .blade__item {
-    grid-template-columns: 2.5rem;
-    padding: 0.35rem;
+    padding: 0.4rem;
   }
   .blade__label {
     display: none;
@@ -577,6 +654,9 @@ body {
   }
   .blade__toggle {
     display: none;
+  }
+  .blade__login {
+    margin: 0 0.4rem 0 0;
   }
   .chapters {
     padding-left: 0;
