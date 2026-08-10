@@ -23,7 +23,7 @@ const v = encodeURIComponent(ASSET_VERSION);
 const APPS = [
   {
     glyph: "▣",
-    label: "TALVI",
+    label: "RELAY",
     href: "https://app.ygdcbtmc4u.uk/relay",
     title: "Talvi — file share (relay)",
   },

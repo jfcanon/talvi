@@ -1,15 +1,12 @@
-// talvi hub — the floating launcher (v4.3).
+// talvi hub — the floating launcher with real physics (v4.3.2).
 //
-// Owner review, on top of v4.2:
-//   - the glitching colour-faults are GONE — stable, quiet tiles;
-//   - the cubes FLOAT in the air, gently hovering (bobbing), not piled into a
-//     wall;
-//   - they are now 3D ICONS in a grid — the Okta / JumpCloud application
-//     launcher: a 2x2 grid of small tiles, each carrying the app's 2D icon
-//     (a glyph) on its face, with a flat 2D caption below — nothing is a 3D
-//     text object anymore (the v4.2 word slabs are rolled back);
-//   - 60% realistic (solid lit tiles, depth haze, fog) / 40% digital (glyph
-//     icons, faint grid, neon glows, pulse rings).
+// Owner review, on top of v4.3:
+//   - the caption labels under the cubes are GONE (the icons stay as they
+//     are);
+//   - the tiles have lightweight 3D PHYSICS: each floats toward a hovering
+//     anchor, drifts, and when two tiles touch they do NOT phase through each
+//     other — they separate and bounce off with a slight restitution. A floor
+//     catches any that fall.
 //
 // The .leak/.grain/.wear film layers stay in CSS, above the canvas.
 import * as THREE from "three";
@@ -18,13 +15,22 @@ import { makeGlow } from "./glow.js";
 
 const SIDE = 2.3; // tile edge.
 
+// --- lightweight physics ---------------------------------------------------
+const BODY_R = SIDE * 0.55; // collision radius (slightly larger than the cube,
+//                            so contact reads before any visual overlap)
+const SPRING = 1.3; // pull toward the anchor
+const DAMP = 0.985; // per-frame velocity damping at 60fps
+const REST = 0.35; // restitution — the "barely/slightly bounce"
+
 // The launcher grid: three apps plus a dimmed future slot, floating at two
 // heights. href null → present but not clickable (like the blade's MORE).
+// Spacing is comfortably above 2*BODY_R, so the tiles rest apart and only
+// collide when a gust pushes them together.
 const TILE_CFG = [
-  { key: "relay", glyph: "▣", label: "TALVI", href: "https://app.ygdcbtmc4u.uk/relay", x: -1.7, baseY: 6.3, z: 0 },
-  { key: "chat", glyph: "▤", label: "CHAT", href: "https://app.ygdcbtmc4u.uk/chat", x: 1.7, baseY: 6.3, z: 0 },
-  { key: "cinto", glyph: "◈", label: "CINTO", href: "https://cinto.ygdcbtmc4u.uk", x: -1.7, baseY: 4.0, z: 0 },
-  { key: "future", glyph: "＋", label: "MORE", href: null, x: 1.7, baseY: 4.0, z: 0 },
+  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -1.8, baseY: 6.6, z: 0 },
+  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 1.8, baseY: 6.6, z: 0 },
+  { key: "cinto", glyph: "◈", href: "https://cinto.ygdcbtmc4u.uk", x: -1.8, baseY: 3.4, z: 0 },
+  { key: "future", glyph: "＋", href: null, x: 1.8, baseY: 3.4, z: 0 },
 ];
 
 // Where the camera orbits around, and how far out it starts.
@@ -72,13 +78,7 @@ export function buildWorld(scene) {
     update(dt) {
       rain.update(dt);
       pulse.update(dt);
-      // Gentle hover: each tile bobs around its base height. Skipped under
-      // prefers-reduced-motion (main.js doesn't call update then).
-      const t = performance.now() / 1000;
-      for (const tile of tiles) {
-        tile.group.position.y = tile.baseY + Math.sin(t * 0.9 + tile.phase) * 0.28;
-        tile.worldPos.copy(tile.group.position);
-      }
+      stepPhysics(tiles, dt);
     },
     setHighlight(b, on) {
       b.mat.emissiveIntensity = on ? 1.15 : 0.55;
@@ -168,11 +168,7 @@ function makeTile(cfg) {
   const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.3 : 0.16);
   group.add(glow);
 
-  // Flat 2D caption below the tile — a single texture plane, not a 3D object.
-  const cap = makeLabel(cfg.label, 2.1);
-  cap.position.y = -half - 0.8;
-  cap.position.z = 0.05;
-  group.add(cap);
+  // v4.3.2: no caption label under the cubes — the icons carry the identity.
 
   let hit = null;
   if (cfg.href) {
@@ -199,11 +195,95 @@ function makeTile(cfg) {
     worldPos: new THREE.Vector3(cfg.x, cfg.baseY, cfg.z),
     mat,
     glow,
+    // physics state
+    pos: group.position,
+    vel: new THREE.Vector3(
+      (Math.random() - 0.5) * 0.5,
+      0,
+      (Math.random() - 0.5) * 0.5,
+    ),
+    anchor: new THREE.Vector3(cfg.x, cfg.baseY, cfg.z),
     baseY: cfg.baseY,
     phase: Math.random() * Math.PI * 2,
+    nextGust: 1 + Math.random() * 2,
   };
   if (hit) hit.userData.building = building;
   return building;
+}
+
+// The lightweight physics: each tile drifts under a gentle spring toward a
+// hovering anchor (so they still bob), receives an occasional random gust, and
+// whenever two tiles touch they separate along the collision normal and bounce
+// with a slight restitution — they never phase through each other. A floor
+// catches any tile that falls. Skipped under prefers-reduced-motion (main.js
+// doesn't call update then), so the launcher sits still and quiet.
+function stepPhysics(tiles, dt) {
+  const t = performance.now() / 1000;
+  const dtF = Math.min(dt, 0.033);
+
+  for (const tile of tiles) {
+    // The anchor bobs gently; the spring keeps the tile near it.
+    tile.anchor.y = tile.baseY + Math.sin(t * 0.9 + tile.phase) * 0.28;
+    tile.vel.x += (tile.anchor.x - tile.pos.x) * SPRING * dtF;
+    tile.vel.y += (tile.anchor.y - tile.pos.y) * SPRING * dtF;
+    tile.vel.z += (tile.anchor.z - tile.pos.z) * SPRING * dtF;
+    tile.vel.multiplyScalar(Math.pow(DAMP, dtF * 60));
+    tile.pos.addScaledVector(tile.vel, dtF);
+
+    // Occasional gust so tiles wander into each other.
+    if (t > tile.nextGust) {
+      tile.nextGust = t + 2 + Math.random() * 3;
+      tile.vel.x += (Math.random() - 0.5) * 0.45;
+      tile.vel.z += (Math.random() - 0.5) * 0.45;
+    }
+  }
+
+  // Pair collisions — sphere vs sphere, impulse with restitution.
+  for (let i = 0; i < tiles.length; i++) {
+    for (let j = i + 1; j < tiles.length; j++) {
+      const A = tiles[i];
+      const B = tiles[j];
+      const dx = B.pos.x - A.pos.x;
+      const dy = B.pos.y - A.pos.y;
+      const dz = B.pos.z - A.pos.z;
+      const dist = Math.hypot(dx, dy, dz);
+      const min = BODY_R * 2;
+      if (dist < min && dist > 0.0001) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const nz = dz / dist;
+        const overlap = min - dist;
+        A.pos.x -= nx * overlap / 2;
+        A.pos.y -= ny * overlap / 2;
+        A.pos.z -= nz * overlap / 2;
+        B.pos.x += nx * overlap / 2;
+        B.pos.y += ny * overlap / 2;
+        B.pos.z += nz * overlap / 2;
+        const rel =
+          (B.vel.x - A.vel.x) * nx +
+          (B.vel.y - A.vel.y) * ny +
+          (B.vel.z - A.vel.z) * nz;
+        if (rel < 0) {
+          const imp = (-(1 + REST) * rel) / 2;
+          A.vel.x -= nx * imp;
+          A.vel.y -= ny * imp;
+          A.vel.z -= nz * imp;
+          B.vel.x += nx * imp;
+          B.vel.y += ny * imp;
+          B.vel.z += nz * imp;
+        }
+      }
+    }
+  }
+
+  // The floor: tiles never sink below their radius.
+  for (const tile of tiles) {
+    if (tile.pos.y < BODY_R) {
+      tile.pos.y = BODY_R;
+      if (tile.vel.y < 0) tile.vel.y = -tile.vel.y * REST;
+    }
+    tile.worldPos.copy(tile.pos);
+  }
 }
 
 // The atmosphere: expanding shockwave rings across the ground.
@@ -266,28 +346,4 @@ function makeIcon(glyph, size) {
     blending: THREE.AdditiveBlending,
   });
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
-}
-
-// A flat 2D caption: the app name on a single texture plane. Not a 3D object —
-// no slab, no depth — and fixed facing +Z (you orbit around it).
-function makeLabel(text, width) {
-  const c = document.createElement("canvas");
-  c.width = 512;
-  c.height = 128;
-  const ctx = c.getContext("2d");
-  ctx.font = "700 64px " + DISPLAY_STACK;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.8)";
-  ctx.shadowBlur = 26;
-  ctx.fillStyle = "#7dffc4";
-  ctx.fillText(text, c.width / 2, c.height / 2 + 4);
-  const mat = new THREE.MeshBasicMaterial({
-    map: new THREE.CanvasTexture(c),
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-  });
-  return new THREE.Mesh(new THREE.PlaneGeometry(width, width * (128 / 512)), mat);
 }
