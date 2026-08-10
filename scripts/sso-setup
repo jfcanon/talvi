@@ -1,5 +1,5 @@
 #!/bin/sh
-# sso-setup — idempotent SSO + web3 wiring for talvi blue (talvi2.ygdcbtmc4u.uk).
+# sso-setup — idempotent SSO + web3 wiring for the talvi relay (app.ygdcbtmc4u.uk/relay).
 #
 #   ./scripts/sso-setup --status
 #   ./scripts/sso-setup --plan google
@@ -136,14 +136,14 @@ plan() {
             echo "GOOGLE OAuth client (manual, once) — Google Cloud Console:"
             echo "  APIs & Services > Credentials > Create credentials > OAuth client ID"
             echo "  Application type: Web application"
-            echo "  Authorized JavaScript origins: https://talvi2.ygdcbtmc4u.uk"
+            echo "  Authorized JavaScript origins: https://app.ygdcbtmc4u.uk"
             echo "  Authorized redirect URIs:  $ur"
             echo "  Create, then: GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... ./scripts/sso-setup --store google"
             echo "  For production users, set the consent screen publishing status to 'In production'."
             ;;
         github)
             echo "GITHUB OAuth app (manual, once) — github.com > Settings > Developer settings > OAuth Apps:"
-            echo "  Homepage URL: https://talvi2.ygdcbtmc4u.uk"
+            echo "  Homepage URL: https://app.ygdcbtmc4u.uk/relay"
             echo "  Authorization callback URL:  $ur"
             echo "  Register, then: GITHUB_CLIENT_ID=... GITHUB_CLIENT_SECRET=... ./scripts/sso-setup --store github"
             ;;
