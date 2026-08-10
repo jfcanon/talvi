@@ -834,3 +834,58 @@ href in the same PR.
 `default-src 'none'`; assets are self-hosted, versioned (`/h.css?v=`,
 `/h.js?v=`), never inlined. `grep dist/index.js` for
 `unsafe-|eval(|new Function|on(click|load|error)=` must return 0.
+
+---
+
+## 10. The 3d style study (`3d.ygdcbtmc4u.uk`)
+
+A public, fully procedural three.js scroll-world that explores whether talvi's
+neon-noir instrument aesthetic works in 3D. Blueprint:
+`plans/talvi-3d-style-study-blueprint.md`. Pure visual study — **no product
+function, no storage, no auth, no secrets, no Access**. Kage's technique, not
+Kage's code (that repo is unlicensed).
+
+### What it is
+A fixed full-viewport WebGL canvas behind five 100vh sections; the camera
+follows a Catmull-Rom path driven by scroll. Everything is procedural — fog,
+ground grid, instrument panels (corner brackets + marked strip), glow sprites,
+a scan band, diagonal rain, and a runtime-drawn TALVI wordmark whose
+magenta/cyan split appears only in glitch frames. The `.leak/.grain/.wear`
+film layers are CSS, above the canvas.
+
+### Deploy
+Own worker `talvi-3d`, state key `talvi/3d/terraform.tfstate`, workflow
+`terraform-3d.yml` (PR → plan, merge → apply). No DOs, so no `migrations`
+block, ever. Host is public by design (A4).
+
+### Build
+```bash
+cd 3d
+npm ci && npm run build          # dist/index.js is the Terraform input
+gzip -c dist/index.js | wc -c    # must stay far under the 3 MB free-plan limit
+```
+The client bundle (three.js + the scene) is embedded as a string in the
+worker, so the size you see in `dist/index.js` IS the deployed script. If the
+worker ever grows toward ~5 MB raw, switch `main.tf` to a
+`content_file`/`content_sha256` reference (hub's note) — the plan renderer
+OOMs past that.
+
+### Verify live
+```bash
+npm run test:3d                  # needs playwright-core installed ad hoc
+curl -sS https://3d.ygdcbtmc4u.uk/healthz
+```
+The browser test asserts the page, both versioned assets, the uniform 404, the
+WebGL boot, the five sections, scroll-driven camera, and zero own-page CSP
+violations. The one expected red console line is the Cloudflare Browser
+Insights beacon — the CSP blocks it correctly (see section 6's note; never
+widen `script-src`).
+
+### Editing the scene
+Scene modules live in `3d/src/scene/`; the camera path is the two
+Catmull-Rom curves in `scroll.js`; the world (panels, grid, rain, scan, sign)
+is `world.js`/`rain.js`/`sign.js`/`glow.js`. `main.js` skips autonomous
+motion under `prefers-reduced-motion` (camera-from-scroll still runs — that is
+the user's action). Captions and the page shell are `src/ui/page.js`;
+`src/ui/style.css` carries the tokens and the film overlays verbatim from
+talvi's page.

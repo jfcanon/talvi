@@ -68,6 +68,8 @@ body {
 
 .chapter {
   min-height: 100vh;
+  min-height: 100svh; /* svh = the small viewport: no caption hidden under
+                         the iOS Safari chrome, which can eat 100vh */
   padding: 0 5vw 12vh;
   display: flex;
   flex-direction: column;
