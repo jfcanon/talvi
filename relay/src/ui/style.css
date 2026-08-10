@@ -58,6 +58,11 @@
 
   --col: 34rem;
 
+  /* Shared shell (the persistent blade). Collapsed is a narrow icon rail;
+     expanded shows labels. Same values as the hub's tokens. */
+  --blade-collapsed: 3.75rem;
+  --blade-expanded: 15rem;
+
   --glow-cyan: 0 0 8px rgba(34, 232, 255, 0.55), 0 0 26px rgba(34, 232, 255, 0.2);
   --glow-magenta: 0 0 8px rgba(255, 46, 136, 0.55), 0 0 26px rgba(255, 46, 136, 0.2);
 
@@ -1578,6 +1583,14 @@ a {
     transform: none;
   }
 
+  /* The shared shell's panel entrance is motion — removed for reduced-motion
+     users (it uses `both` fill, so it must also settle VISIBLE). */
+  .panel {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
   *,
   *::before,
   *::after {
@@ -1772,3 +1785,233 @@ a {
   color: var(--phosphor-dim);
   opacity: 0.7;
 }
+/* ===========================================================================
+ * talvi shared shell — the persistent blade (A1, extended).
+ * COPIED byte-identical into hub/src/ui, relay/src/ui, chat/src/ui style.css.
+ * Every page = blade (left, constant) + panel (content, swaps). The blade is
+ * what makes switching apps read as one app, the X/Twitter way.
+ * ========================================================================= */
+
+/* The shell: blade rail + content panel. Grid so the rail is a real column
+   that collapses to icons; the panel takes the rest. */
+.shell {
+  position: relative;
+  z-index: 1;
+  min-height: calc(100vh - 8rem);
+  display: grid;
+  grid-template-columns: var(--blade-collapsed) minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 2rem);
+  transition: grid-template-columns 160ms ease;
+}
+
+.shell.is-open {
+  grid-template-columns: var(--blade-expanded) minmax(0, 1fr);
+}
+
+/* The panel: the content area of the current app. It enters with a quick
+   rise/fade so a navigation reads as a panel swap, not a page load.
+   prefers-reduced-motion disables it (see the bottom of this file). */
+.panel {
+  min-width: 0;
+  animation: panel-enter 240ms ease-out both;
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The blade
+ * ------------------------------------------------------------------------- */
+
+.blade {
+  position: relative;
+  align-self: stretch;
+  border: 1px solid var(--hud-line);
+  background: linear-gradient(
+    180deg,
+    var(--hud-fill),
+    rgba(10, 16, 24, 0.85)
+  );
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tag label straddling the top border (instrument signature: overlap is the
+   point). Opaque background so the border shows through around it. */
+.blade__tag {
+  position: absolute;
+  top: 0;
+  left: 1rem;
+  transform: translateY(-50%);
+  background: var(--void);
+  padding: 0 0.4rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--rule);
+}
+
+.blade__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 2rem 0.5rem 0.5rem;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Each item: icon rail on the left of an <a>; the label is hidden in the
+   collapsed rail and shown when the blade opens. The anchor is the whole
+   row — keyboard-reachable for free. */
+.blade__item {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.4rem;
+  color: var(--text-lo);
+  text-decoration: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.blade__item:hover,
+.blade__item:focus-visible {
+  color: var(--phosphor);
+  background: var(--hud-fill-lit);
+  border-color: var(--hud-line-soft);
+}
+
+/* The active app: where you are now. Filled, lit, bordered — the one item
+   that is "on". aria-current carries it to assistive tech. */
+.blade__item.is-active {
+  color: var(--phosphor);
+  background: var(--hud-fill-lit);
+  border-color: var(--hud-line);
+  box-shadow: inset 0 0 0 1px var(--hud-line-soft);
+}
+
+/* A visited app keeps a trace of itself — dimmed, still readable. Browsers
+   only let :visited change colour (a privacy guard), which is all we want. */
+.blade__item:visited {
+  color: var(--text-dim);
+}
+
+.blade__item:hover:visited,
+.blade__item:focus-visible:visited {
+  color: var(--phosphor);
+}
+
+/* :active pairs every hover for touch — a phone gets feedback too. */
+.blade__item:active {
+  background: var(--hud-fill);
+}
+
+.blade__glyph {
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+.blade__item:hover .blade__glyph,
+.blade__item:focus-visible .blade__glyph,
+.blade__item.is-active .blade__glyph {
+  color: var(--phosphor);
+  text-shadow: none;
+}
+
+.blade__label {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+/* Keyboard users tabbing the collapsed rail still see what they are focused
+   on — the focus ring alone does not say which app. :focus-visible fires only
+   for keyboard navigation, so pointer users never see the forced label. */
+.blade__item:focus-visible .blade__label {
+  opacity: 1;
+}
+
+/* A future-app slot: present, marked as empty, not a link. */
+.blade__item.is-slot {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.shell.is-open .blade__label {
+  opacity: 1;
+}
+
+/* Retract control pinned to the blade's foot. Plain <button> + class toggle
+   in client.js — no inline handler, no dependency. */
+.blade__toggle {
+  margin: 0 0.5rem 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--rule);
+  font-family: var(--font-console);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.blade__toggle:hover,
+.blade__toggle:focus-visible {
+  color: var(--phosphor);
+  border-color: var(--hud-line-soft);
+}
+
+/* Mobile: the shell becomes a horizontal rail so a phone keeps the icons
+   usable; the panel stacks below. The retract toggle is hidden — on a phone
+   the blade is always just the icon row, there is no side rail to open. */
+@media (max-width: 40rem) {
+  .shell,
+  .shell.is-open {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .blade {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .blade__tag {
+    display: none;
+  }
+  .blade__nav {
+    flex-direction: row;
+    padding: 0.5rem;
+    gap: 0.25rem;
+  }
+  .blade__item {
+    grid-template-columns: 2.5rem;
+    padding: 0.35rem;
+  }
+  .blade__label {
+    display: none;
+  }
+  .blade__item:focus-visible .blade__label {
+    display: none;
+  }
+  .blade__toggle {
+    display: none;
+  }
+}
+
+/* ===========================================================================
+ * End of shared shell block.
+ * ========================================================================= */

@@ -31,7 +31,9 @@ const ambientJs = await readFile(join(root, "src/ui/ambient.js"), "utf8");
 // belt-and-braces rather than load-bearing.
 const chatCryptoJs = await readFile(join(root, "src/ui/chatcrypto.js"), "utf8");
 const chatJs = await readFile(join(root, "src/ui/chat.js"), "utf8");
-const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n" + chatJs;
+// The shared shell's blade retraction (same bytes as hub/relay).
+const bladeClientJs = await readFile(join(root, "src/ui/blade-client.js"), "utf8");
+const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n" + chatJs + "\n" + bladeClientJs + "\n";
 
 const version = createHash("sha256")
   .update(css)

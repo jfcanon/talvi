@@ -32,7 +32,9 @@ const spriteB64 = spritePng.toString("base64");
 const clientJs = await readFile(join(root, "src/ui/client.js"), "utf8");
 const ambientJs = await readFile(join(root, "src/ui/ambient.js"), "utf8");
 const chatCryptoJs = await readFile(join(root, "src/ui/chatcrypto.js"), "utf8");
-const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n";
+// The shared shell's blade retraction (same bytes as hub/chat).
+const bladeClientJs = await readFile(join(root, "src/ui/blade-client.js"), "utf8");
+const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n" + bladeClientJs + "\n";
 
 const version = createHash("sha256")
   .update(css)
