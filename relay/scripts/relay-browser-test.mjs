@@ -51,6 +51,21 @@ try {
   check("has TTL options", (await page.locator("input[name=ttl]").count()) === 3);
   check("has send button", (await page.locator("button").count()) >= 1);
 
+  // P2: the quiet 3D world sits behind the machine (backdrop canvas + WebGL),
+  // and the instrument panels are frosted glass over it.
+  const p2 = await page.evaluate(() => {
+    const canvas = document.getElementById("backdrop");
+    const gl = canvas ? canvas.getContext("webgl2") || canvas.getContext("webgl") : null;
+    const panel = document.querySelector(".panel");
+    return {
+      canvas: !!canvas,
+      webgl: !!gl,
+      glass: panel ? /blur\(/.test(getComputedStyle(panel).backdropFilter) : false,
+    };
+  });
+  check("quiet backdrop canvas + WebGL", p2.canvas && p2.webgl);
+  check("panels are frosted glass", p2.glass);
+
   // Every asset request on the page must come back 200 (prefixed paths work).
   const badAssets = [];
   page.on("response", (r) => {

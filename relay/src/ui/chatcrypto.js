@@ -1,5 +1,5 @@
 // Chat key derivation — the browser half of the PIN gate (PR3). WebCrypto
-// only: no library, no WASM, nothing that needs 'unsafe-eval'. The CSP
+// only: no library, no WASM, nothing that needs a relaxed script-src. The CSP
 // (`script-src 'self'`) is not weakened by a single byte of this file, and any
 // dependency that would require weakening it is by definition the wrong
 // dependency.

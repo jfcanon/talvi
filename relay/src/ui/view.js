@@ -140,5 +140,7 @@ export function viewPage(row, slug, isImage, gated) {
     // A stranger with a share link came for one thing — the file. No shell,
     // no blade, nothing else to click (blueprint A2).
     shell: false,
+    // P2: the quiet world still sits behind the single-purpose instrument.
+    backdrop: true,
   });
 }

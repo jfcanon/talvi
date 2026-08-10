@@ -120,6 +120,41 @@ body {
      (filenames, URLs) and minmax(0,…) on the grid tracks. */
 }
 
+/* The quiet 3D world (P2). Fixed beneath everything; only present on pages
+   that opt in via <canvas id="backdrop"> (the upload and view pages). Sized
+   by the renderer in src/ui/backdrop.js. */
+#backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
+/* =================================================== frosted glass (P2) ===
+   The instrument panels read as glass over the quiet world behind them —
+   translucent fills plus a backdrop blur. The prompt12 essence (cinematic
+   backdrop under layered UI) in talvi's palette: no photo, no fonts, no
+   external assets. Graceful degradation: without backdrop-filter support the
+   translucent fill alone still reads. */
+.panel,
+.box,
+.hud,
+.term,
+.drop,
+.ttl__opt {
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
+}
+
+/* The two big opaque housings become translucent glass; everything else
+   (box, hud cells, term, ttl options) was already a translucent fill. */
+.panel,
+.drop {
+  background: rgba(18, 43, 40, 0.62);
+}
+
 /* The one ambient effect (A.5: pick one register, execute it well).
    Fine diagonal rain over the whole ground. Pointer-events none, fixed, and
    behind everything.
@@ -420,7 +455,8 @@ html::after {
   align-items: flex-start;
   gap: 1.25rem;
   border: 1px solid var(--rule);
-  background: var(--deep);
+  /* P2: glass — translucent fill + blur (the shared frosted rule above). */
+  background: rgba(18, 43, 40, 0.62);
   padding: 1.4rem;
   margin: 0;
   min-width: 0;
@@ -456,7 +492,8 @@ html::after {
   border: 2px solid var(--cyan);
   outline: 1px solid rgba(34, 232, 255, 0.25);
   outline-offset: 4px;
-  background: var(--deep);
+  /* P2: glass — translucent fill + blur (the shared frosted rule above). */
+  background: rgba(18, 43, 40, 0.62);
   box-shadow:
     inset 0 0 40px rgba(34, 232, 255, 0.07),
     0 0 14px rgba(34, 232, 255, 0.14);

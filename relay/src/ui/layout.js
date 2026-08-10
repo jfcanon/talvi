@@ -30,7 +30,10 @@ import { shell } from "./blade.js";
 // apps read as one app. The view/share page (a stranger with a link) passes
 // `shell: false` to stay a single-purpose page per blueprint A2 — one file,
 // nothing else to click.
-export function renderPage(title, { lede, content, script = false, shell: useShell = true }) {
+export function renderPage(
+  title,
+  { lede, content, script = false, shell: useShell = true, backdrop = false },
+) {
   const v = encodeURIComponent(ASSET_VERSION);
 
   // The instrument: the framed readout that is every app's content. In shell
@@ -58,9 +61,11 @@ export function renderPage(title, { lede, content, script = false, shell: useShe
     "</main>" +
     "</div></div>";
 
-  // The body: ambient layers, then either the shell (blade + panel) or the
-  // standalone instrument.
+  // The body: the quiet 3D backdrop (P2, only when the page opts in) sits
+  // beneath everything, then the ambient layers, then either the shell
+  // (blade + panel) or the standalone instrument.
   const body =
+    (backdrop ? '<canvas id="backdrop" aria-hidden="true"></canvas>' : "") +
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +

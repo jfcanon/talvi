@@ -13,12 +13,14 @@
 // Determinism matters here beyond tidiness: dist/index.js is a Terraform
 // input, so any run-to-run variation surfaces as a perpetual plan diff. Same
 // bytes in, same hash out — no clock, no randomness, no filesystem ordering.
+import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const outdir = join(root, "dist");
 
 const css = await readFile(join(root, "src/ui/style.css"), "utf8");
 const spritePng = await readFile(join(root, "src/ui/sprites/figure.png"));
@@ -28,13 +30,43 @@ const spriteB64 = spritePng.toString("base64");
 // each self-booting and sharing nothing. The relay serves client.js (upload +
 // view behaviour) + ambient.js (the drifting pad) + chatcrypto.js (the
 // download-PIN gate derivation, Workstream E — same KDF chat uses, moved
-// byte-identical). NO chat UI scripts.
+// byte-identical) + blade-client.js (the shared shell's blade retraction). NO
+// chat UI scripts.
+//
+// The quiet 3D backdrop (P2) IS bundled: it imports three.js, so build-assets
+// bundles backdrop.js into a self-booting IIFE and appends it. It self-guards
+// on <canvas id="backdrop">, so pages without the canvas pay nothing at
+// runtime.
 const clientJs = await readFile(join(root, "src/ui/client.js"), "utf8");
 const ambientJs = await readFile(join(root, "src/ui/ambient.js"), "utf8");
 const chatCryptoJs = await readFile(join(root, "src/ui/chatcrypto.js"), "utf8");
 // The shared shell's blade retraction (same bytes as hub/chat).
 const bladeClientJs = await readFile(join(root, "src/ui/blade-client.js"), "utf8");
-const js = clientJs + "\n" + ambientJs + "\n" + chatCryptoJs + "\n" + bladeClientJs + "\n";
+
+await build({
+  entryPoints: [join(root, "src/ui/backdrop.js")],
+  outfile: join(outdir, "backdrop-bundle.js"),
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  minify: true,
+  legalComments: "none",
+  target: ["es2020"],
+  logLevel: "warning",
+});
+const backdropJs = await readFile(join(outdir, "backdrop-bundle.js"), "utf8");
+
+const js =
+  clientJs +
+  "\n" +
+  ambientJs +
+  "\n" +
+  chatCryptoJs +
+  "\n" +
+  bladeClientJs +
+  "\n" +
+  backdropJs +
+  "\n";
 
 const version = createHash("sha256")
   .update(css)
