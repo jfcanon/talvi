@@ -3,6 +3,11 @@
 // No inline style and no inline script anywhere (CSP, B.7 item 3).
 // No <form>: form-action is 'none', so a real submit would be blocked. The
 // send button is an ordinary button driven by XHR.
+//
+// The page renders for everyone, but its state follows the session (Clerk):
+// signed in → the drop machine + a SIGN OUT link; signed out → a SIGN IN
+// button, because the upload POST is gated. `authed` comes from the worker's
+// networkless __session verification.
 import { ASSET_VERSION } from "../generated/assets.js";
 import { renderPage } from "./layout.js";
 import { PREFIX } from "../prefix.js";
@@ -41,7 +46,27 @@ function ttlOptions() {
   ).join("");
 }
 
-export function uploadPage() {
+export function uploadPage({ authed } = {}) {
+  // Signed out: the drop machine is replaced by a single SIGN IN door. The
+  // lede and the button carry the same "session closed" language as the
+  // blue release's root page; sharing stays public either way.
+  if (!authed) {
+    return renderPage("talvi — drop a file", {
+      lede:
+        "SESSION CLOSED. Sign in to drop a file. Sharing stays public — a link " +
+        "already sent keeps working.",
+      content:
+        '<div class="panel">' +
+        '<div class="tagline"><span class="tagline__box">input</span></div>' +
+        '<a class="btn" href="' + PREFIX + '/sign-in">SIGN IN</a>' +
+        '<p class="msg">The write path is gated on your session. Read links ' +
+        "need no account — anyone with a link can download until it expires.</p>" +
+        "</div>",
+      // P2: same quiet world behind the closed door.
+      backdrop: true,
+    });
+  }
+
   const content =
     '<div class="panel">' +
     // label + visually-hidden input: keyboard-reachable and screen-reader
@@ -108,7 +133,7 @@ export function uploadPage() {
     "</div>" +
     '<div class="result__actions">' +
     '<button class="btn btn--ghost" type="button" id="copy">COPY LINK</button>' +
-    '<a class="btn btn--ghost" href="https://amazed-cougar-41.accounts.dev/sign-out">SIGN OUT</a>' +
+    '<a class="btn btn--ghost" href="' + PREFIX + '/api/signout">SIGN OUT</a>' +
     "</div>" +
     "</div>";
 

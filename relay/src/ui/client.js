@@ -227,6 +227,7 @@
     // Status -> message. 503 is not an error the user caused, and does not read
     // like one; 429 arrives once Step 6's rate limits exist.
     function failureText(status, body) {
+      if (status === 401) return "REFUSED — sign in to upload.";
       if (status === 413) return "REFUSED — over the 25 MB ceiling.";
       if (status === 503) {
         return "CLOSED FOR THE DAY — the daily budget is spent. Try tomorrow.";
@@ -305,13 +306,10 @@
       };
 
       xhr.onerror = () => {
-        // An XHR POST cannot follow the Cloudflare Access 302 to the
-        // cross-origin PIN page — the browser blocks reading it and this
-        // handler fires. The fix is a full-page navigation to
-        // /relay/api/upload: Access shows the email PIN, sets its cookie, and
-        // redirects back. After that, a retry carries the cookie and uploads
-        // normally.
-        window.location.href = "/relay/api/upload";
+        // A network/edge failure (not a status we can read — the request
+        // never completed). Navigate to the upload page so the visitor can
+        // retry; the chosen file is lost, and the message says so.
+        fail("FAILED — connection error. Nothing was stored.");
       };
 
       xhr.onload = () => {
@@ -319,6 +317,12 @@
         const body = parseBody(xhr.responseText);
         if (xhr.status === 200 && body?.url) {
           succeed(body);
+          return;
+        }
+        // 401 = no (or invalid) __session cookie. Full-page navigation to the
+        // sign-in page so clerk-js can run the flow and set the cookie.
+        if (xhr.status === 401) {
+          window.location.href = "/relay/sign-in";
           return;
         }
         fail(failureText(xhr.status, body));

@@ -4,7 +4,10 @@
 # file-drop routes with chat removed (chat stays on green until Workstream C).
 # The relay SHARES green's D1 (talvi-meta) and R2 (talvi-drop) so existing
 # drops keep working — new uploads and old links both resolve. The upload gate
-# is Cloudflare Access on /relay/api/upload; reads stay public.
+# is a Clerk session verified in-worker (s7/talvi-blue-auth-handover.md); reads
+# stay public. The Cloudflare Access application that used to gate the upload
+# POST was removed when the Clerk gate landed — same swap the blue release made,
+# one layer instead of two.
 terraform {
   required_providers {
     cloudflare = {
@@ -40,6 +43,18 @@ variable "talvi_zone_id" {
   type = string
 }
 
+variable "clerk_secret_key" {
+  type = string
+}
+
+variable "clerk_publishable_key" {
+  type = string
+}
+
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # ---------------------------------------------------------------------------
 # Shared storage — GREEN'S existing D1 and R2, looked up by name. NOT new
 # resources. The relay must serve the same drops green serves, so it binds to
@@ -65,6 +80,9 @@ resource "cloudflare_workers_script" "talvi_relay" {
   main_module        = "index.js"
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-08-10"
+  # nodejs_compat: @clerk/backend (the networkless JWT verifier) is built for
+  # the Workers runtime but expects node-compat primitives, same as green/blue.
+  compatibility_flags = ["nodejs_compat"]
 
   bindings = [
     { type = "d1", name = "DB", id = data.cloudflare_d1_database.talvi_meta.id },
@@ -95,6 +113,28 @@ resource "cloudflare_workers_script" "talvi_relay" {
       type = "ai"
       name = "AI"
     },
+
+    # Clerk auth (port of blue's PR 3 bindings). CLERK_SECRET_KEY is a
+    # secret_text binding (never in state); CLERK_PUBLISHABLE_KEY and
+    # CLERK_JWT_KEY are public by design. The worker verifies the __session
+    # cookie locally via @clerk/backend using jwtKey — no network per request,
+    # no clerk-js on any page except /sign-in and /sso-callback, no CSP change
+    # anywhere else.
+    {
+      type = "secret_text"
+      name = "CLERK_SECRET_KEY"
+      text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = var.clerk_jwt_key
+    },
   ]
 
   # NO `migrations` block — the relay has no Durable Objects (chat is not here).
@@ -114,38 +154,4 @@ resource "cloudflare_workers_route" "relay_root" {
   zone_id = var.talvi_zone_id
   pattern = "app.ygdcbtmc4u.uk/relay"
   script  = cloudflare_workers_script.talvi_relay.script_name
-}
-
-# ---------------------------------------------------------------------------
-# Upload gate — Cloudflare Access on /relay/api/upload (email-PIN), mirroring
-# green's proven pattern on the relay's own path. Reads stay public.
-# ---------------------------------------------------------------------------
-data "cloudflare_zero_trust_access_identity_provider" "email_otp" {
-  account_id           = var.cloudflare_account_id
-  identity_provider_id = "d4addd78-c730-401d-bca3-02ec5e2fa5dd"
-}
-
-resource "cloudflare_zero_trust_access_application" "relay_upload" {
-  zone_id      = var.talvi_zone_id
-  name         = "talvi relay — upload"
-  domain       = "app.ygdcbtmc4u.uk/relay/api/upload"
-  type         = "self_hosted"
-  allowed_idps = [data.cloudflare_zero_trust_access_identity_provider.email_otp.id]
-  policies = [
-    {
-      id         = cloudflare_zero_trust_access_policy.relay_owner_email.id
-      precedence = 1
-    },
-  ]
-}
-
-resource "cloudflare_zero_trust_access_policy" "relay_owner_email" {
-  account_id = var.cloudflare_account_id
-  name       = "Allow account owner"
-  decision   = "allow"
-  include = [{
-    email = {
-      email = "jangofett86@gmail.com"
-    }
-  }]
 }
