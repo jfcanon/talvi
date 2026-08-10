@@ -72,7 +72,10 @@ try {
 
   // --- the page ------------------------------------------------------------
   await page.goto(base, { waitUntil: "load", timeout: 30000 });
-  await page.waitForTimeout(1000); // let the world boot + a frame render
+  // Wait for the world to actually boot (WebGL + the ~600 KiB bundle on a cold
+  // edge) — a fixed timeout races a slow first load and flakes.
+  await page.waitForFunction(() => !!window.talviProbe, null, { timeout: 15000 });
+  await page.waitForTimeout(400); // let a frame render
 
   check("page loads with title talvi", (await page.title()) === "talvi");
   const world = await page.evaluate(() => {
