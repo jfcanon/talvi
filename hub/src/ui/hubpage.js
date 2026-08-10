@@ -87,7 +87,7 @@ export function welcomePage() {
     bladeItems() +
     "</div>" +
     '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="hub">' +
-    "retract" +
+    "expand" +
     "</button>" +
     "</nav>" +
     '<main class="welcome">' +

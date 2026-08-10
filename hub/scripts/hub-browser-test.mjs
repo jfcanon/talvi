@@ -76,13 +76,27 @@ try {
   }
   check("future slot is not a link", (await page.locator(".blade__item.is-slot").count()) === 1);
 
-  // Blade collapses/expands and remembers the state.
+  // Blade collapses/expands and remembers the state; the toggle label says
+  // what the next click does.
   const hub = page.locator("#hub");
+  const toggle = page.locator(".blade__toggle");
   check("blade starts collapsed", !(await hub.evaluate((el) => el.classList.contains("is-open"))));
-  await page.locator(".blade__toggle").click();
+  check("closed toggle reads expand", (await toggle.textContent()).toLowerCase() === "expand");
+  await toggle.click();
   check("blade opens on toggle", await hub.evaluate((el) => el.classList.contains("is-open")));
-  await page.locator(".blade__toggle").click();
+  check("open toggle reads retract", (await toggle.textContent()).toLowerCase() === "retract");
+  await toggle.click();
   check("blade closes on second toggle", !(await hub.evaluate((el) => el.classList.contains("is-open"))));
+  check("closed toggle reads expand again", (await toggle.textContent()).toLowerCase() === "expand");
+
+  // Mobile: the blade becomes a horizontal icon rail and the retract toggle
+  // disappears (no side rail to open on a phone).
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.reload({ waitUntil: "load", timeout: 30000 });
+  check("mobile hides the retract toggle", (await page.locator(".blade__toggle").isVisible()) === false);
+  check("mobile shows the icon rail", (await page.locator(".blade__item").count()) === 4);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.reload({ waitUntil: "load", timeout: 30000 });
 
   // Zero CSP violations from OUR page (the edge beacon is reported separately).
   check("zero own CSP violations", violations.length === 0, violations.join(" | ").slice(0, 300));

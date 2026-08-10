@@ -187,6 +187,17 @@ html::before {
   border-color: var(--hud-line-soft);
 }
 
+/* A visited app keeps a trace of itself — dimmed, still readable. Browsers
+   only let :visited change colour (a privacy guard), which is all we want. */
+.blade__item:visited {
+  color: var(--text-dim);
+}
+
+.blade__item:hover:visited,
+.blade__item:focus-visible:visited {
+  color: var(--phosphor);
+}
+
 /* :active pairs every hover for touch — a phone gets feedback too. */
 .blade__item:active {
   background: var(--hud-fill);
@@ -211,6 +222,13 @@ html::before {
   text-transform: uppercase;
   opacity: 0;
   transition: opacity 120ms ease;
+}
+
+/* Keyboard users tabbing the collapsed rail still see what they are focused
+   on — the focus ring alone does not say which app. :focus-visible fires only
+   for keyboard navigation, so pointer users never see the forced label. */
+.blade__item:focus-visible .blade__label {
+  opacity: 1;
 }
 
 /* A future-app slot: present, marked as empty, not a link. */
@@ -324,7 +342,8 @@ html::before {
 }
 
 /* Mobile: the blade becomes a horizontal rail so a phone keeps the icons
-   usable; the grid becomes one column. */
+   usable; the grid becomes one column. The retract toggle is hidden — on a
+   phone the blade is always just the icon row, there is no side rail to open. */
 @media (max-width: 40rem) {
   .hub,
   .hub.is-open {
@@ -347,13 +366,16 @@ html::before {
     grid-template-columns: 2.5rem;
     padding: 0.35rem;
   }
+  /* Labels never show on mobile — there is no open state for the rail, and
+     letting them appear would push the row off-screen. The icon + title
+     attribute carry the name. */
   .blade__label {
     display: none;
   }
-  .hub.is-open .blade__label {
-    display: inline;
+  .blade__item:focus-visible .blade__label {
+    display: none;
   }
   .blade__toggle {
-    margin: 0.5rem;
+    display: none;
   }
 }
