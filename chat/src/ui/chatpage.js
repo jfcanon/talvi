@@ -134,6 +134,10 @@ export function chatRoomPage(name) {
     // timer on purpose: an automatic retry against a gated channel spends a
     // lockout attempt each time (D8).
     '<button class="btn btn--ghost" type="button" id="reconnect" hidden>RECONNECT</button>' +
+    // DISCONNECT (owner 2026-08-10) — the explicit leave. A dropped socket is
+    // not a leave (presence model); this button is the only way to end your
+    // presence, and if you were the last one, the room ends now.
+    '<button class="btn btn--ghost btn--danger" type="button" id="disconnect">DISCONNECT</button>' +
     // Whether this channel is encrypted is a property of the live object, not
     // of the URL — the Worker rendering this page does not know it, and asking
     // the object would both cost a round trip and turn page load into an

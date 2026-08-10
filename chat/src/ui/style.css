@@ -2213,3 +2213,17 @@ a {
     width: 100%;
   }
 }
+
+/* ===========================================================================
+ * DISCONNECT (owner pass 2026-08-10) — the explicit leave. A danger-tinted
+ * ghost button: quiet, but a different color so it reads as "ends something".
+ * ========================================================================= */
+.btn--danger {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.btn--danger:hover {
+  background: var(--amber);
+  color: var(--void);
+}

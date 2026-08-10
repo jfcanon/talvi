@@ -628,10 +628,9 @@ export class ChatChannel {
         ws.send(text);
       } catch {
         // send() failed means this socket is already past the close/error
-        // events. drop() is the single removal point: it deletes the socket
-        // AND broadcasts {t:"leave"} so nobody keeps a ghost in their roster
-        // (the platform close event that would have fired drop() never does
-        // once the send path hit an error first).
+        // events. drop() is the single removal point: it deletes the socket.
+        // No {t:"leave"} — a dead socket is not a leave (presence model); the
+        // member stays in the room until they DISCONNECT.
         this.drop(ws);
       }
     }
