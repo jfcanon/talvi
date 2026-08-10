@@ -28,13 +28,89 @@
 
   const NICK_STORAGE = "talvi.chat.nick";
   const GATE_STORAGE = "talvi.chat.gate";
+  const CHANNELS_STORE = "talvi.chat.channels"; // names only — the PIN is never stored
+  const MAX_CHANNELS = 20;
+  const CHANNEL_TTL_MS = 24 * 60 * 60 * 1000;
   const CHANNEL_RE = /^[a-z0-9-]{1,64}$/;
   const MAX_WIRE_BYTES = 4096;
   const CLOSE_GATE = 4003; // uniform gate refusal (D8)
   const encoder = new TextEncoder();
 
+  // The unambiguous 32-char alphabet chatcrypto uses for slugs (l/1, o/0
+  // omitted — these strings get read aloud and copied by hand).
+  const SLUG_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
+
   function $(id) {
     return document.getElementById(id);
+  }
+
+  // A fresh random nick, "rv" + 10 unambiguous chars — display-only, and it
+  // satisfies the server's nick rule by construction (no whitespace/control).
+  function randomNick() {
+    const bytes = crypto.getRandomValues(new Uint8Array(10));
+    let s = "rv";
+    for (const b of bytes) s += SLUG_ALPHABET[b % SLUG_ALPHABET.length];
+    return s;
+  }
+
+  // A fresh random 4-digit PIN. `byte % 10` is biased but that is irrelevant
+  // for a gate; what matters is it clears the weak-PIN blocklist, so reject and
+  // re-roll if pinProblem complains. The fallback is unreachable in practice.
+  function randomPin() {
+    const gate = window.talviGate;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const bytes = crypto.getRandomValues(new Uint8Array(4));
+      const p = bytes.map((b) => String(b % 10)).join("");
+      if (!gate.pinProblem(p)) return p;
+    }
+    return "8437";
+  }
+
+  // ---- sidebar: this browser's channels (names only) ----
+  // Persisted in localStorage so the list survives a reload; entries older
+  // than 24h are dropped (the room would be gone anyway). The PIN is never
+  // here — reopening a gated room means typing the PIN you know.
+  function readChannels() {
+    try {
+      const raw = window.localStorage.getItem(CHANNELS_STORE);
+      const list = raw ? JSON.parse(raw) : [];
+      const now = Date.now();
+      return list
+        .filter((c) => c && typeof c.name === "string" && now - (c.lastSeen || 0) < CHANNEL_TTL_MS)
+        .slice(0, MAX_CHANNELS);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveChannel(name, nick) {
+    try {
+      const next = readChannels().filter((c) => c.name !== name);
+      next.unshift({ name, nick, lastSeen: Date.now() });
+      window.localStorage.setItem(CHANNELS_STORE, JSON.stringify(next.slice(0, MAX_CHANNELS)));
+      renderSide();
+    } catch {
+      // storage blocked — the sidebar just won't persist; chat still works
+    }
+  }
+
+  function renderSide() {
+    const list = $("sidelist");
+    const side = $("side");
+    if (!list || !side) return;
+    const channels = readChannels();
+    const current = window.location.pathname.replace(/^\/chat\//, "");
+    list.textContent = "";
+    for (const c of channels) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = "/chat/" + c.name;
+      a.textContent = c.name;
+      if (c.name === current) a.setAttribute("aria-current", "page");
+      li.appendChild(a);
+      list.appendChild(li);
+    }
+    side.hidden = channels.length === 0;
   }
 
   // Mirrors isValidNick in src/chat/name.js (server is authoritative; this is
@@ -76,7 +152,6 @@
     const nick = $("nick");
     const pin = $("pin");
     const join = $("join");
-    const create = $("create");
     const msg = $("msg");
     if (!channel || !nick || !join) return; // not this page
 
@@ -87,15 +162,14 @@
       msg.className = "msg";
     }
 
-    // D9. A created channel gets a 100-bit name, because "first joiner sets
-    // the gate" means a guessable name can be claimed before its owner ever
-    // arrives. Typing your own name is still allowed for joining one you were
-    // given — it is generating them that must not be guessable.
-    function newChannel() {
-      channel.value = gate.randomSlug();
-      say("NAME GENERATED — share it with the people you want, and nobody else.");
-      if (pin) pin.focus();
-    }
+    // Autopopulate, per the owner: name, nick and PIN are prefilled with fresh
+    // random values, everything stays editable, ENTER joins. A 100-bit name
+    // (D9) and a uniform 4-digit PIN (clears the weak-PIN floor by
+    // construction) — the two things a person is worst at making up are the
+    // two this generates.
+    if (!channel.value) channel.value = gate.randomSlug();
+    if (!nick.value) nick.value = randomNick();
+    if (pin && !pin.value) pin.value = randomPin();
 
     // There is no "create" mode, deliberately. Supplying a PIN IS the intent,
     // and the server resolves what that means from the channel's actual state:
@@ -144,20 +218,17 @@
         // PBKDF2 at 300k iterations is deliberately slow. Do it here, once,
         // while the user is still on this page, so the room joins instantly.
         join.disabled = true;
-        if (create) create.disabled = true;
         say("DERIVING KEY — a moment.");
         try {
           const master = await gate.deriveMasterHex(secret, name);
           if (!writeStore(GATE_STORAGE, JSON.stringify({ name, master }))) {
             say("STORAGE BLOCKED — cannot carry the key into the room.");
             join.disabled = false;
-            if (create) create.disabled = false;
             return;
           }
         } catch {
           say("KEY FAILED — this browser refused the crypto this needs.");
           join.disabled = false;
-          if (create) create.disabled = false;
           return;
         }
       } else {
@@ -170,6 +241,8 @@
         }
       }
 
+      // Remember this channel in the sidebar (names only — never the PIN).
+      saveChannel(name, who);
       window.location.href = "/chat/" + name;
     }
 
@@ -180,7 +253,7 @@
     channel.addEventListener("keydown", onEnter);
     if (pin) pin.addEventListener("keydown", onEnter);
     join.addEventListener("click", () => go());
-    if (create) create.addEventListener("click", newChannel);
+    renderSide();
   }
 
   // ---------------------------------------------------------------- room
@@ -235,7 +308,13 @@
       if (joinbox) joinbox.hidden = false;
       if (message) say(message);
       if (roomnick) {
-        roomnick.value = nick ?? "";
+        // Autofill the nick (a fresh random one if this tab has none) — the
+        // PIN is deliberately NOT autofilled: it is user knowledge (owner Q2).
+        if (!nick) {
+          nick = randomNick();
+          writeStore(NICK_STORAGE, nick);
+        }
+        roomnick.value = nick;
         roomnick.focus();
       }
     }
@@ -438,11 +517,8 @@
       // could be true (D13).
       if (mode) {
         mode.textContent = cryptoKey
-          ? "ENCRYPTED — sealed in your browser with the PIN before it is sent, " +
-            "so nothing readable crosses the wire. But four digits is ten " +
-            "thousand combinations: anyone recording the traffic can try them " +
-            "all. A lock on the door, not a safe. Who talks to whom, and when, " +
-            "is visible either way."
+          ? "ENCRYPTED — sealed in your browser with the PIN before it is sent; " +
+            "nothing readable crosses the wire."
           : "NOT ENCRYPTED — no PIN on this channel, so messages are relayed " +
             "exactly as you typed them.";
       }
@@ -450,6 +526,8 @@
       send.disabled = false;
       if (reconnect) reconnect.hidden = true;
       say("");
+      // Admitted → remember this channel for the sidebar (names only).
+      saveChannel(channelName, nick);
       renderMembers();
       text.focus();
     }
@@ -658,13 +736,19 @@
     }
 
     if (roomjoin) roomjoin.addEventListener("click", () => submitJoin());
-    for (const el of [roomnick, roompin]) {
+    // The reconnect (↻) icon beside the PIN input — the owner's affordance for
+    // reopening a channel from the sidebar: type the PIN you know, click ↻.
+    // It is the same join as ENTER.
+    const roomreconnect = $("roomreconnect");
+    if (roomreconnect) roomreconnect.addEventListener("click", () => submitJoin());
+    for (const el of [roomnick, roompin, roomreconnect]) {
       if (el) {
         el.addEventListener("keydown", (e) => {
           if (e.key === "Enter") submitJoin();
         });
       }
     }
+    renderSide();
 
     if (reconnect) {
       reconnect.hidden = true;

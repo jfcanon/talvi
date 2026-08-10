@@ -2111,3 +2111,105 @@ a {
 /* ===========================================================================
  * End of shared shell block.
  * ========================================================================= */
+
+/* ===========================================================================
+ * Chat sidebar + reconnect icon (owner pass 2026-08-10).
+ * The channel list (names only — never the PIN) sits left of the form or the
+ * conversation, and stacks above it on narrow screens. The ↻ icon sits beside
+ * the PIN input to reopen a channel from the list.
+ * ========================================================================= */
+.chat__layout {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.chat__side {
+  flex: 0 0 13rem;
+  min-width: 0;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--rule);
+  background: var(--void);
+}
+
+.chat__channels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chat__channels li + li {
+  margin-top: 0.35rem;
+}
+
+.chat__channels a {
+  display: block;
+  padding: 0.4rem 0.5rem;
+  font-family: var(--font-console);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat__channels a:hover {
+  color: var(--text-hi);
+  border-color: var(--hud-line-soft);
+}
+
+.chat__channels a[aria-current="page"] {
+  color: var(--amber);
+  border-color: var(--rule);
+}
+
+.chat__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chat__pinslot {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.chat__pinslot .chat__pin {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
+
+.chat__reconnect {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--hud-line-soft);
+  background: var(--void);
+  color: var(--text-dim);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat__reconnect:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.chat__reconnect:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+@media (max-width: 52rem) {
+  .chat__layout {
+    flex-direction: column;
+  }
+  .chat__side {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

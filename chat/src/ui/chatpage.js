@@ -32,12 +32,19 @@ function nickInput() {
 
 export function chatLandingPage() {
   const content =
+    '<div class="chat__layout">' +
+    // This browser's channels (names only — the PIN is never stored, and
+    // reopening a gated room means typing the PIN you know into the room).
+    '<aside class="chat__side" id="side" hidden>' +
+    '<div class="tagline"><span class="tagline__box">channels</span></div>' +
+    '<ul class="chat__channels" id="sidelist"></ul>' +
+    "</aside>" +
+    '<div class="chat__main">' +
     '<div class="panel chat">' +
     '<div class="tagline"><span class="tagline__box">channel</span></div>' +
     '<input class="chat__field" id="channel" type="text" ' +
     'maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" ' +
     'placeholder="NAME" aria-label="Channel name">' +
-    '<button class="btn btn--ghost" type="button" id="create">NEW NAME</button>' +
     '<div class="tagline"><span class="tagline__box">nick</span></div>' +
     nickInput() +
     '<div class="tagline"><span class="tagline__box">pin</span>' +
@@ -48,39 +55,24 @@ export function chatLandingPage() {
     'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, optional">' +
     '<p class="msg hidden" id="msg"></p>' +
     '<button class="btn" type="button" id="join">ENTER</button>' +
-    '<p class="chat__fineprint">' +
-    "Names are secrets — you know the channel, or you don't. Pick any nick; " +
-    "no accounts, nothing is saved. The room dies when the last person leaves." +
-    "</p>" +
-    '<p class="chat__fineprint">' +
-    "A 4-digit PIN locks the door: the first person in sets it, and everyone " +
-    "after needs it to get in. Leave it empty for an open channel. Nothing you " +
-    "type is stored, but the same name and PIN always reopen the same door, so " +
-    "a PIN stays worth guarding after the room is gone." +
-    "</p>" +
-    '<p class="chat__fineprint">' +
-    "When the last person leaves, the room forgets its PIN along with " +
-    "everything else — and whoever walks in first after that sets the next " +
-    "one. So a name is worth as much as the PIN is: share both only with " +
-    "people you would let back in." +
-    "</p>" +
-    '<p class="chat__fineprint">' +
-    "With a PIN, messages are encrypted in your browser before they leave it, " +
-    "so this app never handles readable text and nothing readable crosses the " +
-    "wire. Know the limit: four digits is only ten thousand combinations, so " +
-    "anyone who records the traffic can try them all and read along. Treat it " +
-    "as a lock on a door, not a safe. Whoever carries the traffic also sees " +
-    "who talks to whom and when, anyone holding the PIN reads everything and " +
-    "can post as anyone, and without a PIN there is no scrambling at all." +
-    "</p>" +
+    '<p class="chat__fineprint">Names are secrets — pick one, nick yourself, and ' +
+    "walk in. The room dies 24 hours after the last message, or when the last " +
+    "person disconnects — whichever comes first.</p>" +
+    '<p class="chat__fineprint">A 4-digit PIN locks the door: the first person ' +
+    "in sets it, and everyone after needs it to get in. Leave it empty for an " +
+    "open channel. With a PIN, messages are encrypted in your browser before " +
+    "they leave it, so nothing readable ever sits on the server. The PIN locks " +
+    "the door, not the safe — anyone who holds it can read and post as anyone.</p>" +
+    "</div>" +
+    "</div>" +
     "</div>" +
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
     "is an empty frame without it.</p></noscript>";
 
   return renderPage("chat", {
     lede:
-      "CHANNEL. Name it, nick yourself, walk in. Ephemeral by design — no " +
-      "log, no history, gone when the room empties.",
+      "CHANNEL. Name it, nick yourself, walk in. The room lives 24 hours " +
+      "after the last message — then everything is gone.",
     content,
     script: true,
     // The quiet 3D world behind the panel, like /talvi.
@@ -90,6 +82,13 @@ export function chatLandingPage() {
 
 export function chatRoomPage(name) {
   const content =
+    '<div class="chat__layout">' +
+    // This browser's channels, beside the conversation — one click jumps.
+    '<aside class="chat__side" id="side" hidden>' +
+    '<div class="tagline"><span class="tagline__box">channels</span></div>' +
+    '<ul class="chat__channels" id="sidelist"></ul>' +
+    "</aside>" +
+    '<div class="chat__main">' +
     '<div class="panel chat">' +
     '<div class="tagline"><span class="tagline__box">channel</span>' +
     '<span class="chat__channel">' +
@@ -101,6 +100,11 @@ export function chatRoomPage(name) {
     // retype 20 random characters they were sent is not a form, it is a wall.
     // Hidden by default; the client reveals it only when this tab actually
     // needs something (a nick, or a PIN for a gated channel).
+    //
+    // The PIN is user knowledge, never stored: you type the PIN you know into
+    // the field, then ENTER or the reconnect (↻) icon beside it joins. The ↻
+    // is the same join — it is the affordance the owner asked for when
+    // reopening a channel from the sidebar.
     '<div class="chat__join" id="joinbox" hidden>' +
     '<div class="tagline"><span class="tagline__box">nick</span></div>' +
     '<input class="chat__field" id="roomnick" type="text" maxlength="32" ' +
@@ -108,10 +112,14 @@ export function chatRoomPage(name) {
     'placeholder="NICK" aria-label="Your nick">' +
     '<div class="tagline"><span class="tagline__box">pin</span>' +
     '<span class="chat__optional">if this channel has one</span></div>' +
-    '<input class="chat__field" id="roompin" type="password" maxlength="4" ' +
+    '<div class="chat__pinslot">' +
+    '<input class="chat__field chat__pin" id="roompin" type="password" maxlength="4" ' +
     'inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
     'autocapitalize="off" spellcheck="false" ' +
     'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, if the channel has one">' +
+    '<button class="chat__reconnect" id="roomreconnect" type="button" ' +
+    'aria-label="Reconnect with this PIN">↻</button>' +
+    "</div>" +
     '<button class="btn" type="button" id="roomjoin">ENTER</button>' +
     "</div>" +
     '<p class="chat__members" id="members" aria-live="polite"></p>' +
@@ -136,18 +144,19 @@ export function chatRoomPage(name) {
     '<p class="chat__fineprint">Anyone in the room posts as anyone — no ' +
     "moderation, no way to eject, and no way to prove who wrote a line.</p>" +
     "</div>" +
+    "</div>" +
+    "</div>" +
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
     "is an empty frame without it.</p></noscript>";
 
   return renderPage("chat/" + name, {
     // No encryption claim in the lede either, for the same reason: this string
-    // is rendered before anyone knows whether the room has a gate. "Nothing is
-    // stored" is true of both kinds and is the part worth saying up front.
+    // is rendered before anyone knows whether the room has a gate.
     lede:
       "IN " +
       escapeHtml(name).toUpperCase() +
-      ". Nothing is stored, nothing is logged, and the room ends when the " +
-      "last person leaves.",
+      ". The room lives 24 hours after the last message, then everything is " +
+      "gone — or ends when the last person disconnects.",
     content,
     script: true,
     // The quiet 3D world behind the panel, like /talvi.
