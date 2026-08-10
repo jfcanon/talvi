@@ -92,8 +92,14 @@ export class AgentDO extends WrappedAgent {
       // getWorkspace(this) resolves the local Workspace and awaits ready()
       // internally (the client surface has fs/runtime/git — no ready()). The
       // workspace root must exist before the first write; idempotent.
-      const ws = await getWorkspace(this);
-      await ws.fs.mkdir(WORKSPACE_ROOT, { recursive: true }).catch(() => {});
+      //
+      // Stored on the instance, NOT captured in the message-listener closure:
+      // esbuild's minifier hit a genuine name-collision bug renaming a closure
+      // variable shared with three.js's `ws` class (the deployed bundle
+      // referenced an undefined `ws` at the call site). A property access
+      // mangles consistently.
+      this.ws = await getWorkspace(this);
+      await this.ws.fs.mkdir(WORKSPACE_ROOT, { recursive: true }).catch(() => {});
       server.send(JSON.stringify({ t: "ready" }));
     } catch (err) {
       // Surface the failure to the client instead of hanging: close 4401 with
@@ -115,7 +121,7 @@ export class AgentDO extends WrappedAgent {
       }
       console.log("agent msg", event.data.slice(0, 80));
       try {
-        await this.handleFrame(server, ws, event.data);
+        await this.handleFrame(server, this.ws, event.data);
         console.log("agent frame done");
       } catch (err) {
         console.log("agent fault", String(err?.message ?? err).slice(0, 120), String(err?.stack ?? "").slice(0, 300));
