@@ -13,7 +13,6 @@
 import * as THREE from "three";
 import { buildWorld } from "./world.js";
 import { OrbitController } from "./input.js";
-import { updateLabels } from "./labels.js";
 
 export function bootScene() {
   const canvas = document.getElementById("scene");
@@ -181,12 +180,29 @@ export function bootScene() {
   }
   window.addEventListener("resize", resize);
 
+  // Test probe: exposes each building's current screen position so the browser
+  // test can click a cube and assert orbit/zoom without depending on the DOM
+  // (v4.1: the labels are in-world now, not DOM elements). No secrets — just
+  // public building keys, hrefs and projected coordinates.
+  window.talviProbe = function () {
+    const v = new THREE.Vector3();
+    return world.buildings.map((b) => {
+      v.copy(b.worldPos).project(camera);
+      return {
+        key: b.key,
+        href: b.href,
+        x: Math.round((v.x * 0.5 + 0.5) * window.innerWidth),
+        y: Math.round((-v.y * 0.5 + 0.5) * window.innerHeight),
+        visible: v.z <= 1,
+      };
+    });
+  };
+
   let last = performance.now();
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     if (!reduceMotion) world.update(dt);
-    updateLabels(camera, world.buildings);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }

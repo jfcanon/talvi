@@ -8,12 +8,10 @@
 // Google Earth — plus:
 //   - the blade: flat chrome rail, always visible, keyboard-first — the
 //     instant switcher, and the navigation fallback if WebGL is absent.
-//   - one building per app (relay, chat, cinto). Each carries a floating
-//     <a class="node"> label, parked on its building every frame by
-//     scene/labels.js. Click the building OR its label → open the app.
-//     The labels are real anchors: keyboard-reachable, and the guaranteed
-//     path even before the first frame or if the raycast misses.
-//   - the HUD: the `>_` prompt (which echoes a hovered building as
+//   - three CUBES (relay, chat, cinto), each with a fixed 3D nameplate above
+//     it. Click a cube (raycast) to open its app. The blade is the keyboard
+//     path; there are no DOM app labels (v4.1 — the names live in the world).
+//   - the HUD: the `>_` prompt (which echoes a hovered cube as
 //     "> open relay") and a one-line hint of the controls.
 //   - the .leak/.grain/.wear film overlays, above the canvas (A5c).
 import { ASSET_VERSION } from "../generated/assets.js";
@@ -49,14 +47,10 @@ const APPS = [
   },
 ];
 
-// The world buildings — the apps you can open. data-key must match the
-// building key in scene/world.js so scene/labels.js can find each anchor.
-const NODES = [
-  { key: "relay", label: "TALVI", href: "https://app.ygdcbtmc4u.uk/relay", title: "Open relay" },
-  { key: "chat", label: "CHAT", href: "https://app.ygdcbtmc4u.uk/chat", title: "Open chat" },
-  { key: "cinto", label: "CINTO", href: "https://cinto.ygdcbtmc4u.uk", title: "Open cinto" },
-];
-
+// The world cubes — the apps you can open — live in scene/world.js (their
+// keys, nameplates and hrefs). The blade below covers keyboard navigation;
+// the raycast covers clicking a cube. No DOM app labels (v4.1 — the names
+// are fixed 3D nameplates in the world).
 function bladeItems() {
   return APPS.map((app) =>
     app.href
@@ -76,21 +70,6 @@ function bladeItems() {
         '</span><span class="blade__label">' +
         app.label +
         "</span></span>",
-  ).join("");
-}
-
-function nodeItems() {
-  return NODES.map(
-    (node) =>
-      '<a class="node is-off" data-key="' +
-      node.key +
-      '" href="' +
-      node.href +
-      '" title="' +
-      node.title +
-      '">' +
-      node.label +
-      "</a>",
   ).join("");
 }
 
@@ -126,11 +105,7 @@ export function hubPage() {
     "⏻" +
     "</button>" +
     "</nav>" +
-    // The building labels, parked on their buildings by scene/labels.js.
-    '<main class="world">' +
-    nodeItems() +
-    "</main>" +
-    // The HUD: the terminal prompt (echoes a hovered building) and the hint.
+    // The HUD: the terminal prompt (echoes a hovered cube) and the hint.
     '<div class="hud">' +
     '<p class="prompt" aria-live="polite">' +
     '<span class="prompt__gt" aria-hidden="true">&gt;</span>' +
