@@ -1,6 +1,211 @@
-/* talvi 3d — placeholder stylesheet (Step 1). The real page + wear overlays
-   land in Step 2. Kept minimal here so the build pipeline has real bytes to
-   hash and serve. */
+/* talvi 3d — neon-noir in three dimensions (blueprint A5/A7, A.5c).
+ *
+ * Served at /3d.css. NOT inlined: the CSP is `style-src 'self'` with no inline
+ * styles allowed, which is exactly why the asset lives at its own route.
+ *
+ * Dark-only. Colours are the talvi tokens verbatim, so the 3D world and the
+ * page it is a study of agree. The film overlays (.leak/.grain/.wear) are the
+ * same three layers and blend modes as talvi's style.css, sitting above the
+ * canvas — the worn-film register is a CSS fact, not a WebGL feature.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --void: #05060b;
+  --deep: #0b0d1c;
+
+  --magenta: #ff2e88;
+  --cyan: #22e8ff;
+  --amber: #ffb648;
+
+  --phosphor: #7dffc4;
+  --phosphor-dim: #35d998;
+
+  --text-hi: #eaf2ff;
+
+  --font-console: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono",
+    "Roboto Mono", "Consolas", monospace;
+
+  --soft: 0.35px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html {
-  background: #05060b;
+  background: var(--void);
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--text-hi);
+  font-family: var(--font-console);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The whole world. Fixed, behind everything, sized by the renderer. */
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
+/* Captions scroll over the fixed canvas — the page is content on top of a
+   world that moves with it, not a canvas with text pasted on. */
+.chapters {
+  position: relative;
+  z-index: 1;
+}
+
+.chapter {
+  min-height: 100vh;
+  padding: 0 5vw 12vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+/* Alternate anchors so the captions don't all read at the same height. */
+#c1 {
+  justify-content: flex-start;
+  padding-top: 16vh;
+}
+
+#c3 {
+  align-items: flex-end;
+  padding-right: 6vw;
+}
+
+#c4 {
+  padding-bottom: 20vh;
+}
+
+.chapter__label {
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--phosphor-dim);
+  filter: blur(var(--soft));
+}
+
+.chapter__line {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--phosphor);
+  text-shadow:
+    0 0 2px rgba(198, 255, 232, 0.5),
+    0 0 7px rgba(107, 255, 168, 0.4),
+    0 0 18px rgba(53, 217, 152, 0.25);
+  filter: blur(var(--soft));
+}
+
+.chapter__line::before {
+  content: "> ";
+  color: var(--phosphor-dim);
+}
+
+/* ========================================================== wear and film */
+
+/* Same three layers and blend modes as talvi's style.css, above the canvas:
+     .leak  — uneven backlight, SCREEN (adds light)
+     .grain — emulsion grain, OVERLAY (adds tooth without shifting colour)
+     .wear  — scratches and dust, MULTIPLY (removes light)
+   All pointer-events: none and aria-hidden. */
+
+.leak,
+.grain,
+.wear {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.leak {
+  z-index: 2;
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  background:
+    radial-gradient(120% 45% at 50% -8%, rgba(150, 152, 92, 0.5), transparent 70%),
+    radial-gradient(120% 45% at 50% 108%, rgba(150, 152, 92, 0.42), transparent 70%),
+    radial-gradient(60% 40% at 30% 40%, rgba(120, 140, 96, 0.16), transparent 75%),
+    linear-gradient(
+      to bottom,
+      rgba(140, 146, 88, 0.22) 0 6%,
+      transparent 12% 84%,
+      rgba(140, 146, 88, 0.18) 92% 100%
+    );
+}
+
+.grain {
+  z-index: 3;
+  mix-blend-mode: overlay;
+  opacity: 0.72;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='0.55'/></svg>");
+  animation: grainshift 0.45s steps(3, end) infinite;
+}
+
+@keyframes grainshift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  33% {
+    transform: translate3d(-6px, 3px, 0);
+  }
+  66% {
+    transform: translate3d(4px, -5px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.wear {
+  z-index: 4;
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+  background-image:
+    linear-gradient(to right, transparent 11.3%, rgba(0, 0, 0, 0.5) 11.35%, transparent 11.4%),
+    linear-gradient(to right, transparent 28.7%, rgba(0, 0, 0, 0.32) 28.73%, transparent 28.78%),
+    linear-gradient(to right, transparent 46.1%, rgba(0, 0, 0, 0.22) 46.14%, transparent 46.2%),
+    linear-gradient(to right, transparent 63.9%, rgba(0, 0, 0, 0.4) 63.95%, transparent 64%),
+    linear-gradient(to right, transparent 81.4%, rgba(0, 0, 0, 0.28) 81.44%, transparent 81.5%),
+    radial-gradient(circle at 18% 24%, rgba(0, 0, 0, 0.55) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 61%, rgba(0, 0, 0, 0.5) 0 1px, transparent 2px),
+    radial-gradient(circle at 41% 78%, rgba(0, 0, 0, 0.45) 0 1px, transparent 2px),
+    radial-gradient(circle at 88% 33%, rgba(0, 0, 0, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 55% 12%, rgba(0, 0, 0, 0.5) 0 1px, transparent 2px),
+    linear-gradient(to right, transparent 6.2%, rgba(0, 0, 0, 0.35) 6.24%, transparent 6.3%),
+    linear-gradient(to right, transparent 35.8%, rgba(0, 0, 0, 0.45) 35.83%, transparent 35.9%),
+    linear-gradient(to right, transparent 52.4%, rgba(0, 0, 0, 0.3) 52.44%, transparent 52.5%),
+    linear-gradient(to right, transparent 74.6%, rgba(0, 0, 0, 0.5) 74.63%, transparent 74.7%),
+    linear-gradient(to right, transparent 93.1%, rgba(0, 0, 0, 0.35) 93.15%, transparent 93.2%),
+    radial-gradient(ellipse 22% 9% at 12% 18%, rgba(0, 0, 0, 0.45), transparent 70%),
+    radial-gradient(ellipse 16% 14% at 84% 72%, rgba(0, 0, 0, 0.4), transparent 70%),
+    radial-gradient(ellipse 30% 7% at 58% 92%, rgba(0, 0, 0, 0.35), transparent 70%),
+    radial-gradient(ellipse 12% 18% at 33% 55%, rgba(0, 0, 0, 0.3), transparent 75%),
+    radial-gradient(110% 90% at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.88) 100%);
+}
+
+/* ========================================================== reduced motion */
+
+/* The WebGL scene freezes its own autonomous motion in JS (main.js). Here we
+   freeze the one CSS animation the film stack carries — grain stays as
+   texture but stops crawling, exactly as on talvi's page. */
+@media (prefers-reduced-motion: reduce) {
+  .grain {
+    animation: none;
+  }
 }
