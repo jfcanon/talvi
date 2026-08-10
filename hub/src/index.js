@@ -77,8 +77,18 @@ export default {
       return new Response(welcomePage(), { headers: HTML_HEADERS });
     }
 
-    // A1 will claim "/" (welcome page + blade). Until then it is the uniform
-    // 404, exactly as the blueprint intends the not-yet-built routes to read.
+    // Bare app-root paths for the path-mounted apps. Cloudflare's route
+    // specificity for an exact route plus a `/*` route on the same worker is
+    // inconsistent on the bare path (the hub's `/*` fallback wins /chat while
+    // /relay routes fine). The slashed forms /chat/ and /relay/ are proven to
+    // route correctly, so normalize here — a trailing-slash redirect is
+    // standard web practice and sidesteps the quirk entirely.
+    if (pathname === "/chat" || pathname === "/relay") {
+      return Response.redirect(new URL(pathname + "/", request.url).toString(), 301);
+    }
+
+    // Uniform 404 for everything else — a not-yet-migrated route reads exactly
+    // like broken routing, as the blueprint intends.
     return notFound();
   },
 };
