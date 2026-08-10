@@ -89,10 +89,10 @@ export class AgentDO extends WrappedAgent {
     this.sockets.add(server);
 
     try {
+      // getWorkspace(this) resolves the local Workspace and awaits ready()
+      // internally (the client surface has fs/runtime/git — no ready()). The
+      // workspace root must exist before the first write; idempotent.
       const ws = await getWorkspace(this);
-      await ws.ready();
-      // The workspace root must exist before the first write (the README's
-      // initialize step). Idempotent; the fs surface handles the recursive mkdir.
       await ws.fs.mkdir(WORKSPACE_ROOT, { recursive: true }).catch(() => {});
       server.send(JSON.stringify({ t: "ready" }));
     } catch (err) {
