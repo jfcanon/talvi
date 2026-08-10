@@ -128,5 +128,9 @@ export function uploadPage() {
       "one day unless you say otherwise. Ceiling 25 MB.",
     content,
     script: true,
+    // P2: the quiet 3D world behind the machine, with the panels frosted over
+    // it (the prompt12 essence — cinematic backdrop under layered UI — in
+    // talvi's language).
+    backdrop: true,
   });
 }
