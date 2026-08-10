@@ -9,9 +9,9 @@
 // Covers, live in a real browser: the upload page renders under /relay with
 // all assets prefixed and loading, zero own-page CSP violations, and the
 // blade's TALVI link resolves (so navigation into the relay works). The upload
-// POST itself requires the owner's Access email-PIN (human-held), so it is
-// exercised by the browser test's absence-of-error check on the page, not by
-// completing an upload here.
+// POST itself requires a Clerk session (human-held — sign-in at /relay/sign-in),
+// so it is exercised by the browser test's absence-of-error check on the page,
+// not by completing an upload here.
 import { chromium } from "playwright-core";
 
 const base = process.argv[2] ?? "https://app.ygdcbtmc4u.uk/relay";
@@ -84,6 +84,27 @@ try {
   await page.goto(base.replace(/relay\/?$/, ""), { waitUntil: "load", timeout: 30000 });
   const relayLink = await page.locator('a[href="https://app.ygdcbtmc4u.uk/relay"]').count();
   check("blade has relay link", relayLink >= 1, `found ${relayLink}`);
+
+  // Clerk gate (auth swap): the upload page tells an anonymous visitor the
+  // write path needs a session, and the sign-in page renders the custom form
+  // with the strict nonce CSP. Signing in itself needs the owner's account, so
+  // it is exercised by the E2E, not here.
+  await page.goto(base, { waitUntil: "load", timeout: 30000 });
+  const signedOut = await page.evaluate(() => {
+    return {
+      closed: document.body.innerText.includes("SESSION CLOSED"),
+      signIn: !!document.querySelector('a[href="/relay/sign-in"]'),
+    };
+  });
+  check("upload page shows SESSION CLOSED when signed out", signedOut.closed);
+  check("upload page offers SIGN IN", signedOut.signIn);
+
+  const siResp = await page.goto(base + "/sign-in", { waitUntil: "load", timeout: 30000 });
+  const csp = siResp?.headers()["content-security-policy"] || "";
+  check("sign-in page renders form", (await page.locator("#si-form").count()) === 1);
+  check("sign-in CSP is nonce + strict-dynamic", csp.includes("'nonce-") && csp.includes("'strict-dynamic'"), csp.slice(0, 120));
+  check("sign-in CSP has no unsafe-inline", !csp.includes("unsafe-inline"));
+  check("clerk-js loaded from the instance", (await page.evaluate(() => !!window.Clerk)) === true);
 
   check("zero own CSP violations", violations.length === 0, violations.join(" | ").slice(0, 300));
   // The edge beacon is expected on the proxied zone and blocked correctly. It
