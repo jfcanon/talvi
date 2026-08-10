@@ -25,7 +25,7 @@ export const BLADE_APPS = [
   {
     key: "relay",
     glyph: "▣",
-    label: "TALVI",
+    label: "RELAY",
     href: "/relay",
     title: "Talvi — file share (relay)",
   },

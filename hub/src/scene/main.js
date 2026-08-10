@@ -194,6 +194,9 @@ export function bootScene() {
         x: Math.round((v.x * 0.5 + 0.5) * window.innerWidth),
         y: Math.round((-v.y * 0.5 + 0.5) * window.innerHeight),
         visible: v.z <= 1,
+        wx: b.worldPos.x,
+        wy: b.worldPos.y,
+        wz: b.worldPos.z,
       };
     });
   };
