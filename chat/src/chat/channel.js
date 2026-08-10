@@ -11,24 +11,34 @@
 // is never sent at all.
 //
 // Wire protocol (blueprint §3):
-//   Client→server:  {t:"join", nick}                 — open channel
-//                   {t:"join", nick, setgate:<hex>}  — create a gated channel
-//                   {t:"join", nick, gate:<hex>}     — answer to a challenge
-//                   {t:"msg", d}                     — plaintext message
+//   Client→server:  {t:"join", nick, id}              — open channel
+//                   {t:"join", nick, id, setgate:hex} — create a gated channel
+//                   {t:"join", nick, id, gate:hex}    — answer to a challenge
+//                   {t:"msg", d}                      — plaintext message
+//                   {t:"leave"}                       — explicit disconnect
 //   Server→client:  {t:"challenge", nonce}           — gated channels only
 //                   {t:"ready"}                      — join accepted
+//                   {t:"history", msgs}              — replay for a new member
 //                   {t:"msg", from, d}               — relayed message
 //                   {t:"join", nick} / {t:"leave", nick}
 //                   {t:"error", code}                — "full" | "toolarge"
 //                                                      "badnick" | "notfirst"
 //
-// Deliberately NON-hibernatable (D2): classic accept()+listeners keeps the
-// object alive exactly while members are connected, and every field dies on
-// eviction — including the gate. The canonical workers-chat-demo uses
-// Hibernation + state.storage because it persists history; this app's whole
-// point is that it does not. Zero state.storage writes: even though the free
-// plan forced a SQLite-backed namespace (main.tf PR1b), we never write, so
-// "channel dies when last member leaves" is literal.
+// Lifecycle (owner decision 2026-08-10, presence model — blueprint
+// plans/talvi-hub-auth-chat-blueprint.md A9/A9a). A dropped WebSocket is NOT
+// leaving: a member's presence survives socket drops (phone lock, laptop
+// sleep, minutes of inactivity) until they explicitly DISCONNECT ({t:"leave"})
+// or the room's 24-hour clock ends everything. The gate, the presence roster,
+// and the last 200 messages (ciphertext only — gated channels) persist in
+// state.storage, and a DO alarm fires 24h after the last activity and deletes
+// the room: gate, history, presence — all of it. The room also ends
+// immediately when the last member disconnects.
+//
+// The join/gate/challenge logic below is the settled, security-reviewed code
+// (PR3/D5-D8) and is deliberately UNCHANGED in behavior — persistence, the
+// alarm, presence, and history are additive around it. The PIN is still
+// nowhere: H_gate stays two KDF steps from it and the server never sees the
+// key.
 //
 // NOTHING HERE LOGS. Not the gate, not a nonce, not a proof, not a nick, not
 // an IP. The blueprint requires it (PR3 task 5) and the confidentiality claim
@@ -53,8 +63,19 @@ const MAX_WIRE_BYTES = 4096;
 
 // Abuse bounds, in-DO (D11). Platform ratelimit bindings are known-inert
 // (RUNBOOK §8) and are NOT relied on for chat.
-const MAX_MEMBERS = 64; // joined sockets per channel
+const MAX_MEMBERS = 64; // member PRESENCE per channel (idle members count)
 const MAX_SOCKETS = 128; // any open socket (incl. never-joining) — bounds memory
+
+// Room lifetime (owner 2026-08-10): 24h after the last activity (a message or
+// a join), the alarm deletes the room. Gated history is capped at the last
+// MAX_HISTORY messages.
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_HISTORY = 200;
+
+// A member id is client-generated (sessionStorage) and opaque. Restrict the
+// shape so a malformed value never reaches storage; anything else falls back
+// to a server-generated id.
+const MEMBER_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
 // Origin gate (D11, LOW finding). Browsers always send Origin on a WS upgrade,
 // so a cross-origin page must be refused. Channel names are unguessable secrets
@@ -142,14 +163,146 @@ export class ChatChannel {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
-    this.sessions = new Map(); // WebSocket -> { nick, nonce, joining }
+    this.sessions = new Map(); // WebSocket -> { nick, nonce, joining, memberId }
 
-    // Gate state. All in memory, all gone on eviction (D4): the PIN is stored
-    // nowhere, but it stays *derivable* from name+PIN, so the same PIN
-    // re-gates a reclaimed name. The UI says exactly that (D13).
+    // Gate state. Restored from storage when a real DO (ctx.storage present);
+    // in the offline tests ctx is a mock and this stays in-memory only.
     this.gate = null; // Uint8Array H_gate, or null for an open channel
     this.gateFails = 0;
     this.lockedUntil = 0;
+
+    // Presence (owner 2026-08-10): memberId -> { nick }. A member stays here
+    // after their socket drops; only an explicit DISCONNECT removes them, and
+    // the room dies when this map empties or the 24h alarm fires.
+    this.members = new Map();
+    // Gated-channel ciphertext history (last MAX_HISTORY), replayed to a
+    // genuinely new member. Open channels store none (A9a).
+    this.history = [];
+    this.lastActivity = null;
+
+    this._storage = ctx.storage || null;
+    this._restored = this._storage ? this._restore() : Promise.resolve();
+  }
+
+  // Load persisted room state. Called once, cached as this._restored and
+  // awaited at the top of fetch() so the gate exists before any challenge.
+  async _restore() {
+    const [g, m, h, last] = await Promise.all([
+      this._storage.get("gate"),
+      this._storage.get("members"),
+      this._storage.get("history"),
+      this._storage.get("lastActivity"),
+    ]);
+    if (g) {
+      this.gate = g.h ? fromHex(g.h) : null;
+      this.gateFails = g.fails || 0;
+      this.lockedUntil = g.lockedUntil || 0;
+    }
+    if (Array.isArray(m)) {
+      for (const x of m) if (x && x.id) this.members.set(x.id, { nick: x.nick });
+    }
+    if (Array.isArray(h)) this.history = h;
+    if (last) {
+      this.lastActivity = last;
+      // Defensive re-arm: the alarm should already be pending, but a restore
+      // after an eviction must not rely on that.
+      const at = new Date(last).getTime();
+      if (at + ROOM_TTL_MS > Date.now()) {
+        await this._storage.setAlarm(at + ROOM_TTL_MS).catch(() => {});
+      }
+    }
+  }
+
+  // ---- persistence (no-op in the offline tests) ----
+
+  async _persistGate() {
+    if (!this._storage) return;
+    await this._storage
+      .put("gate", {
+        h: this.gate ? toHex(this.gate) : null,
+        fails: this.gateFails,
+        lockedUntil: this.lockedUntil,
+      })
+      .catch(() => {});
+  }
+
+  async _persistMembers() {
+    if (!this._storage) return;
+    await this._storage
+      .put("members", [...this.members].map(([id, m]) => ({ id, nick: m.nick })))
+      .catch(() => {});
+  }
+
+  async _persistHistory() {
+    if (!this._storage) return;
+    await this._storage.put("history", this.history).catch(() => {});
+  }
+
+  // Reset the room's 24h clock and re-arm the alarm. Called on joins and on
+  // accepted messages — the two kinds of activity that keep a room alive.
+  async _touchActivity() {
+    if (!this._storage) return;
+    this.lastActivity = new Date().toISOString();
+    try {
+      await this._storage.put("lastActivity", this.lastActivity);
+      await this._storage.setAlarm(Date.now() + ROOM_TTL_MS);
+    } catch {
+      // a failed clock write must never take the relay down
+    }
+  }
+
+  // Append a gated-channel message to history (ciphertext payload) and reset
+  // the clock. Capped at MAX_HISTORY, oldest dropped first.
+  async _appendHistory(from, payload) {
+    if (!this._storage) return;
+    this.history.push({ from, ...payload, ts: Date.now() });
+    if (this.history.length > MAX_HISTORY) {
+      this.history.splice(0, this.history.length - MAX_HISTORY);
+    }
+    await this._persistHistory();
+    await this._touchActivity();
+  }
+
+  // The room is over: everything gone, alarm cancelled. Called when the last
+  // member disconnects, and by alarm().
+  async _endRoom() {
+    if (!this._storage) {
+      // Offline tests: just reset in-memory state.
+      this.gate = null;
+      this.gateFails = 0;
+      this.lockedUntil = 0;
+      this.members.clear();
+      this.history = [];
+      this.lastActivity = null;
+      return;
+    }
+    try {
+      await this._storage.cancelAlarm();
+      await this._storage.deleteAll();
+    } catch {
+      // best effort — storage unavailable must not wedge the object
+    }
+    this.gate = null;
+    this.gateFails = 0;
+    this.lockedUntil = 0;
+    this.members.clear();
+    this.history = [];
+    this.lastActivity = null;
+  }
+
+  // 24h after the last activity: the room is gone — gate, history, presence,
+  // everything. Any socket still open is closed so no client sits in a room
+  // that no longer exists.
+  async alarm() {
+    for (const ws of [...this.sessions.keys()]) {
+      try {
+        ws.close(1000, "room ended");
+      } catch {
+        /* already gone */
+      }
+    }
+    this.sessions.clear();
+    await this._endRoom();
   }
 
   // The Worker routes /chat/<name>/ws here. Only WebSocket upgrades are valid.
@@ -160,6 +313,9 @@ export class ChatChannel {
   // uniformly. Otherwise this endpoint would be an oracle for probing which
   // channel names are live.
   async fetch(request) {
+    // The persisted gate/presence/history must be in memory before the first
+    // challenge or join is handled. One storage read, cached.
+    await this._restored;
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("expected websocket", { status: 426 });
     }
@@ -239,7 +395,15 @@ export class ChatChannel {
         });
       return;
     }
-    if (frame?.t !== "msg") return; // anything else from a member is dropped
+    if (frame?.t !== "msg" && frame?.t !== "leave") return;
+
+    // Explicit DISCONNECT (owner 2026-08-10): the only thing that removes a
+    // member's presence. A dropped socket never does — that is the point of
+    // the presence model.
+    if (frame.t === "leave") {
+      this.disconnect(ws, session);
+      return;
+    }
 
     // A channel carries exactly ONE kind of payload, decided by whether it has
     // a gate, and the mismatched kind is DROPPED rather than relayed.
@@ -254,10 +418,13 @@ export class ChatChannel {
     if (this.gate) {
       if (!isEnvelope(frame.env)) return;
       this.broadcast({ t: "msg", from: session.nick, env: frame.env }, ws);
+      this._appendHistory(session.nick, { env: frame.env });
       return;
     }
     if (typeof frame.d === "string" && frame.d.length > 0) {
       this.broadcast({ t: "msg", from: session.nick, d: frame.d }, ws);
+      // Open channels store no history (A9a) but the 24h clock still applies.
+      this._touchActivity();
     }
   }
 
@@ -280,13 +447,37 @@ export class ChatChannel {
       return;
     }
 
+    // Presence: a member id identifies THIS tab's session. A known id is a
+    // resume (socket dropped, room alive) — no history replay, the tab kept
+    // its transcript. A new id is a fresh member — history is replayed.
+    const memberId =
+      typeof frame.id === "string" && MEMBER_ID_RE.test(frame.id)
+        ? frame.id
+        : toHex(randomNonce()); // legacy/absent id: treat as a fresh member
+    const resuming = this.members.has(memberId);
+    this.members.set(memberId, { nick: frame.nick });
+    this._persistMembers();
+    this._touchActivity();
+
     session.nick = frame.nick;
+    session.memberId = memberId;
     session.nonce = null; // spent; never reused
     this.send(ws, { t: "ready" });
-    // Roster replay: every existing member announces itself to the newcomer.
-    for (const [other, s] of this.sessions) {
-      if (other !== ws && s.nick) this.send(ws, { t: "join", nick: s.nick });
+
+    // Roster replay from PRESENCE (idle members included), not just connected
+    // sockets: a newcomer sees everyone who is in the room, not only those
+    // with a live socket.
+    for (const m of this.members.values()) {
+      if (m.nick && m.nick !== frame.nick) this.send(ws, { t: "join", nick: m.nick });
     }
+
+    // History replay for a genuinely new member — the room's record of the
+    // last MAX_HISTORY messages (ciphertext on a gated channel). Sent as one
+    // frame so the client can hold it until its encryption key is ready.
+    if (!resuming && this.history.length) {
+      this.send(ws, { t: "history", msgs: this.history });
+    }
+
     this.broadcast({ t: "join", nick: frame.nick }, ws);
   }
 
@@ -304,6 +495,8 @@ export class ChatChannel {
       return false;
     }
     this.gate = fromHex(setgate);
+    this._persistGate(); // fire-and-forget; the gate must survive eviction
+    this._touchActivity();
     return true;
   }
 
@@ -360,6 +553,7 @@ export class ChatChannel {
     }
 
     this.gateFails = 0; // a correct answer clears the streak
+    this._persistGate(); // lockout state must survive an eviction too
     return true;
   }
 
@@ -376,6 +570,7 @@ export class ChatChannel {
       this.lockedUntil = Date.now() + GATE_LOCKOUT_MS;
       this.gateFails = 0;
     }
+    this._persistGate(); // lockout must survive eviction — it is the whole point
     this.refuseGate(ws);
   }
 
@@ -383,16 +578,36 @@ export class ChatChannel {
     ws.close(CLOSE_GATE, CLOSE_GATE_REASON);
   }
 
+  // Socket closed or errored — a drop, NOT a leave (presence model). The
+  // member's presence stays in this.members, no {t:"leave"} is broadcast, and
+  // the roster keeps them. Their reconnect with the same memberId resumes the
+  // presence; the room stays alive for them.
   drop(ws) {
     const session = this.sessions.get(ws);
     this.sessions.delete(ws);
-    if (session?.nick) this.broadcast({ t: "leave", nick: session.nick }, ws);
+    // No broadcast. Deliberately: a phone-locked tab or a laptop that slept
+    // is still in the room (owner 2026-08-10). Only {t:"leave"} ends a
+    // presence.
+  }
+
+  // Explicit DISCONNECT — the only thing that removes a member's presence.
+  // If it was the last presence, the room ends NOW, not in 24h.
+  disconnect(ws, session) {
+    const nick = session.nick;
+    if (session.memberId) this.members.delete(session.memberId);
+    this.sessions.delete(ws);
+    this._persistMembers();
+    if (nick) this.broadcast({ t: "leave", nick }, ws);
+    if (this.members.size === 0) this._endRoom();
+    try {
+      ws.close(1000, "bye");
+    } catch {
+      /* already closed */
+    }
   }
 
   memberCount() {
-    let n = 0;
-    for (const s of this.sessions.values()) if (s.nick) n += 1;
-    return n;
+    return this.members.size;
   }
 
   send(ws, obj) {

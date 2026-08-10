@@ -97,6 +97,39 @@ function newChannel() {
   return new ChatChannel({}, {});
 }
 
+// A real-DO-shaped mock storage, so the persistence layer (gate, presence,
+// history, the 24h alarm) can be exercised offline. Same method surface the
+// DO runtime provides: get/put/deleteAll/setAlarm/cancelAlarm.
+class MockStorage {
+  constructor() {
+    this.kv = new Map();
+    this.alarms = [];
+    this.deleted = false;
+  }
+  async get(k) {
+    return this.kv.get(k);
+  }
+  async put(k, v) {
+    this.kv.set(k, v);
+  }
+  async deleteAll() {
+    this.kv.clear();
+    this.deleted = true;
+  }
+  async setAlarm(t) {
+    this.alarms.push(t);
+  }
+  async cancelAlarm() {
+    this.alarms = [];
+  }
+}
+
+function newChannelWithStorage() {
+  const storage = new MockStorage();
+  const ch = new ChatChannel({ storage }, {});
+  return { ch, storage };
+}
+
 async function connect(ch) {
   const ws = new MockWS();
   ch.handleSession(ws);
@@ -182,7 +215,22 @@ check("differing port is refused",
 
   b.close(1000, "bye");
   await settle();
-  check("leave is broadcast", a.all("leave").some((f) => f.nick === "b"));
+  // Presence model (owner 2026-08-10): a dropped socket is NOT leaving. No
+  // {t:"leave"} is broadcast and the member still counts as present — a
+  // phone-locked tab or a laptop that slept is still in the room.
+  check("socket drop is not a leave (presence survives)",
+    !a.all("leave").some((f) => f.nick === "b"));
+  check("dropped member still counts as present", ch.memberCount() === 2);
+
+  // Explicit DISCONNECT is the only leave — on a still-connected member.
+  const c = await connect(ch);
+  c.recv({ t: "join", nick: "c" });
+  await settle();
+  check("third member admitted", c.has("ready"));
+  c.recv({ t: "leave" });
+  await settle();
+  check("disconnect broadcasts leave", a.all("leave").some((f) => f.nick === "c"));
+  check("disconnect removes the presence", ch.memberCount() === 2);
 }
 
 // ------------------------------------------------------------- gate creation
@@ -370,6 +418,95 @@ check("differing port is refused",
   });
   await settle();
   check("correct PIN admitted once the lockout expires", after.has("ready"));
+}
+
+// ------------------------------------------------- presence + lifecycle (C5)
+
+// A dropped socket keeps the member present; a reconnect with the SAME id
+// resumes without a duplicate; a fresh id replays history.
+{
+  const { ch, storage } = newChannelWithStorage();
+  const key = await talvi.encKey(await talvi.deriveMasterHex(PIN, NAME), NAME);
+
+  const a = await connect(ch);
+  a.recv({ t: "join", nick: "a", id: "member-aaaa", setgate: GATE });
+  await settle();
+  check("first joiner with id installs the gate", a.has("ready") && ch.gate !== null);
+  check("gate persisted to storage", storage.kv.has("gate"));
+
+  const m1 = { v: 1, iv: "i".repeat(16), ct: "one" };
+  a.recv({ t: "msg", env: m1 });
+  await settle();
+  check("history stored (ciphertext only)", storage.kv.get("history")?.length === 1);
+
+  // a's socket drops — presence must survive (phone-lock case).
+  a.close(1000, "bye");
+  await settle();
+  check("member present after socket drop", ch.memberCount() === 1);
+
+  // a resumes with the same id — no history replay, no duplicate presence.
+  const a2 = await connect(ch);
+  a2.recv({ t: "join", nick: "a", id: "member-aaaa", gate: await talvi.answerHex(GATE, a2.first("challenge").nonce) });
+  await settle();
+  check("resume with same id admitted", a2.has("ready"));
+  check("resume does not replay history", !a2.has("history"));
+  check("no duplicate presence on resume", ch.memberCount() === 1);
+
+  // A genuinely NEW member gets the stored history.
+  const b = await connect(ch);
+  b.recv({ t: "join", nick: "b", id: "member-bbbb", gate: await talvi.answerHex(GATE, b.first("challenge").nonce) });
+  await settle();
+  check("fresh member admitted", b.has("ready"));
+  const hist = b.first("history");
+  check("fresh member receives history replay", hist?.msgs?.length === 1, "len=" + (hist?.msgs?.length ?? "none"));
+  check("history payload is the ciphertext envelope", hist?.msgs?.[0]?.env?.ct === "one");
+
+  // An open channel stores NO history.
+  const oc = newChannelWithStorage();
+  const oa = await connect(oc.ch);
+  oa.recv({ t: "join", nick: "o", id: "member-oooo" });
+  await settle();
+  oa.recv({ t: "msg", d: "plain hello" });
+  await settle();
+  check("open channel stores no history", !oc.storage.kv.has("history"));
+}
+
+// The room's 24h clock: a message arms an alarm ~24h out; the last
+// DISCONNECT ends the room immediately.
+{
+  const { ch, storage } = newChannelWithStorage();
+  const a = await connect(ch);
+  a.recv({ t: "join", nick: "a", id: "member-aaaa" });
+  await settle();
+  a.recv({ t: "msg", d: "hello" });
+  await settle();
+  check("message arms the 24h alarm", storage.alarms.length >= 1 &&
+    Math.abs(storage.alarms[0] - (Date.now() + 24 * 60 * 60 * 1000)) < 5000);
+
+  const b = await connect(ch);
+  b.recv({ t: "join", nick: "b", id: "member-bbbb" });
+  await settle();
+  b.recv({ t: "leave" });
+  await settle();
+  check("one member leaving does not end the room", ch.memberCount() === 1 && storage.kv.size > 0);
+
+  a.recv({ t: "leave" });
+  await settle();
+  check("last member leaving ends the room now", ch.memberCount() === 0);
+  check("room storage wiped on last leave", storage.deleted === true);
+  check("gate cleared with the room", ch.gate === null);
+}
+
+// The 24h alarm wipes the room.
+{
+  const { ch, storage } = newChannelWithStorage();
+  const a = await connect(ch);
+  a.recv({ t: "join", nick: "a", id: "member-aaaa", setgate: GATE });
+  await settle();
+  await ch.alarm();
+  check("alarm wipes gate", ch.gate === null);
+  check("alarm wipes presence", ch.memberCount() === 0);
+  check("alarm wipes storage", storage.deleted === true);
 }
 
 // -------------------------------------------------------------- other bounds
