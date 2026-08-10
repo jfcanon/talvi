@@ -28,6 +28,7 @@
 
   const NICK_STORAGE = "talvi.chat.nick";
   const GATE_STORAGE = "talvi.chat.gate";
+  const MEMBER_STORAGE = "talvi.chat.id"; // per-tab presence id (C5)
   const CHANNELS_STORE = "talvi.chat.channels"; // names only — the PIN is never stored
   const MAX_CHANNELS = 20;
   const CHANNEL_TTL_MS = 24 * 60 * 60 * 1000;
@@ -51,6 +52,19 @@
     let s = "rv";
     for (const b of bytes) s += SLUG_ALPHABET[b % SLUG_ALPHABET.length];
     return s;
+  }
+
+  // The per-tab presence id (C5). Survives a dropped socket so the server can
+  // tell "the same tab came back" from "a new person arrived"; sessionStorage
+  // (tab-scoped) is exactly the right lifetime.
+  function memberId() {
+    let id = readStore(MEMBER_STORAGE);
+    if (!id) {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      id = "m" + [...bytes].map((b) => b.toString(36)).join("");
+      writeStore(MEMBER_STORAGE, id);
+    }
+    return id;
   }
 
   // A fresh random 4-digit PIN. `byte % 10` is biased but that is irrelevant
@@ -284,6 +298,11 @@
     // shared it has already done the only hard part.
     let nick = readStore(NICK_STORAGE);
 
+    // Presence id (C5): stable per tab, so the server can resume this
+    // member's presence after a socket drop instead of treating them as a
+    // newcomer. Cleared on an explicit DISCONNECT so a rejoin is fresh.
+    const myId = memberId();
+
     // Key material, if the landing derived any. It is bound to the channel it
     // was derived for: a stale blob from another channel would produce a
     // wrong gate answer and burn a lockout attempt, so it is ignored.
@@ -354,6 +373,23 @@
     // messages go as plaintext (D10) — which the UI says out loud.
     let cryptoKey = null;
 
+    // History replay (C5): the server sends the room's last messages as one
+    // {t:"history"} frame to a genuinely new member. On a gated channel the
+    // payloads are sealed, so they are held here until ready() has derived
+    // K_enc — otherwise a frame racing the WebCrypto derivation would be
+    // silently dropped and the room's history lost.
+    let pendingHistory = null;
+
+    function flushHistory() {
+      if (!pendingHistory) return;
+      for (const m of pendingHistory) {
+        if (!m || typeof m.from !== "string") continue;
+        if (m.env !== undefined) show({ from: m.from, env: m.env });
+        else if (typeof m.d === "string") line("them", m.from, m.d);
+      }
+      pendingHistory = null;
+    }
+
     async function emit() {
       const t = text.value;
       if (!t.trim()) return;
@@ -393,6 +429,9 @@
     // Set when the server challenges a tab that holds no key, so the close
     // handler knows to ask for a PIN rather than report a dropped link.
     let needsPin = false;
+    // Set when the user clicked DISCONNECT, so closed() says so instead of
+    // stamping the generic link-dropped message over a deliberate leave.
+    let leaving = false;
 
     // The socket is rebuilt on every connect, so this is a `let`. Everything
     // that sends goes through the CURRENT one.
@@ -460,7 +499,7 @@
     // not a guess made on the landing page — settles which happened.
     sock.addEventListener("open", () => {
       if (sock !== ws) return; // superseded before it finished opening
-      const frame = { t: "join", nick };
+      const frame = { t: "join", nick, id: myId };
       if (!keys) {
         sock.send(JSON.stringify(frame));
         return;
@@ -487,7 +526,7 @@
       try {
         const h = await gate.gateHex(keys.master, channelName);
         const answer = await gate.answerHex(h, nonce);
-        sock.send(JSON.stringify({ t: "join", nick, gate: answer }));
+        sock.send(JSON.stringify({ t: "join", nick, id: myId, gate: answer }));
       } catch {
         lastError = "KEY FAILED — this browser refused the crypto this needs.";
         say(lastError);
@@ -511,6 +550,9 @@
           sock.close();
           return;
         }
+        // K_enc is ready — render any history that arrived while it was being
+        // derived (C5).
+        flushHistory();
       }
       // Say which kind of room this turned out to be, now that the handshake
       // has settled it. The page shipped without a claim precisely so this one
@@ -570,6 +612,11 @@
         ready();
         return;
       }
+      if (frame.t === "history" && Array.isArray(frame.msgs)) {
+        pendingHistory = frame.msgs;
+        if (cryptoKey) flushHistory();
+        return;
+      }
       if (frame.t === "msg") {
         show(frame);
         return;
@@ -614,6 +661,15 @@
       roster.clear();
       renderMembers();
 
+      // A deliberate DISCONNECT: the presence is gone server-side; the room
+      // stays for 24h or until everyone else leaves too.
+      if (leaving) {
+        leaving = false;
+        say("YOU LEFT — the room stays for 24h, or until everyone else leaves.");
+        showJoin();
+        return;
+      }
+
       // D8: one close code for every gate refusal — wrong PIN, malformed
       // answer, or a channel locked out by someone else's guessing. The
       // server does not say which, so neither does this.
@@ -623,7 +679,10 @@
           "REFUSED — wrong PIN, or too many attempts on this channel. " +
           "Wait a minute and try again.";
       }
-      say(lastError ?? "DISCONNECTED — the room is gone, or the link dropped.");
+      // Presence model (C5): a dropped link is not the end of the room — it
+      // lives 24h after the last message. The copy says so, and reconnect is
+      // the way back in.
+      say(lastError ?? "LINK DROPPED — you're still in the room. Reconnect to get back in.");
 
       // Offer a button rather than retrying on a timer. An automatic retry
       // against a gated channel spends a lockout attempt every time, so a room
@@ -753,15 +812,44 @@
     if (reconnect) {
       reconnect.hidden = true;
       reconnect.addEventListener("click", () => {
-        // A reconnect is a NEW membership, not a resumption: the room kept no
-        // history and the object may have been evicted and rebuilt while we
-        // were away. The transcript on screen stays as this tab's own record,
+        // A reconnect is a RESUMPTION (C5): the room and this tab's presence
+        // survived the drop. The server skips history replay for a resuming
+        // member, so the transcript on screen stays this tab's own record,
         // with a rule drawn so nobody reads across the gap as one conversation.
         const rule = document.createElement("li");
         rule.className = "chat__line chat__line--rule";
         rule.textContent = "— reconnected —";
         msgs.appendChild(rule);
         connect();
+      });
+    }
+
+    // DISCONNECT (owner 2026-08-10) — the explicit leave. The only thing that
+    // removes this tab's presence server-side; if it was the last one, the
+    // room ends now instead of waiting out its 24h.
+    const disconnectBtn = $("disconnect");
+    if (disconnectBtn) {
+      disconnectBtn.addEventListener("click", () => {
+        leaving = true;
+        try {
+          if (ws && open) ws.send(JSON.stringify({ t: "leave" }));
+        } catch {
+          /* socket already gone */
+        }
+        // Reset this tab's chat state: a fresh presence id next time, so a
+        // rejoin is a clean arrival (with history) rather than a resume.
+        try {
+          window.sessionStorage.removeItem(MEMBER_STORAGE);
+        } catch {
+          /* nothing stored to clear */
+        }
+        msgs.textContent = "";
+        // The server closes the socket; closed() shows the YOU LEFT message.
+        try {
+          if (ws) ws.close(1000, "bye");
+        } catch {
+          /* already closing */
+        }
       });
     }
 
