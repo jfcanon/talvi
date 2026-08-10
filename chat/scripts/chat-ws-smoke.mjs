@@ -394,7 +394,7 @@ async function gateTest(a) {
 
   // 1. create
   let heardFromA = null;
-  const rA = await attempt("gate-a", goodGate, {
+  const rA = await attempt("gatea", goodGate, {
     setgate: true,
     hold: true,
     onReady: (ws) =>
@@ -419,7 +419,7 @@ async function gateTest(a) {
   // artifact actually emits is the point; a hand-tuned frame would pass while
   // the browser failed.
   let bSocket = null;
-  const rB = await attempt("gate-b", goodGate, {
+  const rB = await attempt("gateb", goodGate, {
     setgate: true,
     hold: true,
     onReady: (ws) => {
@@ -450,16 +450,16 @@ async function gateTest(a) {
   expect("gated channel relays a sealed message", heardFromA, "gated-hello");
 
   // 4. wrong PIN refused
-  const rC = await attempt("gate-c", badGate);
+  const rC = await attempt("gatec", badGate);
   expect("wrong PIN refused 4003", rC, "closed:4003");
 
   // 5. four more wrong answers arms the lockout (5 total, D8)
   for (let i = 0; i < 4; i += 1) {
-    await attempt("gate-x" + i, badGate);
+    await attempt("g" + "abcde"[i], badGate);
   }
 
   // 6. correct PIN is now refused too — that is the lockout, not the PIN
-  const rLocked = await attempt("gate-good-but-locked", goodGate);
+  const rLocked = await attempt("goody", goodGate);
   expect("correct PIN refused while locked out", rLocked, "closed:4003");
 
   for (const ws of held) ws.close();
@@ -557,11 +557,11 @@ async function e2eTest(a) {
     });
   }
 
-  const A = await member("e2e-a");
+  const A = await member("alice");
   expect("A creates the gated channel", A.result === "ready", A.result);
 
   const wire = []; // every raw frame the server sent to B
-  const B = await member("e2e-b", (raw) => wire.push(raw));
+  const B = await member("bob", (raw) => wire.push(raw));
   expect("B joins with the same PIN", B.result === "ready", B.result);
 
   // A speaks, sealed.
