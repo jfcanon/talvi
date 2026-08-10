@@ -36,7 +36,7 @@ const APPS = [
   {
     glyph: "◈",
     label: "CINTO",
-    href: "https://cinto.ygdcbtmc4u.uk",
+    href: "/cinto",
     title: "Cinto — compliance",
   },
   {
@@ -78,7 +78,14 @@ function bladeItems() {
   ).join("");
 }
 
-export function hubPage() {
+export function hubPage({ authed } = {}) {
+  // The login control: a plain link, so it works with no JS. Signed out →
+  // SIGN IN at /sign-in; signed in → SIGN OUT at /api/signout (revoke + drop
+  // the __session cookie). The relay's gate verifies the same host-wide cookie.
+  const login =
+    authed
+      ? '<a class="blade__login" href="/api/signout" aria-label="sign out">SIGN OUT</a>'
+      : '<a class="blade__login" href="/sign-in" aria-label="sign in">SIGN IN</a>';
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -104,11 +111,9 @@ export function hubPage() {
     '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="blade" aria-label="expand rail">' +
     "»" +
     "</button>" +
-    // Login control at the bottom (placeholder — auth on app.* is Cloudflare
-    // Access at the edge; when Clerk lands this becomes the real gate).
-    '<button class="blade__login" type="button" aria-label="sign in">' +
-    "⏻" +
-    "</button>" +
+    // Login control at the bottom — SIGN IN / SIGN OUT depending on the
+    // host-wide __session cookie (the auth state the worker passed in).
+    login +
     "</nav>" +
     // The HUD: the terminal prompt (echoes a hovered cube) and the hint.
     '<div class="hud">' +

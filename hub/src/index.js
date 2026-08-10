@@ -12,8 +12,23 @@
 //     (A security decision driving a build decision, A11).
 import { H_CSS, H_JS } from "./generated/assets.js";
 import { hubPage } from "./ui/hubpage.js";
+import { isAuthenticated, getSessionId, revokeSession, getPublishableKey } from "./lib/auth.js";
+import { signInPage, ssoCallbackPage, signInCsp } from "./ui/signin.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
+
+// A fresh CSP nonce for the two clerk-js pages (/sign-in, /sso-callback).
+// 18 random bytes base64url-encoded — no entropy from the request, nothing
+// derivable from any header. Workers has no node:crypto; getRandomValues is
+// the platform's CSPRNG.
+function nonce() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
 
 // Same header set green uses. The CSP has no inline style/script allowances —
 // which is WHY css/js live at /h.css and /h.js instead of being inlined.
@@ -74,7 +89,62 @@ export default {
     if (pathname === "/h.js") return assetResponse(H_JS, "text/javascript; charset=utf-8");
 
     if (pathname === "/") {
-      return new Response(hubPage(), { headers: HTML_HEADERS });
+      // The front door knows whether this visitor is signed in, so the blade
+      // login control can say SIGN IN or SIGN OUT (the 3D welcome page itself
+      // is the hub session's design; this is the auth state it needs).
+      const authed = await isAuthenticated(request, env);
+      return new Response(hubPage({ authed }), { headers: HTML_HEADERS });
+    }
+
+    // "/sign-in" and "/sso-callback" — the two clerk-js pages (s7 handover §4).
+    // The ONLY pages whose CSP widens to the strict nonce + strict-dynamic
+    // Clerk CSP (signInCsp); everything else keeps HTML_HEADERS byte-for-byte.
+    // An already-authenticated visitor to /sign-in is bounced straight home.
+    if (pathname === "/sign-in") {
+      if (await isAuthenticated(request, env)) {
+        return Response.redirect(new URL("/", request.url).toString(), 302);
+      }
+      const n = nonce();
+      return new Response(signInPage({ publishableKey: getPublishableKey(env), nonce: n }), {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "content-security-policy": signInCsp(n),
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+          "x-robots-tag": ROBOTS_TAG,
+        },
+      });
+    }
+
+    if (pathname === "/sso-callback") {
+      const n = nonce();
+      return new Response(ssoCallbackPage({ publishableKey: getPublishableKey(env), nonce: n }), {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "content-security-policy": signInCsp(n),
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+          "x-robots-tag": ROBOTS_TAG,
+        },
+      });
+    }
+
+    // GET /api/signout — a link target (works with JS off): revoke the active
+    // session on Clerk's side, drop the __session cookie, send the browser
+    // home.
+    if (pathname === "/api/signout") {
+      const sessionId = await getSessionId(request, env);
+      if (sessionId) await revokeSession(env, sessionId);
+      const headers = new Headers({
+        Location: "/",
+      });
+      // Clearing the cookie is the important half: the browser must stop
+      // sending it even if Clerk's revocation round-trip fails. Same flags
+      // Clerk sets — __session is HttpOnly and SameSite=Lax.
+      headers.append("Set-Cookie", "__session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax");
+      return new Response(null, { status: 302, headers });
     }
 
     // /agent/ws — the agent's WebSocket surface (blueprint PR2). Handled

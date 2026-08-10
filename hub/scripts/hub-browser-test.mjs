@@ -22,7 +22,7 @@ const base = process.argv[2] ?? "https://app.ygdcbtmc4u.uk";
 const EXPECTED_NODES = {
   relay: "https://app.ygdcbtmc4u.uk/relay",
   chat: "https://app.ygdcbtmc4u.uk/chat",
-  cinto: "https://cinto.ygdcbtmc4u.uk",
+  cinto: "/cinto",
 };
 
 // Cloudflare injects its Browser Insights beacon into HTML at the edge on the
