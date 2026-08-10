@@ -1,28 +1,43 @@
-// Hub asset pipeline (A0). Same shape as green's scripts/build-assets.mjs —
-// embeds the hub's /h.css and /h.js as plain JS string exports so the worker
-// serves them without a file read and without inlining anything in HTML
-// (CSP default-src 'none': a security decision driving a build decision).
+// Hub asset pipeline (A5). Same shape as the 3d site's scripts/build-assets.mjs
+// — bundles the client (three.js + the scene modules + the blade logic) with
+// esbuild, then embeds the CSS and the JS bundle as plain JS string exports so
+// the worker serves them without a file read and without inlining anything in
+// HTML (CSP default-src 'none': a security decision driving a build decision).
 //
 // JSON.stringify does the escaping — template literals are deliberately
 // avoided because CSS/JS containing backticks or ${ would corrupt them.
 //
-// ASSET_VERSION is a hash of the two assets' bytes. The welcome page appends
-// it to /h.css and /h.js as ?v=..., which is what lets those fixed URLs carry
-// an immutable year-long cache safely: the URL changes whenever the content
-// does.
+// ASSET_VERSION is a hash of the two assets' bytes. The page appends it to
+// /h.css and /h.js as ?v=..., which is what lets those fixed URLs carry an
+// immutable year-long cache safely: the URL changes whenever the content does.
 //
 // Determinism matters here beyond tidiness: the built worker is a Terraform
 // input, so any run-to-run variation surfaces as a perpetual plan diff. Same
 // bytes in, same hash out — no clock, no randomness, no filesystem ordering.
+import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const outdir = join(root, "dist");
 
+// Bundle the client (three + scene + blade). Entry is src/ui/client.js.
+await build({
+  entryPoints: [join(root, "src/ui/client.js")],
+  outfile: join(outdir, "client-bundle.js"),
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  minify: true,
+  legalComments: "none",
+  target: ["es2020"],
+  logLevel: "warning",
+});
+
+const js = await readFile(join(outdir, "client-bundle.js"), "utf8");
 const css = await readFile(join(root, "src/ui/style.css"), "utf8");
-const js = await readFile(join(root, "src/ui/client.js"), "utf8");
 
 const version = createHash("sha256")
   .update(css)
@@ -40,6 +55,6 @@ const out =
 await mkdir(join(root, "src/generated"), { recursive: true });
 await writeFile(join(root, "src/generated/assets.js"), out);
 console.log(
-  `build-assets: src/generated/assets.js written ` +
-    `(v=${version}, css ${css.length}B, js ${js.length}B)`,
+  `build-assets: client ${js.length}B, css ${css.length}B, ` +
+    `v=${version}, total worker payload ~${(js.length + css.length) / 1024 | 0} KiB raw`,
 );

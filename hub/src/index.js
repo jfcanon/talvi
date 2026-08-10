@@ -1,9 +1,9 @@
-// talvi hub Worker — the power-app front door (A1).
+// talvi hub Worker — the power-app front door (A1, now the 3D hub).
 //
-// A0 proved the pipeline with an inert skeleton. A1 claims "/" with the
-// welcome page + retractable blade. Everything not claimed by a more-specific
-// route (or a future app worker) is the uniform 404, so a not-yet-migrated
-// route looks exactly like broken routing.
+// P1: "/" claims the 3D hub — the talvi world with the blade on top and one
+// instrument per app (plans/talvi-3d-hub-blueprint.md). Everything not claimed
+// by a more-specific route (or a future app worker) is the uniform 404, so a
+// not-yet-migrated route looks exactly like broken routing.
 //
 // The full architecture is in plans/talvi-hub-blueprint.md:
 //   - hub worker owns app.ygdcbtmc4u.uk/* (the `/*` fallback)
@@ -11,7 +11,7 @@
 //   - CSP default-src 'none': css/js live at /h.css /h.js, never inlined
 //     (A security decision driving a build decision, A11).
 import { H_CSS, H_JS } from "./generated/assets.js";
-import { welcomePage } from "./ui/hubpage.js";
+import { hubPage } from "./ui/hubpage.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
 
@@ -74,7 +74,7 @@ export default {
     if (pathname === "/h.js") return assetResponse(H_JS, "text/javascript; charset=utf-8");
 
     if (pathname === "/") {
-      return new Response(welcomePage(), { headers: HTML_HEADERS });
+      return new Response(hubPage(), { headers: HTML_HEADERS });
     }
 
     // Bare app-root paths for the path-mounted apps. Cloudflare's route

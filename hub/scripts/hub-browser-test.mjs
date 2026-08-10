@@ -1,4 +1,5 @@
-// talvi hub — browser test (A1 verify). Run against the live production hub:
+// talvi hub — browser test (P1, the 3D hub). Run against the live production
+// hub:
 //
 //   npm i --no-save playwright-core   # already present in green's node_modules
 //   node scripts/hub-browser-test.mjs [base-url]
@@ -6,16 +7,20 @@
 // It exits 2 with instructions if playwright-core is absent, so a missing dep
 // never reads as a failing test.
 //
-// Covers, live in a real browser: the blade renders, retract toggles the rail
-// open/closed and persists, each icon href targets the right app, the page
-// raises ZERO CSP violations, and no network error blocks the page.
+// Covers, live in a real browser: the page 200s, the 3D world boots (WebGL),
+// the five scroll sections exist, the blade renders and retracts, every app
+// href targets the right worker (the instrument plates AND the blade agree),
+// the END closing CTA is present, the uniform 404 and the /chat+/relay
+// trailing-slash redirects hold, and the page raises ZERO own-page CSP
+// violations (the edge-injected beacon is reported separately).
 import { chromium } from "playwright-core";
 
 const base = process.argv[2] ?? "https://app.ygdcbtmc4u.uk";
 
+// Post-migration targets (hub blueprint: apps mount at app.* paths).
 const EXPECTED_LINKS = {
-  TALVI: "https://talvi.ygdcbtmc4u.uk",
-  CHAT: "https://talvi.ygdcbtmc4u.uk/chat",
+  TALVI: "https://app.ygdcbtmc4u.uk/relay",
+  CHAT: "https://app.ygdcbtmc4u.uk/chat",
   CINTO: "https://cinto.ygdcbtmc4u.uk",
 };
 
@@ -47,58 +52,96 @@ const violations = [];
 const injected = [];
 page.on("console", (msg) => {
   const text = msg.text();
-  // CSP violations surface as console errors mentioning Content Security Policy.
-  // Everything else an error-level console message says is a genuine page bug.
   if (/content security policy|refused to (load|execute|apply|connect)/i.test(text)) {
     (EDGE_INJECTED.test(text) ? injected : violations).push(text);
   }
 });
-// pageerror is always a real bug — the edge beacon never produces one.
 page.on("pageerror", (err) => violations.push(`pageerror: ${err.message}`));
 
 try {
+  // --- static routes -------------------------------------------------------
+  for (const [name, path, expect] of [
+    ["healthz", "/healthz", 200],
+    ["css", "/h.css", 200],
+    ["js", "/h.js", 200],
+    ["uniform 404", "/does-not-exist", 404],
+  ]) {
+    const r = await page.request.get(base + path);
+    check(`${name} (${path})`, r.status() === expect, `expected ${expect}, got ${r.status()}`);
+    if (name === "css")
+      check("css content-type", r.headers()["content-type"].startsWith("text/css"));
+    if (name === "js")
+      check("js content-type", r.headers()["content-type"].startsWith("text/javascript"));
+  }
+
+  const chat = await page.request.get(base + "/chat", { maxRedirects: 0 });
+  const relay = await page.request.get(base + "/relay", { maxRedirects: 0 });
+  check("bare /chat 301 → /chat/", chat.status() === 301 && chat.headers()["location"].endsWith("/chat/"), `${chat.status()} ${chat.headers()["location"]}`);
+  check("bare /relay 301 → /relay/", relay.status() === 301 && relay.headers()["location"].endsWith("/relay/"), `${relay.status()} ${relay.headers()["location"]}`);
+
+  // --- the page ------------------------------------------------------------
   await page.goto(base, { waitUntil: "load", timeout: 30000 });
+  await page.waitForTimeout(1000); // let the scene boot + a frame render
 
   check("page loads with title talvi", (await page.title()) === "talvi");
-  check("blade nav present", (await page.locator(".blade").count()) === 1);
+  check("five scroll sections", (await page.locator("section.chapter").count()) === 5);
 
+  const world = await page.evaluate(() => {
+    const canvas = document.getElementById("scene");
+    const gl = canvas ? canvas.getContext("webgl2") || canvas.getContext("webgl") : null;
+    return { canvas: !!canvas, webgl: !!gl };
+  });
+  check("webgl world boots", world.canvas && world.webgl);
+
+  // --- the blade -----------------------------------------------------------
+  check("blade nav present", (await page.locator(".blade").count()) === 1);
   const labels = await page.locator(".blade__label").allTextContents();
   check(
     "blade shows 3 apps + future slot",
     labels.length === 4 && labels[3].toLowerCase() === "more",
     labels.join(","),
   );
-
-  // Every expected app is an anchor to the right home.
   for (const [name, href] of Object.entries(EXPECTED_LINKS)) {
     const target = await page.locator(`.blade__item[href="${href}"]`).count();
-    check(`icon ${name} links ${href}`, target === 1);
+    check(`blade ${name} links ${href}`, target === 1);
   }
   check("future slot is not a link", (await page.locator(".blade__item.is-slot").count()) === 1);
 
-  // Blade collapses/expands and remembers the state; the toggle label says
-  // what the next click does.
-  const hub = page.locator("#hub");
+  const blade = page.locator(".blade");
   const toggle = page.locator(".blade__toggle");
-  check("blade starts collapsed", !(await hub.evaluate((el) => el.classList.contains("is-open"))));
-  check("closed toggle reads expand", (await toggle.textContent()).toLowerCase() === "expand");
+  check("blade starts collapsed", !(await blade.evaluate((el) => el.classList.contains("is-open"))));
   await toggle.click();
-  check("blade opens on toggle", await hub.evaluate((el) => el.classList.contains("is-open")));
-  check("open toggle reads retract", (await toggle.textContent()).toLowerCase() === "retract");
+  check("blade opens on toggle", await blade.evaluate((el) => el.classList.contains("is-open")));
   await toggle.click();
-  check("blade closes on second toggle", !(await hub.evaluate((el) => el.classList.contains("is-open"))));
-  check("closed toggle reads expand again", (await toggle.textContent()).toLowerCase() === "expand");
+  check("blade closes on second toggle", !(await blade.evaluate((el) => el.classList.contains("is-open"))));
 
-  // Mobile: the blade becomes a horizontal icon rail and the retract toggle
-  // disappears (no side rail to open on a phone).
+  // --- the instruments (world control plates) ------------------------------
+  const plateHrefs = await page.locator("a.plate").evaluateAll((els) =>
+    els.map((a) => a.getAttribute("href")),
+  );
+  const expectedPlateHrefs = Object.values(EXPECTED_LINKS);
+  check(
+    "instrument plates = one per app",
+    plateHrefs.length === 3 && expectedPlateHrefs.every((h) => plateHrefs.includes(h)),
+    plateHrefs.join(","),
+  );
+  check("END closing CTA present", (await page.locator("#end .btn").count()) === 1);
+
+  // --- scroll drives the world ---------------------------------------------
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(300);
+  check("scroll drives the world", await page.evaluate(() => window.scrollY > 0));
+
+  // --- mobile --------------------------------------------------------------
   await page.setViewportSize({ width: 375, height: 667 });
   await page.reload({ waitUntil: "load", timeout: 30000 });
+  await page.waitForTimeout(600);
   check("mobile hides the retract toggle", (await page.locator(".blade__toggle").isVisible()) === false);
   check("mobile shows the icon rail", (await page.locator(".blade__item").count()) === 4);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.reload({ waitUntil: "load", timeout: 30000 });
 
-  // Zero CSP violations from OUR page (the edge beacon is reported separately).
+  // --- CSP -----------------------------------------------------------------
   check("zero own CSP violations", violations.length === 0, violations.join(" | ").slice(0, 300));
   check("no third-party script injected by the edge", injected.length === 0,
     injected.length

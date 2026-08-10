@@ -795,17 +795,22 @@ Filter the apply by your own HEAD sha:
 
 ## 10. Hub — app.ygdcbtmc4u.uk (the power-app front door)
 
-The talvi power app (blueprint: `plans/talvi-hub-blueprint.md`). The hub is a
-welcome page + retractable blade whose mini icons link to each app. It lives in
-`hub/` — its own worker, own state key, own CI workflow — and owns the `/*`
-fallback route on `app.*`. The relay, chat, and cinto mount at more-specific
-paths later (most-specific-pattern wins).
+The talvi power app (blueprints: `plans/talvi-hub-blueprint.md` +
+`plans/talvi-3d-hub-blueprint.md`). The hub is now **the 3D front door**: a
+fixed WebGL world (the talvi scene — sign, rain, fog, grid) with the flat
+blade rail on top and one glowing instrument per app, scroll through the
+world or jump from the blade. It lives in `hub/` — its own worker, own state
+key, own CI workflow — and owns the `/*` fallback route on `app.*`. The relay,
+chat, and cinto mount at more-specific paths (most-specific-pattern wins).
 
 ### Live URL
-`https://app.ygdcbtmc4u.uk` — `/healthz` is the uptime check; `/` is the blade.
+`https://app.ygdcbtmc4u.uk` — `/healthz` is the uptime check; `/` is the 3D
+hub. The standalone style study lives on at `3d.ygdcbtmc4u.uk` (public, no
+Access) — same scene module, two hosts (A6).
 
 ### How to change the hub
-1. Edit `hub/src/` (pages + blade) and/or `hub/main.tf` (infrastructure).
+1. Edit `hub/src/` (scene modules in `hub/src/scene/`, page + blade in
+   `hub/src/ui/`) and/or `hub/main.tf` (infrastructure).
 2. PR → `terraform-hub.yml` runs `plan`; merge → `apply`. Terraform never runs
    locally. The hub worker is `content = file(dist/index.js)`, rebuilt by
    `npm run build` in CI — so a src edit plans as "1 to change" on the worker.
@@ -818,6 +823,13 @@ paths later (most-specific-pattern wins).
    The one expected red line is the Cloudflare Browser Insights beacon (see
    below). Zero *own-page* CSP violations must hold.
 
+### The scene
+The camera path is the two Catmull-Rom curves in `hub/src/scene/scroll.js`
+(five sections: SIGN, RELAY, CHAT, CINTO, END); the panels sit at the
+positions in `hub/src/scene/world.js`. `three` is pinned exact (0.185.1) and
+bundled into `/h.js` by `build-assets.mjs`. Keep the worker under the free-plan
+~3 MB gzip budget — it is ~140 KiB gzip today.
+
 ### The Cloudflare Browser Insights beacon
 The edge injects `static.cloudflareinsights.com/beacon.min.js` into HTML on
 real browser navigations on this zone. The CSP blocks it (correctly), and the
@@ -826,9 +838,10 @@ feature (Web Analytics / Browser Insights) in the Cloudflare dashboard — never
 add the host to `script-src`.** It is injected on `app.*` and `talvi.*` alike.
 
 ### Add a future app
-One row in `hub/src/ui/hubpage.js` (`APPS`), plus its own worker mounted at a
-more-specific route. When an app migrates to `app.*/<path>`, update its blade
-href in the same PR.
+One row in `hub/src/ui/hubpage.js` (`APPS` for the blade, `INSTRUMENTS` for the
+world), a matching panel position in `hub/src/scene/world.js`, plus its own
+worker mounted at a more-specific route. When an app migrates to `app.*/<path>`,
+update its blade + instrument hrefs in the same PR.
 
 ### CSP
 `default-src 'none'`; assets are self-hosted, versioned (`/h.css?v=`,
