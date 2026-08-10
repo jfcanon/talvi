@@ -14,12 +14,12 @@
 //   /chat                 landing page
 //   /chat/<name>          room page
 //   /chat/<name>/ws       WebSocket → ChatChannel DO
-//   /chat/s.css /s.js /s.png   assets (path-prefixed, A11)
+//   /chat/s.css /s.js   assets (path-prefixed, A11)
 //   /chat/healthz         uptime
 //   scheduled 03:00 UTC   the nightly purge (blueprint L8: the chat worker
 //                         owns it — it is a plain Worker and can hold a
 //                         scheduled handler; the Next.js worker cannot).
-import { STYLE_CSS, CLIENT_JS, SPRITE_PNG_B64, ASSET_VERSION } from "./generated/assets.js";
+import { STYLE_CSS, CLIENT_JS, ASSET_VERSION } from "./generated/assets.js";
 import { chatLandingPage, chatRoomPage } from "./ui/chatpage.js";
 import { notFoundPage } from "./ui/notfound.js";
 import { isValidChannelName } from "./chat/name.js";
@@ -44,27 +44,6 @@ const HTML_HEADERS = {
 };
 
 const ASSET_CACHE = "public, max-age=31536000, immutable";
-
-let spriteBytes = null;
-function getSprite() {
-  if (spriteBytes) return spriteBytes;
-  const bin = atob(SPRITE_PNG_B64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  spriteBytes = out;
-  return spriteBytes;
-}
-
-function handleSprite() {
-  return new Response(getSprite(), {
-    headers: {
-      "content-type": "image/png",
-      "cache-control": ASSET_CACHE,
-      "x-content-type-options": "nosniff",
-      "x-robots-tag": ROBOTS_TAG,
-    },
-  });
-}
 
 function handleAsset(pathname) {
   const isCss = pathname.endsWith("/s.css");
@@ -150,7 +129,6 @@ export default {
         return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
       }
       if (p.endsWith("/s.css") || p.endsWith("/s.js")) return handleAsset(p);
-      if (p.endsWith("/s.png")) return handleSprite();
 
       const ws = CHAT_WS_ROUTE.exec(p);
       if (ws) {

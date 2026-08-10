@@ -28,7 +28,7 @@ import { shell } from "./blade.js";
 // Chat pages always get the shared shell (the persistent blade + this content
 // as the panel) — chat is an app, and the blade is what makes switching apps
 // read as one app. `shell: false` is not used here.
-export function renderPage(title, { lede, content, script = false }) {
+export function renderPage(title, { lede, content, script = false, backdrop = false }) {
   const v = encodeURIComponent(ASSET_VERSION);
 
   // The instrument: the framed readout that is the chat panel.
@@ -48,8 +48,11 @@ export function renderPage(title, { lede, content, script = false }) {
     "</main>" +
     "</div></div>";
 
-  // The body: ambient layers, then the shell (blade + panel).
+  // The body: the quiet 3D backdrop (same as /talvi, only when the page opts
+  // in) sits beneath everything, then the ambient layers, then the shell
+  // (blade + panel).
   const body =
+    (backdrop ? '<canvas id="backdrop" aria-hidden="true"></canvas>' : "") +
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +

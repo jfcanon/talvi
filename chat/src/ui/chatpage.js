@@ -83,6 +83,8 @@ export function chatLandingPage() {
       "log, no history, gone when the room empties.",
     content,
     script: true,
+    // The quiet 3D world behind the panel, like /talvi.
+    backdrop: true,
   });
 }
 
@@ -148,5 +150,7 @@ export function chatRoomPage(name) {
       "last person leaves.",
     content,
     script: true,
+    // The quiet 3D world behind the panel, like /talvi.
+    backdrop: true,
   });
 }
