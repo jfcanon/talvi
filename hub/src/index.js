@@ -54,7 +54,7 @@ function notFound() {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const { pathname } = new URL(request.url);
 
     // GET-only for now. HEAD is routed as GET by Cloudflare; anything else is
@@ -77,6 +77,18 @@ export default {
       return new Response(hubPage(), { headers: HTML_HEADERS });
     }
 
+    // /agent/ws — the agent's WebSocket surface (blueprint PR2). Handled
+    // before the trailing-slash redirects and the 404: it is a GET with an
+    // Upgrade header (an HTTP upgrade is not a page navigation), so it never
+    // collides with the app-root redirects below. One agent per name (the
+    // owner's prototype agent is "main"); the DO owns a workspace and a chat
+    // loop. Mirror of chat's /chat/<name>/ws route — same plain-route shape,
+    // same CSP (connect-src 'self' permits the same-origin upgrade).
+    if (pathname === "/agent/ws") {
+      const stub = env.AGENT.getByName("main");
+      return stub.fetch(request);
+    }
+
     // Bare app-root paths for the path-mounted apps. Cloudflare's route
     // specificity for an exact route plus a `/*` route on the same worker is
     // inconsistent on the bare path (the hub's `/*` fallback wins /chat while
@@ -92,3 +104,9 @@ export default {
     return notFound();
   },
 };
+
+// The AgentDO Durable Object must be a NAMED export of the deployed module for
+// the runtime to instantiate it (the AGENT binding in main.tf references it by
+// class name). Re-exporting here is what makes esbuild keep it in the bundle
+// with its export visible. Same shape as chat's ChatChannel re-export.
+export { AgentDO } from "./agent/agentdo.js";

@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js",
+    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --external:cloudflare:* --external:node:* --outfile=dist/index.js",
+    "test:agent": "node scripts/run-agent-tests.mjs",
     "test:hub": "node scripts/hub-browser-test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
   },
   "dependencies": {
+    "@cloudflare/computer": "^0.1.1",
     "three": "0.185.1"
   }
 }
