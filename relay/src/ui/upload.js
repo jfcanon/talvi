@@ -58,7 +58,7 @@ export function uploadPage({ authed } = {}) {
       content:
         '<div class="panel">' +
         '<div class="tagline"><span class="tagline__box">input</span></div>' +
-        '<a class="btn" href="' + PREFIX + '/sign-in">SIGN IN</a>' +
+        '<a class="btn" href="/sign-in">SIGN IN</a>' +
         '<p class="msg">The write path is gated on your session. Read links ' +
         "need no account — anyone with a link can download until it expires.</p>" +
         "</div>",

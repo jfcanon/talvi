@@ -20,8 +20,7 @@ import { newSlug, isValidSlug } from "./slug.js";
 import { sanitiseFilename, validateContentType } from "./sanitise.js";
 import { sniffImageKind, imageMime } from "./sniff.js";
 import { PREFIX } from "./prefix.js";
-import { isAuthenticated, getSessionId, revokeSession, getPublishableKey } from "./lib/auth.js";
-import { signInPage, ssoCallbackPage, signInCsp } from "./ui/signin.js";
+import { isAuthenticated } from "./lib/auth.js";
 import {
   GATE_MAX_FAILS,
   GATE_LOCKOUT_MS,
@@ -106,19 +105,6 @@ function json(body, status = 200) {
       "x-content-type-options": "nosniff",
     },
   });
-}
-
-// A fresh CSP nonce for the two clerk-js pages (/sign-in, /sso-callback).
-// 18 random bytes base64url-encoded — no entropy from the request, nothing
-// derivable from any header. Workers has no node:crypto; getRandomValues is
-// the platform's CSPRNG.
-function nonce() {
-  const bytes = new Uint8Array(18);
-  crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
 }
 
 // Checks are ordered cheapest-first: no-side-effect validation before any write.
@@ -850,7 +836,7 @@ async function route(request, method, env, ctx) {
     if (stripped === "/api/upload" && method === "POST") {
       if (!(await isAuthenticated(request, env))) {
         return json(
-          { error: "unauthorized; sign in at " + PREFIX + "/sign-in" },
+          { error: "unauthorized; sign in at /sign-in" },
           401,
         );
       }
@@ -907,62 +893,13 @@ async function routePage(request, env, ctx, pathname) {
     return new Response(closedPage(), { status: 503, headers: HTML_HEADERS });
   }
 
-  // "/" — the upload page (Step 5). Public in the green release; the POST is
-  // gated on a Clerk session, so the page renders for everyone but its state
-  // (and the SIGN OUT affordance) depends on whether this visitor is signed in.
+  // The write path is gated on a Clerk session, so the page renders for
+  // everyone but its state (and the SIGN OUT affordance) depends on whether
+  // this visitor is signed in. Sign-in itself lives at the app ROOT (/sign-in,
+  // the hub worker) — the relay only verifies the host-wide __session cookie.
   if (pathname === "/") {
     const authed = await isAuthenticated(request, env);
     return new Response(uploadPage({ authed }), { status: 200, headers: HTML_HEADERS });
-  }
-
-  // "/sign-in" and "/sso-callback" — the two clerk-js pages (s7 handover §4).
-  // The ONLY pages whose CSP widens to the strict nonce + strict-dynamic Clerk
-  // CSP (signInCsp); everything else keeps HTML_HEADERS byte-for-byte. An
-  // already-authenticated visitor to /sign-in is bounced straight home.
-  if (pathname === "/sign-in") {
-    if (await isAuthenticated(request, env)) {
-      return Response.redirect(new URL(PREFIX + "/", request.url).toString(), 302);
-    }
-    const n = nonce();
-    return new Response(signInPage({ publishableKey: getPublishableKey(env), nonce: n }), {
-      status: 200,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "content-security-policy": signInCsp(n),
-        "x-content-type-options": "nosniff",
-        "referrer-policy": "no-referrer",
-        "x-robots-tag": ROBOTS_TAG,
-      },
-    });
-  }
-
-  if (pathname === "/sso-callback") {
-    const n = nonce();
-    return new Response(ssoCallbackPage({ publishableKey: getPublishableKey(env), nonce: n }), {
-      status: 200,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "content-security-policy": signInCsp(n),
-        "x-content-type-options": "nosniff",
-        "referrer-policy": "no-referrer",
-        "x-robots-tag": ROBOTS_TAG,
-      },
-    });
-  }
-
-  // GET /api/signout — a link target (works with JS off): revoke the active
-  // session on Clerk's side, drop the __session cookie, send the browser home.
-  if (pathname === "/api/signout") {
-    const sessionId = await getSessionId(request, env);
-    if (sessionId) await revokeSession(env, sessionId);
-    const headers = new Headers({
-      Location: PREFIX + "/",
-    });
-    // Clearing the cookie is the important half: the browser must stop sending
-    // it even if Clerk's revocation round-trip fails. Same flags Clerk sets —
-    // __session is HttpOnly and SameSite=Lax; Secure is implied on HTTPS.
-    headers.append("Set-Cookie", "__session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax");
-    return new Response(null, { status: 302, headers });
   }
 
   // GET /relay/api/upload — a leftover from the Access era (Access redirected

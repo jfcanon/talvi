@@ -47,10 +47,6 @@ variable "clerk_secret_key" {
   type = string
 }
 
-variable "clerk_publishable_key" {
-  type = string
-}
-
 variable "clerk_jwt_key" {
   type = string
 }
@@ -114,21 +110,15 @@ resource "cloudflare_workers_script" "talvi_relay" {
       name = "AI"
     },
 
-    # Clerk auth (port of blue's PR 3 bindings). CLERK_SECRET_KEY is a
-    # secret_text binding (never in state); CLERK_PUBLISHABLE_KEY and
-    # CLERK_JWT_KEY are public by design. The worker verifies the __session
-    # cookie locally via @clerk/backend using jwtKey — no network per request,
-    # no clerk-js on any page except /sign-in and /sso-callback, no CSP change
-    # anywhere else.
+    # Clerk auth (port of blue's PR 3 bindings, minus the publishable key —
+    # the relay no longer serves clerk-js pages; sign-in lives at the app root).
+    # CLERK_SECRET_KEY is a secret_text binding (never in state);
+    # CLERK_JWT_KEY is public by design. The worker verifies the __session
+    # cookie locally via @clerk/backend using jwtKey — no network per request.
     {
       type = "secret_text"
       name = "CLERK_SECRET_KEY"
       text = var.clerk_secret_key
-    },
-    {
-      type = "plain_text"
-      name = "CLERK_PUBLISHABLE_KEY"
-      text = var.clerk_publishable_key
     },
     {
       type = "plain_text"

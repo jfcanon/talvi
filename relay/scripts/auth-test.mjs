@@ -59,11 +59,11 @@ async function post(path) {
 }
 
 // 1. Fail-closed upload gate: no Clerk bindings → every upload is 401, and the
-//    body says where to sign in.
+//    body says where to sign in (the app root).
 {
   const u = await post("/relay/api/upload");
   check("upload without Clerk bindings → 401", u.status === 401, "status=" + u.status);
-  check("401 names the sign-in path", u.text.includes("/relay/sign-in"), u.text);
+  check("401 names the root sign-in path", u.text.includes("/sign-in"), u.text);
 }
 
 // 2. Public read paths still render for everyone (no session required).
@@ -71,40 +71,24 @@ async function post(path) {
   const root = await get("/relay/");
   check("upload page renders 200", root.status === 200);
   check("upload page shows SESSION CLOSED when signed out", root.text.includes("SESSION CLOSED"), root.text.slice(0, 200));
-  check("upload page offers SIGN IN", root.text.includes("/relay/sign-in"));
+  check("upload page SIGN IN points at the app root", root.text.includes('href="/sign-in"'));
 
   const assets = await get("/relay/s.css");
   check("stylesheet renders", assets.status === 200 && assets.headers.get("content-type").includes("text/css"));
 }
 
-// 3. Sign-in + sso-callback pages: 200, the strict nonce Clerk CSP, no
-//    unsafe-inline, and the PREFIX-aware form/link paths.
+// 3. The relay no longer serves sign-in pages — those live at the app root
+//    (the hub worker). A direct hit is a uniform 404.
 {
   const si = await get("/relay/sign-in");
-  check("sign-in page renders 200", si.status === 200, "status=" + si.status);
-  const csp = si.headers.get("content-security-policy") || "";
-  check("sign-in CSP is nonce + strict-dynamic", csp.includes("'nonce-") && csp.includes("'strict-dynamic'"), csp);
-  check("sign-in CSP has no unsafe-inline/eval", !csp.includes("unsafe-inline") && !csp.includes("unsafe-eval"));
-  check("sign-in form present", si.text.includes('id="si-form"'));
-  check("sign-in points clerk-js at the instance", si.text.includes("clerk.ygdcbtmc4u.uk/npm/@clerk/clerk-js"));
-  check("sign-in stylesheet is PREFIX-pathed", si.text.includes('href="/relay/s.css'));
-
+  check("relay no longer serves /sign-in", si.status === 404, "status=" + si.status);
   const cb = await get("/relay/sso-callback");
-  check("sso-callback renders 200", cb.status === 200, "status=" + cb.status);
-  const cbCsp = cb.headers.get("content-security-policy") || "";
-  check("sso-callback CSP is nonce + strict-dynamic", cbCsp.includes("'nonce-") && cbCsp.includes("'strict-dynamic'"));
-}
-
-// 4. Signout: even without a session, GET /api/signout clears the __session
-//    cookie and redirects home (the revoke step is best-effort).
-{
+  check("relay no longer serves /sso-callback", cb.status === 404, "status=" + cb.status);
   const so = await get("/relay/api/signout");
-  check("signout → 302", so.status === 302, "status=" + so.status);
-  check("signout redirects to /relay/", (so.headers.get("location") || "").endsWith("/relay/"), so.headers.get("location"));
-  check("signout clears __session", (so.headers.get("set-cookie") || "").includes("__session=; Max-Age=0"), so.headers.get("set-cookie"));
+  check("relay no longer serves /api/signout", so.status === 404, "status=" + so.status);
 }
 
-// 5. The healthz/robots endpoints are untouched by the gate.
+// 4. The healthz/robots endpoints are untouched by the gate.
 {
   const h = await get("/relay/healthz");
   check("healthz still 200", h.status === 200);

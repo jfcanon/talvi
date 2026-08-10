@@ -104,12 +104,12 @@ export function bladeNav(active) {
     '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="shell" aria-label="expand rail">' +
     "»" +
     "</button>" +
-    // Login control at the bottom. A placeholder for now: auth on app.* is
-    // Cloudflare Access at the edge (no in-app session); when Clerk lands
-    // (backlog B3) this becomes the real gate.
-    '<button class="blade__login" type="button" aria-label="sign in">' +
+    // Login control at the bottom. Points at the app ROOT sign-in (the hub
+    // worker owns /sign-in); the relay itself only verifies the __session
+    // cookie. A plain link so it works with no JS.
+    '<a class="blade__login" href="/sign-in" aria-label="sign in">' +
     "⏻" +
-    "</button>" +
+    "</a>" +
     "</nav>"
   );
 }
