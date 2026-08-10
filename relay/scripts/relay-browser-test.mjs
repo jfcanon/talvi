@@ -47,9 +47,12 @@ try {
   await page.goto(base, { waitUntil: "load", timeout: 30000 });
 
   check("upload page loads", (await page.title()).length > 0, "no title");
-  check("has upload form controls", (await page.locator("input[type=file]").count()) === 1);
-  check("has TTL options", (await page.locator("input[name=ttl]").count()) === 3);
-  check("has send button", (await page.locator("button").count()) >= 1);
+  // The write path is session-gated (Clerk swap): an anonymous visitor gets
+  // the SIGN IN door, not the drop machine. The drop controls below are only
+  // asserted against the signed-out state; the authed upload flow is the
+  // owner's live E2E (sign-in → upload → share → download).
+  check("signed out — no drop machine", (await page.locator("input[type=file]").count()) === 0);
+  check("signed out — offers SIGN IN", (await page.locator('a[href="/relay/sign-in"]').count()) === 1);
 
   // P2: the quiet 3D world sits behind the machine (backdrop canvas + WebGL),
   // and the instrument panels are frosted glass over it.

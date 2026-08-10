@@ -37,7 +37,7 @@ function utcStamp(iso) {
   );
 }
 
-export function viewPage(row, slug, isImage, gated) {
+export function viewPage(row, slug, isImage, gated, encrypted = false) {
   const name = escapeHtml(row.filename);
   const type = escapeHtml(row.content_type);
   const size = escapeHtml(formatSize(row.size_bytes));
@@ -56,8 +56,31 @@ export function viewPage(row, slug, isImage, gated) {
   // stays visible — the PIN gates the FILE BYTES, not the metadata, and the
   // copy below says exactly that (§4 discipline: state what it adds and what
   // it does not).
+  //
+  // An ENCRYPTED drop (B1): the R2 object is ciphertext and the key travels in
+  // the share link's #k=… fragment. The button is rendered but the client
+  // intercepts it — fetch /d, decrypt in the browser, download the plaintext.
+  // No "as markdown" (OCR cannot read ciphertext), no server-side sniff.
+  const download =
+    '<a class="dl' +
+    (encrypted ? " dl--encrypted" : "") +
+    (gated ? " hidden" : "") +
+    '" href="' +
+    PREFIX +
+    "/" +
+    escapeHtml(slug) +
+    '/d"' +
+    (encrypted ? ' data-encrypted="1"' : "") +
+    ">" +
+    (encrypted
+      ? "Decrypt & download"
+      : 'Download<span class="dl__arrow" aria-hidden="true">&darr;</span>') +
+    "</a>";
+
   const actions =
-    '<div class="actions">' +
+    '<div class="actions" data-encrypted="' +
+    (encrypted ? "1" : "0") +
+    '">' +
     (gated
       ? '<div class="gate">' +
         '<div class="tagline"><span class="tagline__box">pin</span></div>' +
@@ -71,31 +94,18 @@ export function viewPage(row, slug, isImage, gated) {
         "The PIN stops a leaked link being enough on its own — but it does not " +
         "encrypt the file, and anyone with both the link and the PIN can " +
         "download. Four digits is a lock on a door, not a safe.</p>" +
-        "</div>" +
-        '<a class="dl hidden" href="' +
+        "</div>"
+      : "") +
+    download +
+    (isImage && !encrypted
+      ? '<a class="dl--alt' +
+        (gated ? " hidden" : "") +
+        '" href="' +
         PREFIX +
         "/" +
         escapeHtml(slug) +
-        '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
-        (isImage
-          ? '<a class="dl--alt hidden" href="' +
-            PREFIX +
-            "/" +
-            escapeHtml(slug) +
-            '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
-          : "")
-      : '<a class="dl" href="' +
-        PREFIX +
-        "/" +
-        escapeHtml(slug) +
-        '/d">Download<span class="dl__arrow" aria-hidden="true">&darr;</span></a>' +
-        (isImage
-          ? '<a class="dl--alt" href="' +
-            PREFIX +
-            "/" +
-            escapeHtml(slug) +
-            '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
-          : "")) +
+        '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
+      : "") +
     "</div>";
 
   const content =
@@ -131,6 +141,14 @@ export function viewPage(row, slug, isImage, gated) {
     '<div class="hud__strip" aria-hidden="true"></div>' +
     "</div>" +
     actions +
+    (encrypted
+      ? '<p class="chat__fineprint">This file was encrypted before upload — the ' +
+        "server holds ciphertext and cannot read it. The key rides in this " +
+        "link's #k= fragment, which never reaches the server. It is the strongest " +
+        "protection this site offers, and it protects only what it says: anyone " +
+        "with this full link (fragment included) can decrypt and download.</p>" +
+        '<p class="msg hidden" id="encmsg"></p>'
+      : "") +
     "</div>";
 
   return renderPage(row.filename, {
