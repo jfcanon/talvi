@@ -8,12 +8,13 @@
 // never reads as a failing test.
 //
 // Covers, live in a real browser: the page 200s, the 3D world boots (WebGL),
-// the three building labels float on their buildings and carry the right hrefs,
-// the blade renders and retracts, the HUD prompt + hint are present, dragging
-// orbits the camera (labels move), the wheel dollies (labels move again),
-// hovering a building echoes "open <app>" in the prompt, clicking a building
-// navigates to its app, the uniform 404 holds, and the page raises ZERO
-// own-page CSP violations (the edge-injected beacon is reported as info).
+// the three app cubes exist (window.talviProbe — the names live in the world
+// now, not the DOM), the blade renders and retracts, the HUD prompt + hint are
+// present, dragging orbits the camera (cube screen positions move), the wheel
+// dollies (they move again), hovering a cube echoes "open <app>" in the
+// prompt, clicking a cube navigates to its app, the uniform 404 holds, and
+// the page raises ZERO own-page CSP violations (the edge beacon is reported as
+// info).
 import { chromium } from "playwright-core";
 
 const base = process.argv[2] ?? "https://app.ygdcbtmc4u.uk";
@@ -54,10 +55,7 @@ page.on("pageerror", (err) => violations.push(`pageerror: ${err.message}`));
 
 const nodeXs = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll(".node")].map((n) => {
-      const r = n.getBoundingClientRect();
-      return { key: n.getAttribute("data-key"), x: Math.round(r.x + r.width / 2) };
-    }),
+    (window.talviProbe ? window.talviProbe() : []).map((b) => ({ key: b.key, x: b.x })),
   );
 
 try {
@@ -84,18 +82,13 @@ try {
   });
   check("webgl world boots", world.canvas && world.webgl);
 
-  // --- the building labels -------------------------------------------------
-  const labels = await page.evaluate(() =>
-    [...document.querySelectorAll(".node")].map((n) => [
-      n.getAttribute("data-key"),
-      n.getAttribute("href"),
-      n.classList.contains("is-on"),
-    ]),
-  );
-  check("three building labels", labels.length === 3, `found ${labels.length}`);
-  for (const [key, href, on] of labels) {
-    check(`node ${key} → ${href}`, href === EXPECTED_NODES[key] && on, `${href} on=${on}`);
+  // --- the app cubes (in the world, probed) --------------------------------
+  const cubes = await page.evaluate(() => (window.talviProbe ? window.talviProbe() : []));
+  check("three app cubes (talviProbe)", cubes.length === 3, `found ${cubes.length}`);
+  for (const c of cubes) {
+    check(`cube ${c.key} → ${c.href}`, c.href === EXPECTED_NODES[c.key] && c.visible, `${c.href} visible=${c.visible}`);
   }
+  check("no DOM app labels (names are in the world)", (await page.locator(".node").count()) === 0);
 
   // --- the blade -----------------------------------------------------------
   check("blade nav present", (await page.locator(".blade").count()) === 1);
@@ -134,12 +127,11 @@ try {
 
   // --- hover echoes in the prompt ------------------------------------------
   await page.evaluate(() => {
-    const n = document.querySelector('.node[data-key="relay"]');
-    const b = n.getBoundingClientRect();
+    const relay = window.talviProbe().find((b) => b.key === "relay");
     document.getElementById("scene").dispatchEvent(
       new PointerEvent("pointermove", {
-        clientX: Math.round(b.x + b.width / 2),
-        clientY: Math.round(b.y + b.height / 2 + 55),
+        clientX: relay.x,
+        clientY: relay.y,
         pointerId: 9,
         bubbles: true,
       }),
@@ -147,12 +139,15 @@ try {
   });
   await page.waitForTimeout(120);
   const promptText = await page.locator(".prompt__text").textContent();
-  check('hover echoes "open talvi"', /open talvi/.test(promptText), promptText);
+  check('hover echoes "open relay"', /open relay/.test(promptText), promptText);
 
-  // --- click a building navigates ------------------------------------------
-  await page.locator('.node[data-key="relay"]').click({ timeout: 8000 });
+  // --- click a cube navigates ----------------------------------------------
+  const relayCube = await page.evaluate(() => window.talviProbe().find((b) => b.key === "relay"));
+  await page.mouse.move(relayCube.x, relayCube.y);
+  await page.mouse.down();
+  await page.mouse.up();
   await page.waitForTimeout(1200);
-  check("clicking a building opens its app", page.url().includes("/relay"), page.url());
+  check("clicking a cube opens its app", page.url().includes("/relay"), page.url());
 
   // --- CSP -----------------------------------------------------------------
   check("zero own CSP violations", violations.length === 0, violations.join(" | ").slice(0, 300));

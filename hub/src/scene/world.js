@@ -1,33 +1,40 @@
-// talvi hub — the explorable world (v4, ideas #1 + #2).
+// talvi hub — the explorable world (v4.1).
 //
-// Near-black ground, phosphor-green line-and-glow, fog, and the instrument
-// language translated into wireframe geometry. The change in v4: the
-// instrument panels are no longer scenery on a linear path — they are three
-// BUILDINGS (relay, chat, cinto) arranged around the world, each a real app.
-// Every building carries an invisible hit volume so a raycast can find it, a
-// glow that lifts on hover, and a world position the HTML label anchors to.
+// Three CUBES (relay, chat, cinto) arranged around the central wordmark, each
+// a real app you can click (invisible hit volume + raycast). Revisions in
+// v4.1:
+//   - the buildings are cubes (equal sides), not flat prisms;
+//   - each carries a fixed 3D nameplate above it — a textured plane attached
+//     to the cube and facing the world centre, so orbiting walks AROUND it
+//     rather than reading a camera-facing label;
+//   - the light is centred INSIDE each cube;
+//   - the 2D x-ray scan band is gone; the atmosphere is now expanding
+//     shockwave rings of light radiating across the ground (a wave you see
+//     edge-on as you orbit).
 //
-// The sign (wordmark) stays as the central landmark.
-//
-// The .leak/.grain/.wear film layers stay in CSS, above the canvas, so the
-// worn-film register reads exactly as it does on talvi's page today (A5c).
+// The .leak/.grain/.wear film layers stay in CSS, above the canvas.
 import * as THREE from "three";
 import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
 import { createSign } from "./sign.js";
 
-// One building per app. Order and keys must match the <a class="node"
-// data-key=…> anchors in hubpage.js. Positions put the three apps around the
-// wordmark so orbiting reads them as a cluster of lit buildings.
-const BUILDING_CFG = [
-  { key: "relay", label: "TALVI", href: "https://app.ygdcbtmc4u.uk/relay", pos: [-13, 3.2, -6] },
+// One cube per app. `label` is what the nameplate says — RELAY (not TALVI:
+// the wordmark IS talvi; the cube is the relay app). `pos` puts the three
+// cubes around the sign so orbiting reads them as a lit cluster.
+const CUBE_CFG = [
+  { key: "relay", label: "RELAY", href: "https://app.ygdcbtmc4u.uk/relay", pos: [-13, 3.2, -6] },
   { key: "chat", label: "CHAT", href: "https://app.ygdcbtmc4u.uk/chat", pos: [13, 3.2, -6] },
   { key: "cinto", label: "CINTO", href: "https://cinto.ygdcbtmc4u.uk", pos: [0, 3.2, -20] },
 ];
 
+const CUBE = 5.5; // equal sides — a cube, not a cuboid.
+
 // Where the camera orbits around, and how far out it starts.
 export const FOCAL = new THREE.Vector3(0, 2.6, -4);
 export const DEFAULT_RADIUS = 24;
+
+const DISPLAY_STACK =
+  '"Bahnschrift", "DIN Alternate", "Oswald", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
 
 export function buildWorld(scene) {
   scene.background = new THREE.Color(0x05060b);
@@ -39,10 +46,10 @@ export function buildWorld(scene) {
   const rain = createRain(1500);
   scene.add(rain.lines);
 
-  const scan = makeScan();
-  scene.add(scan.mesh);
+  const pulse = makePulse();
+  scene.add(...pulse.lines);
 
-  const buildings = BUILDING_CFG.map((cfg) => makeBuilding(cfg));
+  const buildings = CUBE_CFG.map((cfg) => makeCube(cfg));
   const hitMeshes = [];
   for (const b of buildings) {
     scene.add(b.group);
@@ -60,7 +67,7 @@ export function buildWorld(scene) {
     radius: DEFAULT_RADIUS,
     update(dt) {
       rain.update(dt);
-      scan.update(dt);
+      pulse.update(dt);
       sign.update(dt);
     },
     setHighlight(b, on) {
@@ -70,20 +77,33 @@ export function buildWorld(scene) {
   };
 }
 
-// A building: the instrument box (deeper than the old panels so it reads as a
-// cube), a glow centre, and an invisible hit volume the raycaster targets.
-function makeBuilding(cfg) {
+// A cube: the instrument wireframe (one detailed face with cells + marked
+// strip, the other faces plain edges), a nameplate above it facing the world
+// centre, a glow centred INSIDE it, and an invisible hit volume for the
+// raycaster. Every child moves with the cube, so orbiting sees the plate edge-
+// on from the sides — it is fixed in the world, not facing the audience.
+function makeCube(cfg) {
+  const half = CUBE / 2;
   const group = new THREE.Group();
 
-  const { seg, mat } = makeBox(11, 6, 3);
+  const { seg, mat } = makeBox(CUBE, CUBE, CUBE);
   group.add(seg);
 
-  const glow = makeGlow(0x7dffc4, 8, 0.3);
-  glow.position.set(0, 0, 3.6);
+  // Light centred inside the cube.
+  const glow = makeGlow(0x7dffc4, 3.4, 0.45);
+  glow.position.set(0, 0, half);
   group.add(glow);
 
+  // Nameplate: a textured plane floating just above the cube, its front
+  // turned toward the world centre so you see it at different angles while
+  // orbiting. DoubleSide so it is still readable from behind. lookAt runs
+  // AFTER the group is positioned — it takes world coordinates.
+  const plate = makeNameplate(cfg.label);
+  plate.position.set(0, half + 0.9, 0);
+  group.add(plate);
+
   const hit = new THREE.Mesh(
-    new THREE.BoxGeometry(14, 9, 6),
+    new THREE.BoxGeometry(CUBE + 2.5, CUBE + 2.5, CUBE + 2.5),
     new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
@@ -91,10 +111,10 @@ function makeBuilding(cfg) {
       side: THREE.DoubleSide,
     }),
   );
-  hit.userData.building = null; // set below after the object exists
   group.add(hit);
 
   group.position.set(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
+  plate.lookAt(new THREE.Vector3(0, cfg.pos[1] + half + 0.9, 0));
 
   const building = {
     key: cfg.key,
@@ -108,6 +128,28 @@ function makeBuilding(cfg) {
   };
   hit.userData.building = building;
   return building;
+}
+
+function makeNameplate(text) {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 160;
+  const ctx = c.getContext("2d");
+  ctx.font = "700 84px " + DISPLAY_STACK;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(125,255,196,0.8)";
+  ctx.shadowBlur = 46;
+  ctx.fillStyle = "#7dffc4";
+  ctx.fillText(text, c.width / 2, c.height / 2 + 6);
+  const mat = new THREE.MeshBasicMaterial({
+    map: new THREE.CanvasTexture(c),
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  });
+  return new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.45), mat);
 }
 
 function makeGrid() {
@@ -170,33 +212,49 @@ function makePosts() {
   return group;
 }
 
-function makeScan() {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(170, 9),
-    new THREE.MeshBasicMaterial({
+// The atmosphere is a wave of light now, not a 2D x-ray scan: expanding rings
+// of phosphor radiate from the world centre across the ground, swell, and
+// fade — a sonar pulse you see edge-on while orbiting. Two rings, offset, for
+// a continuous rhythm.
+function makePulse() {
+  const lines = [];
+  const rings = [];
+  for (let i = 0; i < 2; i++) {
+    const SEG = 128;
+    const pts = [];
+    for (let j = 0; j <= SEG; j++) {
+      const a = (j / SEG) * Math.PI * 2;
+      pts.push(Math.cos(a), 0, Math.sin(a));
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    const mat = new THREE.LineBasicMaterial({
       color: 0x6bffa8,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 15;
-  const top = 15;
-  const bottom = -4;
-  const speed = 2.6;
-
-  function update(dt) {
-    mesh.position.y -= speed * dt;
-    if (mesh.position.y < bottom) mesh.position.y = top;
+    });
+    const line = new THREE.Line(geo, mat);
+    line.rotation.x = -Math.PI / 2;
+    lines.push(line);
+    rings.push({ line, mat, t: i * 1.7, period: 3.4, max: 48 });
   }
 
-  return { mesh, update };
+  function update(dt) {
+    for (const r of rings) {
+      r.t += dt;
+      if (r.t > r.period) r.t = 0;
+      const p = r.t / r.period;
+      r.line.scale.setScalar(1 + p * (r.max - 1));
+      r.mat.opacity = 0.32 * Math.sin(Math.PI * p);
+    }
+  }
+
+  return { lines, update };
 }
 
-// The instrument box: front and back faces, corner connectors and brackets,
+// The instrument cube: front and back faces, corner connectors and brackets,
 // divider cells, and a marked strip — the talvi HUD translated to a volume.
 function makeBox(w, h, depth) {
   const hw = w / 2;
@@ -214,7 +272,7 @@ function makeBox(w, h, depth) {
 
   for (const [sx, sy] of [[-1, -1], [-1, 1], [1, 1], [1, -1]]) {
     lines.push(sx * hw, sy * hh, 0, sx * hw, sy * hh, depth);
-    const b = 0.9;
+    const b = 0.8;
     lines.push(sx * hw, sy * hh, 0, sx * hw - sx * b, sy * hh, 0);
     lines.push(sx * hw, sy * hh, 0, sx * hw, sy * hh - sy * b, 0);
   }
@@ -226,10 +284,10 @@ function makeBox(w, h, depth) {
   }
   lines.push(0, -hh, 0, 0, hh, 0);
 
-  const ticks = 14;
+  const ticks = 10;
   for (let i = 0; i < ticks; i++) {
     const x = -hw + (w / ticks) * i + w / (ticks * 2);
-    lines.push(x, -hh - 0.35, 0, x, -hh + 0.3, 0);
+    lines.push(x, -hh - 0.3, 0, x, -hh + 0.25, 0);
   }
 
   const geo = new THREE.BufferGeometry();
