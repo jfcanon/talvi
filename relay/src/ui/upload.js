@@ -51,7 +51,7 @@ export function uploadPage({ authed } = {}) {
   // lede and the button carry the same "session closed" language as the
   // blue release's root page; sharing stays public either way.
   if (!authed) {
-    return renderPage("talvi — drop a file", {
+    return renderPage("relay", {
       lede:
         "SESSION CLOSED. Sign in to drop a file. Sharing stays public — a link " +
         "already sent keeps working.",
@@ -151,7 +151,7 @@ export function uploadPage({ authed } = {}) {
     "</div>" +
     "</div>";
 
-  return renderPage("talvi — drop a file", {
+  return renderPage("relay", {
     lede:
       "SESSION OPEN. Drop a file, take a link. The link expires on schedule — " +
       "one day unless you say otherwise. Ceiling 25 MB.",

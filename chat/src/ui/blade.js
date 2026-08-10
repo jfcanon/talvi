@@ -19,7 +19,7 @@
 // worker, and the styles in each worker's style.css.
 
 // One row per app. href is a SAME-ORIGIN path for apps mounted on app.*, and
-// an absolute URL for cinto (still on its own host until the D migration).
+// a same-origin path — cinto now mounts at app.*/cinto (the D migration landed);
 // null renders the disabled future-slot.
 export const BLADE_APPS = [
   {
@@ -40,7 +40,7 @@ export const BLADE_APPS = [
     key: "cinto",
     glyph: "◈",
     label: "CINTO",
-    href: "https://cinto.ygdcbtmc4u.uk",
+    href: "/cinto",
     title: "Cinto — compliance",
   },
   {
