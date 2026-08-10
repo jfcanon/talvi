@@ -21,8 +21,8 @@ const APPS = [
   {
     glyph: "▣",
     label: "TALVI",
-    href: "https://talvi.ygdcbtmc4u.uk",
-    title: "Talvi — file share",
+    href: "https://app.ygdcbtmc4u.uk/relay",
+    title: "Talvi — file share (relay)",
   },
   {
     glyph: "▤",
