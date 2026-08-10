@@ -1,7 +1,8 @@
-/* talvi hub — the 3D front door (blueprint A1–A4).
+/* talvi hub — the explorable front door (blueprint A1–A4, v4).
  *
- * The power-app front door is now the talvi world: a fixed WebGL canvas under
- * five scroll sections, with the blade kept as flat chrome on top. The same
+ * The power-app front door is a small 3D world you move through like Google
+ * Earth: drag to look, scroll to zoom, click a building (or its floating
+ * label) to open an app. The blade stays flat chrome on top. The same
  * instrument language as green and the 3d study — near-black ground, one green
  * phosphor, box interiors never black, fill-not-hue hierarchy, monospace
  * console voice — plus the worn-film stack (.leak/.grain/.wear) above the
@@ -72,6 +73,9 @@ html {
 
 body {
   margin: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden; /* the world is the whole viewport; wheel = zoom, not scroll */
   background: transparent;
   color: var(--text-hi);
   font-family: var(--font-console);
@@ -89,79 +93,73 @@ body {
   z-index: 0;
 }
 
-/* Captions scroll over the fixed canvas — content on top of a world that
-   moves with it. Padding clears the fixed blade rail on the left (desktop). */
-.chapters {
-  position: relative;
-  z-index: 1;
-  padding-left: clamp(1.25rem, 4vw, 3rem);
-}
-
-.chapter {
-  min-height: 100vh;
-  min-height: 100svh; /* no caption hidden under the iOS Safari chrome */
-  padding: 0 5vw 12vh;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  max-width: 40rem;
-}
-
-/* Alternate anchors so the sections don't all read at the same height. */
-#sign {
-  justify-content: flex-start;
-  padding-top: 18vh;
-}
-
-#chat {
-  align-items: flex-end;
-  text-align: right;
-  align-self: center;
-  margin-left: auto;
-}
-
-#end {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  margin: 0 auto;
-}
-
-.chapter__label {
-  margin: 0;
-  font-size: 0.62rem;
-  letter-spacing: 0.28em;
+/* The building labels float over the world (v4, idea #1). Each is a real <a>
+   parked on its building every frame by scene/labels.js; hidden (is-off) when
+   the building is behind the camera or before the first frame. They are the
+   guaranteed navigation path — keyboard-reachable even if WebGL is absent. */
+.node {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 0.5rem 0.95rem;
+  border: 1px solid var(--hud-line);
+  border-radius: 0.7rem;
+  background: rgba(10, 16, 24, 0.6);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
+  font-family: var(--font-console);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--phosphor-dim);
-  filter: blur(var(--soft));
-}
-
-.chapter__line {
-  margin: 0;
-  font-size: 0.86rem;
-  line-height: 1.7;
   color: var(--phosphor);
-  text-shadow:
-    0 0 2px rgba(198, 255, 232, 0.5),
-    0 0 7px rgba(107, 255, 168, 0.4),
-    0 0 18px rgba(53, 217, 152, 0.25);
-  filter: blur(var(--soft));
+  text-decoration: none;
+  text-shadow: 0 0 6px rgba(125, 255, 196, 0.35);
+  z-index: 2;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
-.chapter__line::before {
-  content: "> ";
-  color: var(--phosphor-dim);
+.node.is-on {
+  opacity: 1;
 }
 
-/* The world's opening prompt — just the terminal mark, `>_`, with a glitching
-   intermittent caret. The underscore is mostly idle; occasionally it faults
-   for a frame (the talvi glitch register, applied to a caret). */
-.chapter__prompt {
+.node.is-off {
+  opacity: 0;
+}
+
+.node:hover,
+.node:focus-visible {
+  background: rgba(28, 66, 60, 0.75);
+  border-color: var(--phosphor);
+}
+
+/* The HUD: the terminal prompt (echoes a hovered building) and the hint of
+   controls. Pointer-events none — it reads, it never blocks the world. */
+.hud {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 1.25rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* The world's prompt — just the terminal mark, `>_`, with a glitching
+   intermittent caret. main.js writes "open <app>" into .prompt__text while a
+   building is hovered; idle, it is blank. */
+.prompt {
   margin: 0;
   font-family: var(--font-console);
-  font-size: clamp(2.4rem, 10vw, 4.2rem);
+  font-size: clamp(1.3rem, 3.6vw, 2rem);
   line-height: 1;
   color: var(--phosphor);
   text-shadow:
@@ -175,10 +173,23 @@ body {
   color: var(--phosphor-dim);
 }
 
+.prompt__text {
+  white-space: pre;
+}
+
 .prompt__caret {
   display: inline-block;
   margin-left: 0.15em;
   animation: caret-glitch 4.5s steps(1, end) infinite;
+}
+
+.hint {
+  margin: 0 0 0.15rem;
+  font-family: var(--font-console);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 @keyframes caret-glitch {
@@ -212,151 +223,11 @@ body {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * The instrument plates — one real <a> per app (blueprint A3). The 3D panel
- * behind it is atmosphere; this anchor is the control: keyboard-reachable,
- * announced, testable.
- * ------------------------------------------------------------------------- */
-
-.plate {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  max-width: 34rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--hud-line);
-  background: var(--hud-fill);
-  color: inherit;
-  text-decoration: none;
-  transition:
-    border-color 120ms linear,
-    background-color 120ms linear,
-    box-shadow 120ms linear;
-}
-
-.plate__glyph {
-  font-size: 1.7rem;
-  line-height: 1;
-  color: var(--cyan);
-  text-shadow: var(--glow-cyan);
-}
-
-.plate__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.plate__label {
-  font-size: 0.64rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-.plate__line {
-  font-size: 0.86rem;
-  line-height: 1.6;
-  color: var(--phosphor);
-  filter: blur(var(--soft));
-}
-
-.plate__line::before {
-  content: "> ";
-  color: var(--phosphor-dim);
-}
-
-.plate__open {
-  margin-left: auto;
-  white-space: nowrap;
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--phosphor-dim);
-}
-
-.plate:hover,
-.plate:focus-visible {
-  border-color: var(--phosphor);
-  background: var(--hud-fill-lit);
-  box-shadow: 0 0 18px rgba(125, 255, 196, 0.25);
-}
-
-.plate:hover .plate__glyph,
-.plate:focus-visible .plate__glyph {
-  color: var(--phosphor);
-  text-shadow: none;
-}
-
-.plate:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 3px;
-}
-
-.plate:active {
-  background: var(--hud-fill);
-}
-
-/* ---------------------------------------------------------------------------
- * The END closing CTA (blueprint A4) — the one idea kept from prompt12, done
- * in talvi's language: no external assets, no second stack.
- * ------------------------------------------------------------------------- */
-
-.chapter__display {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(2.6rem, 10vw, 5.5rem);
-  font-weight: 700;
-  line-height: 0.95;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--phosphor);
-  text-shadow:
-    0 0 2px rgba(255, 255, 255, 0.5),
-    0 0 18px rgba(125, 255, 196, 0.6),
-    0 0 46px rgba(61, 224, 160, 0.3);
-  filter: blur(var(--soft));
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding: 0.9rem 2rem;
-  border: 1px solid var(--phosphor);
-  background: var(--phosphor);
-  color: #04140d;
-  font-family: var(--font-console);
-  font-size: 0.9rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  text-decoration: none;
-  box-shadow: 0 0 18px rgba(125, 255, 196, 0.45);
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-.btn:hover {
-  filter: brightness(1.1);
-}
-
-.btn:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 3px;
-}
-
 /* One focus ring for the whole page — amber is the one sign colour no resting
    state uses, so it stays legible against both phosphor and the world. */
 :focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
-}
-
-.btn:active {
-  filter: brightness(0.92);
-  transform: translateY(1px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -715,8 +586,9 @@ body {
   .blade__login {
     margin: 0 0.4rem 0 0;
   }
-  .chapters {
-    padding-left: 0;
-    padding-top: 4.5rem; /* clear the horizontal blade rail */
+  /* The HUD hugs the bottom on a phone; the prompt stays on the left. */
+  .hud {
+    bottom: 0.9rem;
+    padding: 0 0.9rem;
   }
 }

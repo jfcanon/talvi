@@ -1,24 +1,27 @@
-// talvi hub — the 3D front door (blueprint A1–A4).
+// talvi hub — the explorable front door (v4, ideas #1 + #2).
 //
 // Server-rendered markup; the world boots from /h.js (scene modules bundled by
 // build-assets.mjs) and /h.css is linked, never inlined — CSP default-src
-// 'none', no inline styles or scripts (A11 unchanged).
+// 'none', no inline styles or scripts.
 //
-// The page is a fixed WebGL canvas (the talvi world) plus:
+// The page is a fixed WebGL canvas — a small world you move through like
+// Google Earth — plus:
 //   - the blade: flat chrome rail, always visible, keyboard-first — the
-//     instant switcher (A2). Icons are text glyphs, no external images.
-//   - five scroll sections, one instrument per app. Each app section carries a
-//     real <a> control plate (glyph + name + one line + open arrow) — the 3D
-//     panel behind it is atmosphere, this anchor is the control (A3).
-//   - the END section: a cinematic closing CTA in talvi's language (A4) — the
-//     one salvageable idea from the library's prompt12, rebuilt here.
+//     instant switcher, and the navigation fallback if WebGL is absent.
+//   - one building per app (relay, chat, cinto). Each carries a floating
+//     <a class="node"> label, parked on its building every frame by
+//     scene/labels.js. Click the building OR its label → open the app.
+//     The labels are real anchors: keyboard-reachable, and the guaranteed
+//     path even before the first frame or if the raycast misses.
+//   - the HUD: the `>_` prompt (which echoes a hovered building as
+//     "> open relay") and a one-line hint of the controls.
 //   - the .leak/.grain/.wear film overlays, above the canvas (A5c).
 import { ASSET_VERSION } from "../generated/assets.js";
 
 const v = encodeURIComponent(ASSET_VERSION);
 
 // Blade items — data, not markup scattered through the template. `href` null
-// renders a disabled future-slot. Same targets as before P1 (app.* hosts).
+// renders a disabled future-slot.
 const APPS = [
   {
     glyph: "▣",
@@ -46,34 +49,12 @@ const APPS = [
   },
 ];
 
-// The world instruments, one per scroll section. Order must match the camera
-// path in scene/scroll.js (RELAY, CHAT, CINTO) and the panel positions in
-// scene/world.js (-16, -34, -52).
-const INSTRUMENTS = [
-  {
-    glyph: "▣",
-    label: "RELAY",
-    sub: "file share",
-    line: "drop a file, share a link, it expires.",
-    href: "https://app.ygdcbtmc4u.uk/relay",
-    title: "Open relay",
-  },
-  {
-    glyph: "▤",
-    label: "CHAT",
-    sub: "rooms",
-    line: "a room is an invitation already sent.",
-    href: "https://app.ygdcbtmc4u.uk/chat",
-    title: "Open chat",
-  },
-  {
-    glyph: "◈",
-    label: "CINTO",
-    sub: "compliance",
-    line: "cinto.ygdcbtmc4u.uk",
-    href: "https://cinto.ygdcbtmc4u.uk",
-    title: "Open cinto",
-  },
+// The world buildings — the apps you can open. data-key must match the
+// building key in scene/world.js so scene/labels.js can find each anchor.
+const NODES = [
+  { key: "relay", label: "TALVI", href: "https://app.ygdcbtmc4u.uk/relay", title: "Open relay" },
+  { key: "chat", label: "CHAT", href: "https://app.ygdcbtmc4u.uk/chat", title: "Open chat" },
+  { key: "cinto", label: "CINTO", href: "https://cinto.ygdcbtmc4u.uk", title: "Open cinto" },
 ];
 
 function bladeItems() {
@@ -98,37 +79,22 @@ function bladeItems() {
   ).join("");
 }
 
-function instrumentPlate(inst) {
-  return (
-    '<section class="chapter" id="' +
-    inst.label.toLowerCase() +
-    '">' +
-    '<a class="plate" href="' +
-    inst.href +
-    '" title="' +
-    inst.title +
-    '">' +
-    '<span class="plate__glyph" aria-hidden="true">' +
-    inst.glyph +
-    "</span>" +
-    '<span class="plate__body">' +
-    '<span class="plate__label">' +
-    inst.label +
-    " · " +
-    inst.sub +
-    "</span>" +
-    '<span class="plate__line">' +
-    inst.line +
-    "</span>" +
-    "</span>" +
-    '<span class="plate__open" aria-hidden="true">open →</span>' +
-    "</a>" +
-    "</section>"
-  );
+function nodeItems() {
+  return NODES.map(
+    (node) =>
+      '<a class="node is-off" data-key="' +
+      node.key +
+      '" href="' +
+      node.href +
+      '" title="' +
+      node.title +
+      '">' +
+      node.label +
+      "</a>",
+  ).join("");
 }
 
 export function hubPage() {
-  const instruments = INSTRUMENTS.map(instrumentPlate).join("");
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -160,24 +126,19 @@ export function hubPage() {
     "⏻" +
     "</button>" +
     "</nav>" +
-    '<main class="chapters">' +
-    // 01 / SIGN — the world's opening prompt: just the terminal mark, `>_`,
-    // with a glitching intermittent caret. No copy — the world speaks first.
-    '<section class="chapter" id="sign">' +
-    '<p class="chapter__prompt" aria-label="ready">' +
+    // The building labels, parked on their buildings by scene/labels.js.
+    '<main class="world">' +
+    nodeItems() +
+    "</main>" +
+    // The HUD: the terminal prompt (echoes a hovered building) and the hint.
+    '<div class="hud">' +
+    '<p class="prompt" aria-live="polite">' +
     '<span class="prompt__gt" aria-hidden="true">&gt;</span>' +
+    '<span class="prompt__text"> </span>' +
     '<span class="prompt__caret" aria-hidden="true">_</span>' +
     "</p>" +
-    "</section>" +
-    // one instrument per app
-    instruments +
-    // 05 / END — the closing CTA
-    '<section class="chapter" id="end">' +
-    '<p class="chapter__label">05 / end</p>' +
-    '<h2 class="chapter__display">one front door.</h2>' +
-    '<a class="btn" href="https://app.ygdcbtmc4u.uk/relay">enter →</a>' +
-    "</section>" +
-    "</main>" +
+    '<p class="hint" aria-hidden="true">drag to look · scroll to zoom · click a node</p>' +
+    "</div>" +
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +
     '<div class="wear" aria-hidden="true"></div>' +
