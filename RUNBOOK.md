@@ -1,6 +1,14 @@
 # talvi — runbook
 
-Operational guide. Written for someone who has **never seen this codebase**.
+Operational guide.
+> **The front door (app.ygdcbtmc4u.uk) is separate from the legacy pages this
+> runbook describes.** The talvi welcome/home page is the 3D floating launcher
+> in `hub/`, at its production version (tag `production` = `talvi-3d-v4.3.2`).
+> For the full version history, the reusable 3D scene kit, and how to revert
+> or reuse it, read `s11/talvi-3d-frontdoor-HANDOVER.md` first. Its browser
+> test: `cd hub && node scripts/hub-browser-test.mjs`.
+
+ Written for someone who has **never seen this codebase**.
 If a procedure here needs knowledge that is not on this page, that is a bug in
 this page — fix it here.
 
