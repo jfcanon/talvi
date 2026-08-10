@@ -1,0 +1,6 @@
+/* talvi 3d — placeholder stylesheet (Step 1). The real page + wear overlays
+   land in Step 2. Kept minimal here so the build pipeline has real bytes to
+   hash and serve. */
+html {
+  background: #05060b;
+}
