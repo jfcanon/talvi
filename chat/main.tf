@@ -85,9 +85,11 @@ resource "cloudflare_workers_script" "talvi_chat" {
   ]
 
   # ⚠ MIGRATIONS DANCE, PR C1: create the SQLite-backed ChatChannel namespace.
-  #   PR C2 REMOVES THIS BLOCK. It must never linger once the class has live
+  #   PR C2 REMOVES THIS ARGUMENT. It must never linger once the class has live
   #   objects (code 10074 — see the header comment and green's main.tf).
-  migrations {
+  #   NOTE: in provider v5 this is an ARGUMENT (`migrations = {...}`), not a
+  #   block — a block form is "Blocks of type migrations are not expected here".
+  migrations = {
     new_sqlite_classes = ["ChatChannel"]
   }
 }
