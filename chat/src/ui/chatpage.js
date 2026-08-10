@@ -77,7 +77,7 @@ export function chatLandingPage() {
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
     "is an empty frame without it.</p></noscript>";
 
-  return renderPage("talvi — chat", {
+  return renderPage("chat", {
     lede:
       "CHANNEL. Name it, nick yourself, walk in. Ephemeral by design — no " +
       "log, no history, gone when the room empties.",
@@ -139,7 +139,7 @@ export function chatRoomPage(name) {
     '<noscript><p class="chat__fineprint">This needs JavaScript — the page ' +
     "is an empty frame without it.</p></noscript>";
 
-  return renderPage("talvi — chat/" + name, {
+  return renderPage("chat/" + name, {
     // No encryption claim in the lede either, for the same reason: this string
     // is rendered before anyone knows whether the room has a gate. "Nothing is
     // stored" is true of both kinds and is the part worth saying up front.
