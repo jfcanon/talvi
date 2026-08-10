@@ -221,10 +221,14 @@ check("slug alphabet length divides 256 (no modulo bias)", 256 % ALPHABET_LEN ==
 
 // ------------------------------------------------------------- misc bounds
 
+// Nick rule (owner 2026-08-10): at most 5 lowercase letters — no caps, no
+// digits, no spaces, no control chars.
 check("nick validator rejects whitespace", !isValidNick("two words"));
+check("nick validator rejects digits", !isValidNick("bob1"));
+check("nick validator rejects capitals", !isValidNick("Bob"));
+check("nick validator rejects too long", !isValidNick("abcdef"));
 check("nick validator rejects control chars", !isValidNick("bad\u0000nick"));
 check("nick validator rejects empty", !isValidNick(""));
-check("nick validator rejects >32", !isValidNick("n".repeat(33)));
 check("nick validator accepts a normal nick", isValidNick("jf"));
 
 check("lockout constants match D8", GATE_MAX_FAILS === 5 && GATE_LOCKOUT_MS === 60000);

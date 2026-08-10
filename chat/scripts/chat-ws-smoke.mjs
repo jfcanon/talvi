@@ -259,10 +259,10 @@ async function pairTest(a) {
   }
 
   wsA.addEventListener("open", () => {
-    wsA.send(fmt({ t: "join", nick: "pair-a" }));
+    wsA.send(fmt({ t: "join", nick: "paira" }));
   });
   wsB.addEventListener("open", () => {
-    wsB.send(fmt({ t: "join", nick: "pair-b" }));
+    wsB.send(fmt({ t: "join", nick: "pairb" }));
   });
   wsA.addEventListener("message", (event) => onFrame(wsA, "A", event));
   wsB.addEventListener("message", (event) => onFrame(wsB, "B", event));

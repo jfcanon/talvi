@@ -293,6 +293,7 @@ const HTML_HEADERS = {
     "frame-ancestors 'none'; base-uri 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
+  "cache-control": "no-store",
   "x-robots-tag": ROBOTS_TAG,
 };
 
