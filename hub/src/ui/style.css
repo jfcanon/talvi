@@ -1,46 +1,50 @@
-/* talvi hub — the 2D front door (v5).
+/* talvi hub — the explorable front door (blueprint A1–A4, v4).
  *
- * The 3D world is retired. This is a 2D composition in the prompt12 design
- * language with the cyberpunk palette: deep midnight purple ground, royal
- * blue, magenta, soft pink and pale lavender — a cinematic procedural
- * atmosphere (CSS gradients, no external images, no CSP change) with
- * liquid-glass cards layered over it.
+ * The power-app front door is a small 3D world you move through like Google
+ * Earth: drag to look, scroll to zoom, click a building (or its floating
+ * label) to open an app. The blade stays flat chrome on top. The same
+ * instrument language as green and the 3d study — near-black ground, one green
+ * phosphor, box interiors never black, fill-not-hue hierarchy, monospace
+ * console voice — plus the worn-film stack (.leak/.grain/.wear) above the
+ * canvas, verbatim from talvi's page (A5c).
  *
  * A real .css file, not a JS template literal. scripts/build-assets.mjs reads
  * it and JSON.stringify()s it into src/generated/assets.js. Served at /h.css.
  * NOT inlined: the CSP is `style-src 'self'` — no inline <style> block is
  * allowed; that constraint is the reason this file exists.
  *
- * Dark-only, like every talvi surface. Tokens on :root so a palette call stays
- * reversible.
+ * Dark-only, like green. Tokens on :root so a palette call stays reversible.
  */
 
 :root {
   color-scheme: dark;
 
-  /* Ground — deep midnight purple, never neutral grey. */
-  --void: #140822;
-  --deep: #1d0f33;
-  --raise: #2a1650;
+  /* Ground — near-black with a teal bias, never neutral grey. */
+  --void: #05060b;
+  --deep: #0b0d1c;
+  --raise: #12142a;
 
-  /* The cyberpunk palette. */
-  --magenta: #ff2d95;
-  --violet: #7b4dff;
-  --blue: #4a5dff;
-  --pink: #ff9ecf;
-  --lavender: #cbb8ff;
+  /* Sign colours — magenta and cyan against each other, amber for focus only. */
+  --magenta: #ff2e88;
+  --cyan: #22e8ff;
+  --amber: #ffb648;
 
-  /* Ink — lavender-tinted whites, dimmed in three steps. */
-  --ink: #f4edff;
-  --ink-dim: #a68fd0;
-  --ink-faint: #6d579a;
+  /* Phosphor — the whole interface voice. */
+  --phosphor: #7dffc4;
+  --phosphor-dim: #35d998;
+  --hud-line: rgba(61, 224, 160, 0.58);
+  --hud-line-soft: rgba(61, 224, 160, 0.24);
+  --hud-fill: rgba(18, 43, 40, 0.55);
+  --hud-fill-lit: rgba(28, 66, 60, 0.7);
 
-  --line: rgba(203, 184, 255, 0.22);
-  --line-soft: rgba(203, 184, 255, 0.1);
+  --text-hi: #eaf2ff;
+  --text-lo: #8e9bbe;
+  --text-dim: #5d6689;
 
-  /* Focus — a warm gold, the one colour no resting state uses, so the ring
-     stays legible against every other colour on the page. */
-  --focus: #ffd166;
+  --rule: #1e2340;
+  --rule-lit: #2d3660;
+
+  --glow-cyan: 0 0 8px rgba(34, 232, 255, 0.55), 0 0 26px rgba(34, 232, 255, 0.2);
 
   --font-display: "Bahnschrift", "DIN Alternate", "Oswald",
     "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui,
@@ -48,6 +52,9 @@
   --font-console: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono",
     "Roboto Mono", "Consolas", monospace;
 
+  /* Blade geometry — collapsed is a narrow icon rail, expanded shows labels.
+     The <a> list is plain markup; retraction is a class toggle (client.js),
+     so the blade works with JS disabled and with no inline handlers. */
   --blade-collapsed: 3.75rem;
   --blade-expanded: 15rem;
 
@@ -66,40 +73,331 @@ html {
 
 body {
   margin: 0;
-  min-height: 100vh;
-  min-height: 100svh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden; /* the world is the whole viewport; wheel = zoom, not scroll */
   background: transparent;
-  color: var(--ink);
+  color: var(--text-hi);
   font-family: var(--font-console);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ============================================================= atmosphere */
-
-/* The sky: a fixed procedural gradient field — deep purple ground with soft
-   magenta, royal-blue and violet glows, like neon bleeding into haze. The
-   glass cards blur it through backdrop-filter, which is what makes them read
-   as frosted over the night. */
-.atmos {
+/* The whole world. Fixed, behind everything, sized by the renderer. */
+#scene {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   z-index: 0;
+}
+
+/* The cube nameplates are 3D objects in the world (v4.1) — fixed to their
+   cubes, faced toward the world centre, so orbiting walks around them. No DOM
+   labels here; the blade is the keyboard navigation path. */
+
+/* The HUD: the terminal prompt (echoes a hovered cube) and the hint of
+   controls. Pointer-events none — it reads, it never blocks the world. */
+.hud {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 1.25rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+  z-index: 5;
   pointer-events: none;
-  background:
-    radial-gradient(90% 70% at 82% 8%, rgba(123, 77, 255, 0.3), transparent 62%),
-    radial-gradient(75% 60% at 6% 88%, rgba(255, 45, 149, 0.22), transparent 62%),
-    radial-gradient(60% 45% at 52% 42%, rgba(74, 93, 255, 0.16), transparent 66%),
-    radial-gradient(100% 80% at 50% 120%, rgba(42, 22, 80, 0.9), transparent 70%),
-    linear-gradient(180deg, #170a2b 0%, #241040 52%, #12071f 100%);
+}
+
+/* The world's prompt — just the terminal mark, `>_`, with a glitching
+   intermittent caret. main.js writes "open <app>" into .prompt__text while a
+   building is hovered; idle, it is blank. */
+.prompt {
+  margin: 0;
+  font-family: var(--font-console);
+  font-size: clamp(1.3rem, 3.6vw, 2rem);
+  line-height: 1;
+  color: var(--phosphor);
+  text-shadow:
+    0 0 2px rgba(198, 255, 232, 0.5),
+    0 0 10px rgba(107, 255, 168, 0.4),
+    0 0 26px rgba(53, 217, 152, 0.25);
+  filter: blur(var(--soft));
+}
+
+.prompt__gt {
+  color: var(--phosphor-dim);
+}
+
+.prompt__text {
+  white-space: pre;
+}
+
+.prompt__caret {
+  display: inline-block;
+  margin-left: 0.15em;
+  animation: caret-glitch 4.5s steps(1, end) infinite;
+}
+
+.hint {
+  margin: 0 0 0.15rem;
+  font-family: var(--font-console);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+@keyframes caret-glitch {
+  0%,
+  74%,
+  100% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.1;
+    transform: translateX(1px);
+  }
+  76% {
+    opacity: 1;
+    transform: none;
+  }
+  84% {
+    opacity: 0;
+  }
+  85%,
+  93% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+  95% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* One focus ring for the whole page — amber is the one sign colour no resting
+   state uses, so it stays legible against both phosphor and the world. */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * The blade — flat chrome over the world (blueprint A2). Fixed rail on the
+ * left, above the film overlays so it stays crisp; the collapsed rail shows
+ * icons, expanded shows labels.
+ * ------------------------------------------------------------------------- */
+
+.blade {
+  position: fixed;
+  top: 50%;
+  left: clamp(1rem, 3vw, 2rem);
+  transform: translateY(-50%);
+  width: var(--blade-collapsed);
+  z-index: 5;
+  /* v2: soft chrome over the world — no hard corners, no hard border. A
+     translucent fill + backdrop blur so it sits IN the scene the way the
+     frosted app panels do (P2), with a faint inner highlight for edge. */
+  border: none;
+  border-radius: 1.1rem;
+  background: rgba(10, 16, 24, 0.55);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
+  box-shadow:
+    0 0 22px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(125, 255, 196, 0.08);
+  display: flex;
+  flex-direction: column;
+  transition: width 160ms ease;
+}
+
+/* Expanded state toggled by client.js. */
+.blade.is-open {
+  width: var(--blade-expanded);
+}
+
+/* Entrance: the rail fades in as a whole, then its items "assemble" — each
+   pops in a beat after the last (staggered), then the foot controls follow.
+   Opacity-only on the container because the hub's blade is vertically centred
+   with transform: translateY(-50%). Reduced motion kills the whole thing. */
+.blade {
+  animation: blade-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.blade__item {
+  animation: blade-item-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.blade__item:nth-child(2) {
+  animation-delay: 70ms;
+}
+.blade__item:nth-child(3) {
+  animation-delay: 140ms;
+}
+.blade__item:nth-child(4) {
+  animation-delay: 210ms;
+}
+
+.blade__toggle,
+.blade__login {
+  animation: blade-item-in 280ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
+}
+
+@keyframes blade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes blade-item-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.blade__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem 0.5rem;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Each item: a plain <a> row. Collapsed, the glyph is centred in the rail;
+   expanded, glyph + label read left to right. Keyboard-reachable for free. */
+.blade__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.4rem;
+  border-radius: 0.7rem;
+  color: var(--text-lo);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.blade.is-open .blade__item {
+  justify-content: flex-start;
+}
+
+.blade__item:hover,
+.blade__item:focus-visible {
+  color: var(--phosphor);
+  background: rgba(28, 66, 60, 0.45);
+}
+
+.blade__item:visited {
+  color: var(--text-dim);
+}
+
+.blade__item:hover:visited,
+.blade__item:focus-visible:visited {
+  color: var(--phosphor);
+}
+
+.blade__item:active {
+  background: rgba(18, 43, 40, 0.55);
+}
+
+/* The glyph carries the world's own green (the lede colour), not a second
+   accent — the rail blends with the scene instead of fighting it. */
+.blade__glyph {
+  text-align: center;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--phosphor);
+  text-shadow: 0 0 6px rgba(125, 255, 196, 0.35);
+}
+
+/* The label lives only in the expanded rail; the collapsed rail is pure
+   icons. */
+.blade__label {
+  display: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.blade.is-open .blade__label {
+  display: block;
+  animation: blade-label-in 140ms ease both;
+}
+
+.blade__item:focus-visible .blade__label {
+  display: block;
+}
+
+@keyframes blade-label-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.blade__item.is-slot {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Icon controls at the blade's foot: the retract toggle and the login
+   placeholder. Icon-only — the aria-label carries the words. */
+.blade__toggle,
+.blade__login {
+  margin: 0.25rem 0.4rem;
+  padding: 0.35rem 0.4rem;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-radius: 0.6rem;
+  font-family: var(--font-console);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.blade__toggle:hover,
+.blade__toggle:focus-visible,
+.blade__login:hover,
+.blade__login:focus-visible {
+  color: var(--phosphor);
+  background: rgba(28, 66, 60, 0.45);
+}
+
+.blade__login {
+  margin-bottom: 0.5rem;
 }
 
 /* ========================================================== wear and film */
 
-/* The talvi film stack, recoloured for v5: the leak is now cool neon bleed
-   (lavender/magenta) instead of warm olive; grain and wear stay as they are —
-   tooth and scratches are palette-agnostic. All pointer-events: none and
-   aria-hidden. */
+/* Same three layers and blend modes as talvi's style.css, above the canvas:
+     .leak  — uneven backlight, SCREEN (adds light)
+     .grain — emulsion grain, OVERLAY (adds tooth without shifting colour)
+     .wear  — scratches and dust, MULTIPLY (removes light)
+   All pointer-events: none and aria-hidden. */
 
 .leak,
 .grain,
@@ -112,16 +410,16 @@ body {
 .leak {
   z-index: 2;
   mix-blend-mode: screen;
-  opacity: 0.5;
+  opacity: 0.7;
   background:
-    radial-gradient(120% 55% at 50% -10%, rgba(123, 77, 255, 0.45), transparent 72%),
-    radial-gradient(120% 50% at 50% 112%, rgba(255, 45, 149, 0.3), transparent 72%),
-    radial-gradient(55% 40% at 28% 42%, rgba(74, 93, 255, 0.14), transparent 72%),
+    radial-gradient(120% 45% at 50% -8%, rgba(150, 152, 92, 0.5), transparent 70%),
+    radial-gradient(120% 45% at 50% 108%, rgba(150, 152, 92, 0.42), transparent 70%),
+    radial-gradient(60% 40% at 30% 40%, rgba(120, 140, 96, 0.16), transparent 75%),
     linear-gradient(
       to bottom,
-      rgba(123, 77, 255, 0.14) 0 5%,
-      transparent 14% 84%,
-      rgba(255, 45, 149, 0.1) 94% 100%
+      rgba(140, 146, 88, 0.22) 0 6%,
+      transparent 12% 84%,
+      rgba(140, 146, 88, 0.18) 92% 100%
     );
 }
 
@@ -175,499 +473,21 @@ body {
     radial-gradient(110% 90% at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.88) 100%);
 }
 
-/* ============================================================ the front */
-
-.front {
-  position: relative;
-  z-index: 1;
-  max-width: 74rem;
-  margin: 0 auto;
-  padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 3.5rem) 3rem
-    clamp(6rem, 8vw, 9rem); /* clear the fixed blade rail */
-}
-
-.front__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1.5rem;
-  margin-bottom: clamp(2.5rem, 7vw, 5rem);
-}
-
-.front__word {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(1.2rem, 2.5vw, 1.6rem);
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--ink);
-  text-decoration: none;
-  text-shadow:
-    0 0 10px rgba(203, 184, 255, 0.45),
-    0 0 30px rgba(255, 45, 149, 0.25);
-}
-
-/* The terminal mark: `>_` with a glitching intermittent caret — the console
-   voice carried into the new palette. */
-.prompt {
-  margin: 0;
-  font-family: var(--font-console);
-  font-size: clamp(1rem, 2.4vw, 1.4rem);
-  line-height: 1;
-  color: var(--pink);
-  text-shadow:
-    0 0 2px rgba(255, 158, 207, 0.5),
-    0 0 12px rgba(255, 45, 149, 0.4),
-    0 0 28px rgba(123, 77, 255, 0.3);
-  filter: blur(var(--soft));
-}
-
-.prompt__gt {
-  color: var(--ink-faint);
-}
-
-.prompt__caret {
-  display: inline-block;
-  margin-left: 0.15em;
-  animation: caret-glitch 4.5s steps(1, end) infinite;
-}
-
-@keyframes caret-glitch {
-  0%,
-  74%,
-  100% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 0.1;
-    transform: translateX(1px);
-  }
-  76% {
-    opacity: 1;
-    transform: none;
-  }
-  84% {
-    opacity: 0;
-  }
-  85%,
-  93% {
-    opacity: 1;
-  }
-  94% {
-    opacity: 0.35;
-    transform: translateY(2px);
-  }
-  95% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* The hero — the promise, big, in the display face. Gradient text in the
-   cyberpunk signature: magenta sliding into violet, over a soft glow. */
-.hero {
-  max-width: 46rem;
-  margin-bottom: clamp(2.5rem, 6vw, 4rem);
-}
-
-.hero__title {
-  margin: 0 0 1rem;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(3rem, 10vw, 6.2rem);
-  line-height: 0.92;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-  background: linear-gradient(100deg, var(--magenta) 0%, var(--violet) 55%, var(--lavender) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 18px rgba(255, 45, 149, 0.35))
-    drop-shadow(0 0 46px rgba(123, 77, 255, 0.25));
-}
-
-.hero__lede {
-  margin: 0;
-  max-width: 30rem;
-  color: var(--ink-dim);
-  font-size: clamp(0.9rem, 2vw, 1.05rem);
-  line-height: 1.6;
-}
-
-/* ================================================================ the board */
-
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 1.1rem;
-  align-items: stretch;
-}
-
-/* Liquid glass (prompt12): a translucent fill blurred over the atmosphere,
-   a hairline border, and a thin specular sheen down the top edge. */
-.card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  padding: 1.25rem 1.35rem;
-  border: 1px solid var(--line);
-  border-radius: 1.25rem;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
-  backdrop-filter: blur(18px) saturate(130%);
-  box-shadow:
-    0 18px 40px rgba(6, 2, 14, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  color: var(--ink);
-  text-decoration: none;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-/* The specular sheen — a faint light running down the top edge of the glass. */
-.card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.35) 0%,
-    rgba(255, 255, 255, 0.05) 38%,
-    transparent 58%,
-    rgba(255, 255, 255, 0.18) 100%
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-.card:hover,
-.card:focus-visible {
-  transform: translateY(-3px);
-  border-color: rgba(255, 45, 149, 0.5);
-  box-shadow:
-    0 22px 46px rgba(6, 2, 14, 0.55),
-    0 0 24px rgba(255, 45, 149, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-
-.card:active {
-  transform: translateY(0);
-}
-
-/* The front-door readout (prompt12's primary card): a tag, a big state, then
-   label/value rows. */
-.card--status {
-  gap: 1.1rem;
-}
-
-.card__tag {
-  align-self: flex-start;
-  padding: 0.15rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-family: var(--font-console);
-  font-size: 0.55rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--lavender);
-  background: rgba(123, 77, 255, 0.12);
-}
-
-.card__big {
-  font-family: var(--font-display);
-  font-size: clamp(2.6rem, 6vw, 4rem);
-  font-weight: 700;
-  line-height: 0.9;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--pink);
-  text-shadow:
-    0 0 2px rgba(255, 255, 255, 0.4),
-    0 0 22px rgba(255, 45, 149, 0.5),
-    0 0 50px rgba(123, 77, 255, 0.3);
-}
-
-.card__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 0.55rem;
-  font-size: 0.66rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.card__row b {
-  color: var(--ink-dim);
-  font-weight: 400;
-  letter-spacing: 0.05em;
-  text-transform: none;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-/* One app per glass card: glyph, name, one line, an open arrow. */
-.card--app {
-  min-height: 10.5rem;
-  justify-content: space-between;
-}
-
-.card__glyph {
-  font-size: 1.7rem;
-  line-height: 1;
-  color: var(--violet);
-  text-shadow: 0 0 12px rgba(123, 77, 255, 0.55);
-}
-
-.card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.card__name {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.card__sub {
-  color: var(--ink-dim);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-.card__open {
-  align-self: flex-end;
-  font-size: 0.6rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--pink);
-}
-
-/* ================================================================= the blade */
-
-/* The slim sidebar — glass, purple-tinted, soft edges. Fixed rail on the
-   left, above the film overlays so it stays crisp; collapsed shows icons,
-   expanded shows labels. */
-.blade {
-  position: fixed;
-  top: 50%;
-  left: clamp(1rem, 3vw, 2rem);
-  transform: translateY(-50%);
-  width: var(--blade-collapsed);
-  z-index: 5;
-  border: none;
-  border-radius: 1.1rem;
-  background: rgba(29, 15, 51, 0.5);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
-  backdrop-filter: blur(18px) saturate(130%);
-  box-shadow:
-    0 0 22px rgba(6, 2, 14, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  display: flex;
-  flex-direction: column;
-  transition: width 160ms ease;
-}
-
-.blade.is-open {
-  width: var(--blade-expanded);
-}
-
-/* Entrance: the rail fades in, then its items assemble. Reduced motion kills
-   it (see the bottom of this file). */
-.blade {
-  animation: blade-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.blade__item {
-  animation: blade-item-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.blade__item:nth-child(2) {
-  animation-delay: 70ms;
-}
-.blade__item:nth-child(3) {
-  animation-delay: 140ms;
-}
-.blade__item:nth-child(4) {
-  animation-delay: 210ms;
-}
-
-.blade__toggle,
-.blade__login {
-  animation: blade-item-in 280ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
-}
-
-@keyframes blade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes blade-item-in {
-  from {
-    opacity: 0;
-    transform: translateX(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.blade__nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.75rem 0.5rem 0.5rem;
-  flex: 1;
-  overflow: hidden;
-}
-
-.blade__item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.4rem;
-  border-radius: 0.7rem;
-  color: var(--ink-dim);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.blade.is-open .blade__item {
-  justify-content: flex-start;
-}
-
-.blade__item:hover,
-.blade__item:focus-visible {
-  color: var(--ink);
-  background: rgba(123, 77, 255, 0.18);
-}
-
-.blade__item:visited {
-  color: var(--ink-faint);
-}
-
-.blade__item:hover:visited,
-.blade__item:focus-visible:visited {
-  color: var(--ink);
-}
-
-.blade__item:active {
-  background: rgba(123, 77, 255, 0.12);
-}
-
-.blade__glyph {
-  text-align: center;
-  font-size: 1.15rem;
-  line-height: 1;
-  color: var(--lavender);
-  text-shadow: 0 0 8px rgba(203, 184, 255, 0.4);
-}
-
-.blade__item:hover .blade__glyph,
-.blade__item:focus-visible .blade__glyph {
-  color: var(--pink);
-}
-
-.blade__label {
-  display: none;
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.blade.is-open .blade__label {
-  display: block;
-  animation: blade-label-in 140ms ease both;
-}
-
-.blade__item:focus-visible .blade__label {
-  display: block;
-}
-
-@keyframes blade-label-in {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.blade__item.is-slot {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.blade__toggle,
-.blade__login {
-  margin: 0.25rem 0.4rem;
-  padding: 0.35rem 0.4rem;
-  background: transparent;
-  color: var(--ink-faint);
-  border: none;
-  border-radius: 0.6rem;
-  font-family: var(--font-console);
-  font-size: 0.95rem;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-.blade__toggle:hover,
-.blade__toggle:focus-visible,
-.blade__login:hover,
-.blade__login:focus-visible {
-  color: var(--ink);
-  background: rgba(123, 77, 255, 0.18);
-}
-
-.blade__login {
-  margin-bottom: 0.5rem;
-}
-
-/* One focus ring for the whole page — warm gold, unused by any resting state. */
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
 /* ========================================================== reduced motion */
 
+/* The WebGL scene freezes its own autonomous motion in JS (scene/main.js).
+   Here we freeze the one CSS animation the film stack carries — grain stays
+   as texture but stops crawling, exactly as on talvi's page. */
 @media (prefers-reduced-motion: reduce) {
   .grain {
-    animation: none;
-  }
-  .prompt__caret {
     animation: none;
   }
   .blade,
   .blade.is-open {
     transition: none;
   }
+  /* The entrance is removed outright — the rail and its items are simply
+     visible (the `both` fill on a cancelled animation would strand them). */
   .blade,
   .blade__item,
   .blade__toggle,
@@ -678,23 +498,22 @@ body {
   }
   .blade__label {
     transition: none;
+  }
+  /* The caret keeps reading as a prompt but stops faulting. */
+  .prompt__caret {
     animation: none;
   }
-  .card,
-  .card--app,
-  .hero__title,
-  .front__head {
+  .blade__label {
     animation: none;
   }
 }
 
 /* ================================================================== mobile */
 
+/* The blade becomes a horizontal rail pinned to the top on a phone; content
+   clears it with top padding. The retract toggle is hidden — on a phone the
+   blade is always just the icon row, there is no side rail to open. */
 @media (max-width: 40rem) {
-  .front {
-    padding: 1.1rem 1.1rem 2.5rem;
-  }
-
   .blade {
     top: 0.5rem;
     left: 0.5rem;
@@ -727,16 +546,9 @@ body {
   .blade__login {
     margin: 0 0.4rem 0 0;
   }
-
-  .front__head {
-    margin-bottom: 2rem;
-  }
-
-  .hero__title {
-    font-size: clamp(2.6rem, 14vw, 3.6rem);
-  }
-
-  .board {
-    grid-template-columns: 1fr;
+  /* The HUD hugs the bottom on a phone; the prompt stays on the left. */
+  .hud {
+    bottom: 0.9rem;
+    padding: 0 0.9rem;
   }
 }
