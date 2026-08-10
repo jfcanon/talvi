@@ -100,11 +100,19 @@ resource "cloudflare_workers_script" "talvi_relay" {
   # NO `migrations` block — the relay has no Durable Objects (chat is not here).
 }
 
-# Route: app.ygdcbtmc4u.uk/relay/* → the relay worker. The hub owns the `/*`
-# fallback; this more-specific pattern wins for the relay's paths.
+# Routes: app.ygdcbtmc4u.uk/relay (exact) and /relay/* (everything under it).
+# The hub owns the `/*` fallback; these more-specific patterns win. The exact
+# /relay route matters: the blade links to /relay (no trailing slash), and a
+# `relay/*` wildcard alone would 404 it.
 resource "cloudflare_workers_route" "relay" {
   zone_id = var.talvi_zone_id
   pattern = "app.ygdcbtmc4u.uk/relay/*"
+  script  = cloudflare_workers_script.talvi_relay.script_name
+}
+
+resource "cloudflare_workers_route" "relay_root" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/relay"
   script  = cloudflare_workers_script.talvi_relay.script_name
 }
 
