@@ -87,12 +87,25 @@ export class AgentDO extends WrappedAgent {
   async handleSession(server) {
     server.accept();
     this.sockets.add(server);
-    const ws = await getWorkspace(this);
-    await ws.ready();
-    // The workspace root must exist before the first write (the README's
-    // initialize step). Idempotent; the fs surface handles the recursive mkdir.
-    await ws.fs.mkdir(WORKSPACE_ROOT, { recursive: true }).catch(() => {});
-    server.send(JSON.stringify({ t: "ready" }));
+
+    try {
+      const ws = await getWorkspace(this);
+      await ws.ready();
+      // The workspace root must exist before the first write (the README's
+      // initialize step). Idempotent; the fs surface handles the recursive mkdir.
+      await ws.fs.mkdir(WORKSPACE_ROOT, { recursive: true }).catch(() => {});
+      server.send(JSON.stringify({ t: "ready" }));
+    } catch (err) {
+      // Surface the failure to the client instead of hanging: close 4401 with
+      // a code in the reason so a smoke client can report the DO's init error.
+      try {
+        server.close(4401, "agent init failed: " + String(err?.message ?? err).slice(0, 120));
+      } catch {
+        server.close(4401);
+      }
+      this.drop(server);
+      return;
+    }
 
     server.addEventListener("message", async (event) => {
       if (typeof event.data !== "string") return;
