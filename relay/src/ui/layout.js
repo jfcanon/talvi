@@ -19,12 +19,54 @@
 import { ASSET_VERSION } from "../generated/assets.js";
 import { escapeHtml } from "../sanitise.js";
 import { PREFIX } from "../prefix.js";
+import { shell } from "./blade.js";
 
 // `title` and `lede` are RAW text: escaping happens here so it cannot be
 // forgotten at a call site, and so nothing is ever escaped twice. `content` is
 // already-built markup and is the caller's responsibility.
-export function renderPage(title, { lede, content, script = false }) {
+//
+// `shell` defaults to true: the page is wrapped in the shared shell (the
+// persistent blade + this content as the panel), which is what makes switching
+// apps read as one app. The view/share page (a stranger with a link) passes
+// `shell: false` to stay a single-purpose page per blueprint A2 — one file,
+// nothing else to click.
+export function renderPage(title, { lede, content, script = false, shell: useShell = true }) {
   const v = encodeURIComponent(ASSET_VERSION);
+
+  // The instrument: the framed readout that is every app's content. In shell
+  // mode this becomes the shell's panel; standalone (share page) it is the
+  // whole page.
+  const instrument =
+    '<div class="frame"><div class="wrap">' +
+    '<header class="head">' +
+    // Just "talvi". The "drop" mark was redundant — the lede below already
+    // says what the thing does, and a wordmark repeating its own product
+    // description is the kind of thing that reads as filler.
+    // The wordmark is a link home on EVERY page, including the download page.
+    // A logo that does nothing is a small broken promise: it is the first
+    // thing anyone clicks to get out of a dead end.
+    '<h1 class="sign glitch"><a class="sign__link" href="' + PREFIX + '/">talvi</a></h1>' +
+    '<div class="tagline"><span class="tagline__box">status</span></div>' +
+    '<div class="box">' +
+    '<p class="lede glitch" data-type>' +
+    escapeHtml(lede) +
+    "</p>" +
+    "</div>" +
+    "</header>" +
+    '<main class="stack">' +
+    content +
+    "</main>" +
+    "</div></div>";
+
+  // The body: ambient layers, then either the shell (blade + panel) or the
+  // standalone instrument.
+  const body =
+    '<div class="scan" aria-hidden="true"></div>' +
+    '<div class="leak" aria-hidden="true"></div>' +
+    '<div class="grain" aria-hidden="true"></div>' +
+    '<div class="wear" aria-hidden="true"></div>' +
+    (useShell ? shell("relay", instrument) : instrument);
+
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -38,44 +80,7 @@ export function renderPage(title, { lede, content, script = false }) {
     '">' +
     (script ? '<script src="' + PREFIX + '/s.js?v=' + v + '" defer></script>' : "") +
     "</head><body>" +
-    // The moving scan band (A.5a). A real element rather than a third
-    // pseudo-element, because html has only ::before and ::after and both are
-    // spoken for — rain and static scanlines. Empty, decorative, aria-hidden.
-    '<div class="scan" aria-hidden="true"></div>' +
-    // Wear layers (A.5c). Three separate elements because they blend
-    // differently: light leaks screen over the ground, grain overlays it, and
-    // scratches multiply into it. One combined layer cannot do all three.
-    '<div class="leak" aria-hidden="true"></div>' +
-    '<div class="grain" aria-hidden="true"></div>' +
-    '<div class="wear" aria-hidden="true"></div>' +
-    // A.5b: the entire page lives inside one framed instrument. Every piece of
-    // text below is inside a box or sitting on a line — nothing floats.
-    '<div class="frame">' +
-    '<div class="wrap">' +
-    '<header class="head">' +
-    // Just "talvi". The "drop" mark was redundant — the lede below already
-    // says what the thing does, and a wordmark repeating its own product
-    // description is the kind of thing that reads as filler.
-    // The wordmark is a link home on EVERY page, including the download page.
-    // A logo that does nothing is a small broken promise: it is the first
-    // thing anyone clicks to get out of a dead end.
-    '<h1 class="sign glitch"><a class="sign__link" href="' + PREFIX + '/">talvi</a></h1>' +
-    // data-type marks this for the typed reveal. The text is PLAIN — the
-    // typewriter writes with textContent, so any markup inside would be
-    // silently flattened. Emphasis in a console voice comes from the words,
-    // not from bold.
-    '<div class="tagline"><span class="tagline__box">status</span></div>' +
-    '<div class="box">' +
-    '<p class="lede glitch" data-type>' +
-    escapeHtml(lede) +
-    "</p>" +
-    "</div>" +
-    "</header>" +
-    '<main class="stack">' +
-    content +
-    "</main>" +
-    // Footer removed entirely (A.5b). What it said — links are public, files
-    // expire — is either already in the lede or visible in the record itself.
-    "</div></div></body></html>"
+    body +
+    "</body></html>"
   );
 }
