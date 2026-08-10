@@ -33,11 +33,13 @@ import { bootScene } from "../scene/main.js";
 
   if (!BLADE || !TOGGLE) return;
 
-  // The toggle's label says what the NEXT click does, so a closed rail reads
-  // "expand" and an open one "retract". On mobile the toggle is hidden by CSS
-  // and this is moot, but the text must still be right if it is ever shown.
+  // The toggle is an icon: the glyph says what the NEXT click does (» =
+  // expand, « = collapse), and the aria-label says it in words for assistive
+  // tech. On mobile the toggle is hidden by CSS and this is moot, but the
+  // state must still be right if it is ever shown.
   function refreshToggle(open) {
-    TOGGLE.textContent = open ? "retract" : "expand";
+    TOGGLE.textContent = open ? "«" : "»";
+    TOGGLE.setAttribute("aria-label", open ? "collapse rail" : "expand rail");
     TOGGLE.setAttribute("aria-pressed", String(open));
   }
 

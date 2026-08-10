@@ -9,7 +9,7 @@
 // Path handling: Cloudflare routes app.*/relay/* here, so every pathname starts
 // with /relay. The router strips PREFIX before matching and every generated
 // link re-applies it (src/prefix.js).
-import { STYLE_CSS, CLIENT_JS, SPRITE_PNG_B64, ASSET_VERSION } from "./generated/assets.js";
+import { STYLE_CSS, CLIENT_JS, ASSET_VERSION } from "./generated/assets.js";
 import { closedPage, limitedPage } from "./ui/errorpage.js";
 import { notFoundPage } from "./ui/notfound.js";
 import { uploadPage } from "./ui/upload.js";
@@ -436,29 +436,6 @@ async function handleMarkdown(env, row) {
 // so the URL changes whenever the bytes do. Never ship an immutable cache on
 // an unversioned URL: the next edit would never reach a returning visitor.
 const ASSET_CACHE = "public, max-age=31536000, immutable";
-
-// base64 -> bytes, once per isolate rather than per request.
-let spriteBytes = null;
-
-function getSprite() {
-  if (spriteBytes) return spriteBytes;
-  const bin = atob(SPRITE_PNG_B64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  spriteBytes = out;
-  return spriteBytes;
-}
-
-function handleSprite() {
-  return new Response(getSprite(), {
-    headers: {
-      "content-type": "image/png",
-      "cache-control": ASSET_CACHE,
-      "x-content-type-options": "nosniff",
-      "x-robots-tag": ROBOTS_TAG,
-    },
-  });
-}
 
 function handleAsset(pathname) {
   const isCss = pathname === "/s.css";
@@ -905,10 +882,6 @@ async function routePage(request, env, ctx, pathname) {
 async function routeStatic(request, env, ctx, pathname) {
   if (pathname === "/s.css" || pathname === "/s.js") {
     return handleAsset(pathname);
-  }
-
-  if (pathname === "/s.png") {
-    return handleSprite();
   }
 
   const match = SLUG_ROUTE.exec(pathname);

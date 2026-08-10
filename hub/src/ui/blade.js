@@ -52,10 +52,11 @@ export const BLADE_APPS = [
   },
 ];
 
-// Server-rendered blade markup. The tag straddles the top border; items are a
-// plain <a> list (keyboard-reachable for free); the toggle is a real <button>
-// driven by client.js (no inline handlers, CSP). Active item is marked with
-// aria-current and the lit class.
+// Server-rendered blade markup. Items are a plain <a> list (keyboard-reachable
+// for free); the toggle and the login control are real <button>s driven by
+// client.js (no inline handlers, CSP). Active item is marked with aria-current
+// and the lit class. The "apps" tag label is gone (v2) — the blade is soft
+// chrome over the world, not a framed instrument panel.
 export function bladeNav(active) {
   const items = BLADE_APPS.map((app) => {
     const isActive = app.key !== null && app.key === active;
@@ -95,12 +96,19 @@ export function bladeNav(active) {
 
   return (
     '<nav class="blade" aria-label="apps">' +
-    '<span class="blade__tag">apps</span>' +
     '<div class="blade__nav">' +
     items.join("") +
     "</div>" +
-    '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="shell">' +
-    "expand" +
+    // Icon-only toggle: the glyph says what the NEXT click does (» = expand,
+    // « = collapse). client.js keeps the aria-label and aria-pressed honest.
+    '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="shell" aria-label="expand rail">' +
+    "»" +
+    "</button>" +
+    // Login control at the bottom. A placeholder for now: auth on app.* is
+    // Cloudflare Access at the edge (no in-app session); when Clerk lands
+    // (backlog B3) this becomes the real gate.
+    '<button class="blade__login" type="button" aria-label="sign in">' +
+    "⏻" +
     "</button>" +
     "</nav>"
   );

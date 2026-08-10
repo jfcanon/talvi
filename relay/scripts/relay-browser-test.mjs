@@ -65,6 +65,8 @@ try {
   });
   check("quiet backdrop canvas + WebGL", p2.canvas && p2.webgl);
   check("panels are frosted glass", p2.glass);
+  // v2: the walking pixel sprite is gone (it clashed with the 3D world).
+  check("pixel sprite removed", (await page.locator(".figure").count()) === 0);
 
   // Every asset request on the page must come back 200 (prefixed paths work).
   const badAssets = [];
