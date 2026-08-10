@@ -102,6 +102,29 @@ try {
   await page.locator(".blade__toggle").click();
   check("blade closes on second toggle", !(await blade.evaluate((el) => el.classList.contains("is-open"))));
 
+  // --- the agent panel (blueprint PR2) -------------------------------------
+  // The MORE slot is a real button; clicking it reveals the panel, which
+  // connects to /agent/ws (same origin, CSP connect-src 'self' permits the
+  // upgrade) and round-trips a write/read through the AgentDO workspace.
+  const agentToggle = page.locator("#agent-toggle");
+  check("MORE slot is a button", (await agentToggle.count()) === 1 && (await agentToggle.evaluate((el) => el.tagName)) === "BUTTON");
+  await agentToggle.click();
+  await page.waitForTimeout(300);
+  check("agent panel opens", await page.locator("#agent-panel").isVisible());
+  const statusAfterOpen = await page.locator("#agent-status").textContent();
+  check("agent connects over same-origin WS", statusAfterOpen === "connected", statusAfterOpen);
+
+  if (statusAfterOpen === "connected") {
+    await page.locator("#agent-input").fill("write /workspace/note.txt hello agent");
+    await page.locator("#agent-send").click();
+    await page.waitForTimeout(250);
+    await page.locator("#agent-input").fill("read /workspace/note.txt");
+    await page.locator("#agent-send").click();
+    await page.waitForTimeout(250);
+    const logText = await page.locator("#agent-log").textContent();
+    check("agent fs write/read round-trips", /hello agent/.test(logText), logText.slice(0, 200));
+  }
+
   // --- the HUD -------------------------------------------------------------
   check("prompt present", (await page.locator(".prompt").count()) === 1);
   check("hint present", (await page.locator(".hint").count()) === 1);

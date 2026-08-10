@@ -55,18 +55,50 @@ resource "cloudflare_dns_record" "app" {
   ttl     = 1 # 1 = automatic; required by the provider and only valid when proxied
 }
 
-# The hub Worker — tiny (welcome page + blade), so `content = file(...)` is
-# fine (green's pattern). A content_file + content_sha256 reference is only
-# needed once a script approaches the ~5 MB that OOM'd blue's plan renderer.
+# The hub Worker — still small enough for `content = file(...)` (the
+# @cloudflare/computer agent DO pushes it to ~208 KiB gzip; a
+# content_file + content_sha256 reference is only needed past ~5 MB, the size
+# that OOM'd blue's plan renderer).
 #
-# NO Durable Objects, NO storage, NO secrets — the hub is a dumb launcher of
-# links (A4). Nothing here needs a `migrations` block and nothing ever will.
+# The hub is a dumb launcher of links (A4) — EXCEPT the agent (PR2): the MORE
+# blade slot opens a chat panel that speaks to the AgentDO, a Durable Object
+# owning a filesystem-only @cloudflare/computer Workspace. That is the only DO,
+# storage, or secret-free surface the hub carries; nothing else will be added.
 resource "cloudflare_workers_script" "talvi_hub" {
   account_id         = var.cloudflare_account_id
   script_name        = "talvi-hub"
   main_module        = "index.js"
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-08-10"
+
+  # @cloudflare/computer needs node: crypto/events (nodejs_compat) and the
+  # runtime's cloudflare:workers RPC classes — all provided by workerd, kept
+  # external in the esbuild command (package.json build script).
+  compatibility_flags = ["nodejs_compat"]
+
+  bindings = [
+    # The AgentDO — one Durable Object per agent name (the owner's prototype
+    # agent is "main"; the Worker routes /agent/ws to it). class_name matches
+    # the named export of dist/index.js (src/agent/agentdo.js). SQLite-backed
+    # namespace, required by the free plan — the migrations block below creates
+    # it on this apply.
+    {
+      type       = "durable_object_namespace"
+      name       = "AGENT"
+      class_name = "AgentDO"
+    },
+  ]
+
+  # ONE apply only. The `migrations` argument is WriteOnly in provider v5:
+  # Terraform does not store it and re-sends it on EVERY apply, and Cloudflare
+  # refuses the create-migration once the class has live objects (code 10074 —
+  # the same trap that cost green hours, fixed in PR #51). So: this PR creates
+  # the AgentDO class; the IMMEDIATELY-FOLLOWING PR removes this block. Do not
+  # leave it in place across more than one apply. Map object, not a list; the
+  # free plan rejects `new_classes` (only `new_sqlite_classes` is accepted).
+  migrations = {
+    new_sqlite_classes = ["AgentDO"]
+  }
 }
 
 # The `/*` fallback route. More-specific routes (app.ygdcbtmc4u.uk/relay/*,

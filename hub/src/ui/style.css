@@ -552,3 +552,116 @@ body {
     padding: 0 0.9rem;
   }
 }
+
+/* The agent panel (blueprint PR2) — the agent's chat front door, toggled by
+   the MORE blade button. Sits above the world like the HUD but BELOW the film
+   overlays (.leak/.grain/.wear, which stay last in DOM order = on top). Flat
+   instrument panel: framed, mono, phosphor on the near-black ground — same
+   voice as the rest of the hub. */
+.agent {
+  position: fixed;
+  right: clamp(1.25rem, 4vw, 2.5rem);
+  bottom: clamp(3.5rem, 8vh, 5rem);
+  width: min(24rem, calc(100vw - 2.5rem));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(9, 12, 26, 0.88);
+  border: 1px solid var(--rule-lit);
+  box-shadow: var(--glow-cyan);
+  z-index: 6;
+  font-family: var(--font-console);
+}
+
+.agent[hidden] {
+  display: none;
+}
+
+.agent__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--hud-fill);
+}
+
+.agent__title {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  color: var(--phosphor);
+  text-shadow: 0 0 8px rgba(107, 255, 168, 0.5);
+}
+
+.agent__status {
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.agent__log {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 6rem;
+  max-height: 38vh;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-lo);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent__line {
+  margin: 0 0 0.15rem;
+}
+
+.agent__compose {
+  display: flex;
+  border-top: 1px solid var(--rule);
+}
+
+.agent__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text-hi);
+  font-family: var(--font-console);
+  font-size: 0.72rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.agent__input::placeholder {
+  color: var(--text-dim);
+}
+
+.agent__send {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--rule);
+  color: var(--phosphor);
+  font-size: 0.85rem;
+  padding: 0 0.9rem;
+  cursor: pointer;
+}
+
+.agent__send:hover,
+.agent__send:focus-visible {
+  background: var(--hud-fill-lit);
+}
+
+/* Focus stays visible (keyboard-first, like the blade). */
+.agent__input:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--hud-line);
+}
+
+/* Phones: the panel hugs the bottom like the HUD. */
+@media (max-width: 40rem) {
+  .agent {
+    right: 0.6rem;
+    bottom: 3.2rem;
+    width: calc(100vw - 1.2rem);
+  }
+}

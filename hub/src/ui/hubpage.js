@@ -43,7 +43,7 @@ const APPS = [
     glyph: "＋",
     label: "MORE",
     href: null,
-    title: "Future app",
+    title: "Agent",
   },
 ];
 
@@ -51,6 +51,10 @@ const APPS = [
 // keys, nameplates and hrefs). The blade below covers keyboard navigation;
 // the raycast covers clicking a cube. No DOM app labels (v4.1 — the names
 // are fixed 3D nameplates in the world).
+//
+// The MORE slot is a REAL <button> — it toggles the agent panel (PR2), not a
+// link. No inline handler (CSP: script-src 'self' — which is WHY the toggle
+// is a button + addEventListener in client.js, never an onclick attribute).
 function bladeItems() {
   return APPS.map((app) =>
     app.href
@@ -63,13 +67,14 @@ function bladeItems() {
         '</span><span class="blade__label">' +
         app.label +
         "</span></a>"
-      : '<span class="blade__item is-slot" title="' +
+      : '<button class="blade__item is-slot" id="agent-toggle" type="button" title="' +
         app.title +
-        '"><span class="blade__glyph" aria-hidden="true">' +
+        '" aria-haspopup="true" aria-expanded="false" aria-controls="agent-panel">' +
+        '<span class="blade__glyph" aria-hidden="true">' +
         app.glyph +
         '</span><span class="blade__label">' +
         app.label +
-        "</span></span>",
+        "</span></button>",
   ).join("");
 }
 
@@ -114,6 +119,20 @@ export function hubPage() {
     "</p>" +
     '<p class="hint" aria-hidden="true">drag to look · scroll to zoom · click a node</p>' +
     "</div>" +
+    // The agent panel (PR2) — the agent's chat front door. Hidden by default;
+    // the MORE blade button toggles it (client.js). Sits above the world but
+    // below the film overlays, same stacking as the HUD. The panel is real
+    // markup, the log is written by client.js, and the input is a plain
+    // <input> + <button> — no form (CSP form-action 'none').
+    '<section class="agent" id="agent-panel" hidden aria-label="agent">' +
+    '<header class="agent__head"><span class="agent__title">AGENT</span>' +
+    '<span class="agent__status" id="agent-status">offline</span></header>' +
+    '<div class="agent__log" id="agent-log" role="log" aria-live="polite"></div>' +
+    '<div class="agent__compose">' +
+    '<input class="agent__input" id="agent-input" type="text" autocomplete="off" spellcheck="false" aria-label="command" placeholder="write /workspace/note.txt hello">' +
+    '<button class="agent__send" id="agent-send" type="button" aria-label="send">▸</button>' +
+    "</div>" +
+    "</section>" +
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +
     '<div class="wear" aria-hidden="true"></div>' +

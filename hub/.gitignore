@@ -1,3 +1,9 @@
 # hub build output (built in CI; a Terraform input) — same rule as green's dist/
 /dist/
 /src/generated/
+
+# generated test bundle (scripts/run-agent-tests.mjs rebuilds it)
+/scripts/agent-logic-test.bundle.mjs
+
+node_modules/
+.DS_Store

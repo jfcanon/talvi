@@ -59,4 +59,100 @@ import { bootScene } from "../scene/main.js";
       // Private mode or storage disabled — the toggle still works this page.
     }
   });
+
+  bootAgentPanel();
 })();
+
+// The agent panel (blueprint PR2) — the agent's chat front door. The MORE
+// blade button toggles it; when open, it connects to /agent/ws (same origin,
+// CSP connect-src 'self' permits the upgrade — the chat precedent, D15) and
+// speaks the PR2 command protocol: {t:"cmd", cmd, path, data}. The log is
+// built here, never in HTML, and the input sends on Enter or the send button.
+function bootAgentPanel() {
+  const PANEL = document.getElementById("agent-panel");
+  const TOGGLE = document.getElementById("agent-toggle");
+  const INPUT = document.getElementById("agent-input");
+  const SEND = document.getElementById("agent-send");
+  const LOG = document.getElementById("agent-log");
+  const STATUS = document.getElementById("agent-status");
+  if (!PANEL || !TOGGLE || !INPUT || !SEND || !LOG || !STATUS) return;
+
+  let ws = null;
+
+  function setStatus(text) {
+    STATUS.textContent = text;
+  }
+
+  function log(text) {
+    const line = document.createElement("div");
+    line.className = "agent__line";
+    line.textContent = text;
+    LOG.appendChild(line);
+    LOG.scrollTop = LOG.scrollHeight;
+  }
+
+  function connect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(proto + "//" + location.host + "/agent/ws");
+
+    ws.addEventListener("open", () => {
+      setStatus("connected");
+      log("> connected");
+    });
+    ws.addEventListener("message", (event) => {
+      let frame;
+      try {
+        frame = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (frame.t === "ready") return;
+      if (frame.t === "ok") log("ok  " + frame.result);
+      else if (frame.t === "err") log("err " + frame.code);
+    });
+    ws.addEventListener("close", () => {
+      setStatus("offline");
+      log("> closed");
+      ws = null;
+    });
+    ws.addEventListener("error", () => {
+      setStatus("error");
+      log("> error");
+    });
+  }
+
+  function send() {
+    const value = INPUT.value;
+    if (!value) return;
+    INPUT.value = "";
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      log("> not connected");
+      return;
+    }
+    log("> " + value);
+    // Parse "cmd path [data]" from the input into a frame.
+    const space = value.indexOf(" ");
+    const cmd = space === -1 ? value : value.slice(0, space);
+    const rest = space === -1 ? "" : value.slice(space + 1).trim();
+    const restSpace = rest.indexOf(" ");
+    const path = restSpace === -1 ? rest : rest.slice(0, restSpace);
+    const data = restSpace === -1 ? undefined : rest.slice(restSpace + 1);
+    ws.send(JSON.stringify({ t: "cmd", cmd, path, data }));
+  }
+
+  TOGGLE.addEventListener("click", () => {
+    const open = PANEL.hidden;
+    PANEL.hidden = !open;
+    TOGGLE.setAttribute("aria-expanded", String(open));
+    if (open) {
+      connect();
+      INPUT.focus();
+    }
+  });
+
+  SEND.addEventListener("click", send);
+  INPUT.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") send();
+  });
+}
