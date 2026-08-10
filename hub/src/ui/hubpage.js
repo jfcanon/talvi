@@ -1,19 +1,15 @@
-// talvi hub — the explorable front door (v4, ideas #1 + #2).
+// talvi hub — the 2D front door (v5).
 //
-// Server-rendered markup; the world boots from /h.js (scene modules bundled by
-// build-assets.mjs) and /h.css is linked, never inlined — CSP default-src
-// 'none', no inline styles or scripts.
-//
-// The page is a fixed WebGL canvas — a small world you move through like
-// Google Earth — plus:
-//   - the blade: flat chrome rail, always visible, keyboard-first — the
-//     instant switcher, and the navigation fallback if WebGL is absent.
-//   - three CUBES (relay, chat, cinto), each with a fixed 3D nameplate above
-//     it. Click a cube (raycast) to open its app. The blade is the keyboard
-//     path; there are no DOM app labels (v4.1 — the names live in the world).
-//   - the HUD: the `>_` prompt (which echoes a hovered cube as
-//     "> open relay") and a one-line hint of the controls.
-//   - the .leak/.grain/.wear film overlays, above the canvas (A5c).
+// Server-rendered markup; /h.css and /h.js are linked, never inlined — CSP
+// default-src 'none'. The 3D world is gone; this is a 2D composition in the
+// prompt12 design language with the cyberpunk palette (deep midnight purple,
+// royal blue, magenta, soft pink, pale lavender):
+//   - a full-viewport procedural atmosphere (CSS gradients + the film wear
+//     stack — no external images, no CSP change),
+//   - the blade as the slim sidebar (the persistent rail, keyboard-first),
+//   - a hero: the promise, big, in the display face,
+//   - a glass board: a front-door status card plus one glass card per app
+//     (relay, chat, cinto) — real anchors, prompt12's liquid-glass language.
 import { ASSET_VERSION } from "../generated/assets.js";
 
 const v = encodeURIComponent(ASSET_VERSION);
@@ -47,10 +43,31 @@ const APPS = [
   },
 ];
 
-// The world cubes — the apps you can open — live in scene/world.js (their
-// keys, nameplates and hrefs). The blade below covers keyboard navigation;
-// the raycast covers clicking a cube. No DOM app labels (v4.1 — the names
-// are fixed 3D nameplates in the world).
+// The glass board cards — the apps you can open.
+const CARDS = [
+  {
+    glyph: "▣",
+    name: "relay",
+    sub: "drop a file, share a link",
+    href: "https://app.ygdcbtmc4u.uk/relay",
+    title: "Open relay",
+  },
+  {
+    glyph: "▤",
+    name: "chat",
+    sub: "a room is an invitation already sent",
+    href: "https://app.ygdcbtmc4u.uk/chat",
+    title: "Open chat",
+  },
+  {
+    glyph: "◈",
+    name: "cinto",
+    sub: "compliance",
+    href: "https://cinto.ygdcbtmc4u.uk",
+    title: "Open cinto",
+  },
+];
+
 function bladeItems() {
   return APPS.map((app) =>
     app.href
@@ -73,6 +90,30 @@ function bladeItems() {
   ).join("");
 }
 
+function appCards() {
+  return CARDS.map(
+    (c) =>
+      '<a class="card card--app" href="' +
+      c.href +
+      '" title="' +
+      c.title +
+      '">' +
+      '<span class="card__glyph" aria-hidden="true">' +
+      c.glyph +
+      "</span>" +
+      '<span class="card__body">' +
+      '<span class="card__name">' +
+      c.name +
+      "</span>" +
+      '<span class="card__sub">' +
+      c.sub +
+      "</span>" +
+      "</span>" +
+      '<span class="card__open" aria-hidden="true">open →</span>' +
+      "</a>",
+  ).join("");
+}
+
 export function hubPage() {
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
@@ -87,36 +128,51 @@ export function hubPage() {
     v +
     '" defer></script>' +
     "</head><body>" +
-    // The fixed WebGL world sits beneath everything; the film overlays above
-    // it, exactly as they sit above talvi's page (A5c). aria-hidden throughout.
-    '<canvas id="scene" aria-hidden="true"></canvas>' +
+    // The atmosphere: a fixed procedural sky (gradients) beneath everything,
+    // then the film wear stack above it (A5c, recoloured for v5). aria-hidden.
+    '<div class="atmos" aria-hidden="true"></div>' +
+    '<div class="leak" aria-hidden="true"></div>' +
+    '<div class="grain" aria-hidden="true"></div>' +
+    '<div class="wear" aria-hidden="true"></div>' +
+    // The slim sidebar rail — flat chrome, keyboard-first, the instant
+    // switcher.
     '<nav class="blade" aria-label="apps">' +
     '<div class="blade__nav">' +
     bladeItems() +
     "</div>" +
-    // Icon-only toggle: the glyph says what the NEXT click does (» = expand,
-    // « = collapse). client.js keeps the aria-label and aria-pressed honest.
     '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="blade" aria-label="expand rail">' +
     "»" +
     "</button>" +
-    // Login control at the bottom (placeholder — auth on app.* is Cloudflare
-    // Access at the edge; when Clerk lands this becomes the real gate).
     '<button class="blade__login" type="button" aria-label="sign in">' +
     "⏻" +
     "</button>" +
     "</nav>" +
-    // The HUD: the terminal prompt (echoes a hovered cube) and the hint.
-    '<div class="hud">' +
+    // The 2D composition.
+    '<main class="front">' +
+    '<header class="front__head">' +
+    '<a class="front__word" href="/">talvi</a>' +
     '<p class="prompt" aria-live="polite">' +
     '<span class="prompt__gt" aria-hidden="true">&gt;</span>' +
-    '<span class="prompt__text"> </span>' +
     '<span class="prompt__caret" aria-hidden="true">_</span>' +
     "</p>" +
-    '<p class="hint" aria-hidden="true">drag to look · scroll to zoom · click a node</p>' +
+    "</header>" +
+    '<section class="hero">' +
+    '<h1 class="hero__title">one front door.</h1>' +
+    '<p class="hero__lede">file share, chat, cinto — and whatever comes next, behind one quiet door.</p>' +
+    "</section>" +
+    '<div class="board">' +
+    // The front-door readout (prompt12's primary card): the big state, then
+    // label/value rows.
+    '<a class="card card--status" href="https://app.ygdcbtmc4u.uk/relay" title="enter the power app">' +
+    '<span class="card__tag">front door</span>' +
+    '<span class="card__big">ready</span>' +
+    '<span class="card__row"><span>apps</span><b>3</b></span>' +
+    '<span class="card__row"><span>mode</span><b>private</b></span>' +
+    '<span class="card__row"><span>host</span><b>app.ygdcbtmc4u.uk</b></span>' +
+    "</a>" +
+    appCards() +
     "</div>" +
-    '<div class="leak" aria-hidden="true"></div>' +
-    '<div class="grain" aria-hidden="true"></div>' +
-    '<div class="wear" aria-hidden="true"></div>' +
+    "</main>" +
     "</body></html>"
   );
 }
