@@ -1,25 +1,25 @@
-// talvi hub Worker — the power-app front door (A0 skeleton).
+// talvi hub Worker — the power-app front door (A1).
 //
-// A0 is deliberately inert: it proves the whole pipeline (worktree → PR →
-// plan → merge → apply → live verify) before any UI exists. It serves only
-// /healthz; everything else is the uniform 404, so a not-yet-migrated route
-// looks exactly like broken routing (the same discipline green uses).
+// A0 proved the pipeline with an inert skeleton. A1 claims "/" with the
+// welcome page + retractable blade. Everything not claimed by a more-specific
+// route (or a future app worker) is the uniform 404, so a not-yet-migrated
+// route looks exactly like broken routing.
 //
 // The full architecture is in plans/talvi-hub-blueprint.md:
 //   - hub worker owns app.ygdcbtmc4u.uk/* (the `/*` fallback)
 //   - relay/chat/cinto mount at more-specific path routes, each its own Worker
-//   - A1 adds the welcome page + retractable blade (this file is its home)
-//   - CSP default-src 'none' from day one: css/js live at /h.css /h.js, never
-//     inlined (A security decision driving a build decision, A11).
-import { H_CSS, H_JS, ASSET_VERSION } from "./generated/assets.js";
+//   - CSP default-src 'none': css/js live at /h.css /h.js, never inlined
+//     (A security decision driving a build decision, A11).
+import { H_CSS, H_JS } from "./generated/assets.js";
+import { welcomePage } from "./ui/hubpage.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
 
-// Same header set green uses. The CSP has no 'unsafe-inline' — which is WHY
-// css/js live at /h.css and /h.js instead of being inlined. Referrer-Policy:
-// no-referrer matters more than usual here: the blade will link out to apps
-// whose URLs can contain secret slugs, and no-referrer keeps those out of the
-// Referer header.
+// Same header set green uses. The CSP has no inline style/script allowances —
+// which is WHY css/js live at /h.css and /h.js instead of being inlined.
+// Referrer-Policy: no-referrer matters more than usual here: the blade will
+// link out to apps whose URLs can contain secret slugs, and no-referrer keeps
+// those out of the Referer header.
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "content-security-policy":
@@ -31,9 +31,9 @@ const HTML_HEADERS = {
   "x-robots-tag": ROBOTS_TAG,
 };
 
-// Assets are versioned at build time (ASSET_VERSION is a hash of their bytes)
-// and served with a year-long immutable cache — safe ONLY because every page
-// requests them as /h.css?v=<hash>. Mirrors green's ASSET_CACHE.
+// Assets are versioned at build time (the asset hash) and served with a
+// year-long immutable cache — safe ONLY because every page requests them as
+// /h.css?v=<hash>. Mirrors green's ASSET_CACHE.
 const ASSET_CACHE = "public, max-age=31536000, immutable";
 
 function assetResponse(body, contentType) {
@@ -72,6 +72,10 @@ export default {
 
     if (pathname === "/h.css") return assetResponse(H_CSS, "text/css; charset=utf-8");
     if (pathname === "/h.js") return assetResponse(H_JS, "text/javascript; charset=utf-8");
+
+    if (pathname === "/") {
+      return new Response(welcomePage(), { headers: HTML_HEADERS });
+    }
 
     // A1 will claim "/" (welcome page + blade). Until then it is the uniform
     // 404, exactly as the blueprint intends the not-yet-built routes to read.

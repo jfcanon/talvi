@@ -1,1 +1,359 @@
-/* talvi hub — instrument style (A0 stub). A1 fills this in. */
+/* talvi hub — the power-app front door (A1).
+ *
+ * The same instrument language as green (webapp-factory Phase 5): near-black
+ * ground biased toward the accent, box interiors never black, fill-not-hue
+ * hierarchy, monospace console voice, bracket frame. The hub carries talvi's
+ * neon-noir identity because the hub IS talvi now (A1) — the wordmark and
+ * blade are the front door for the whole power app.
+ *
+ * A real .css file, not a JS template literal. scripts/build-assets.mjs reads
+ * it and JSON.stringify()s it into src/generated/assets.js. Served at /h.css.
+ * NOT inlined: the CSP is `style-src 'self'` — no inline <style> block is
+ * allowed; that constraint is the reason this file exists.
+ *
+ * Dark-only, like green. Tokens on :root so a palette call stays reversible.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Ground — near-black with a teal bias, never neutral grey. */
+  --void: #05060b;
+  --deep: #0b0d1c;
+  --raise: #12142a;
+
+  /* Sign colours — same as green: magenta and cyan against each other, amber
+     for focus only. */
+  --magenta: #ff2e88;
+  --cyan: #22e8ff;
+  --amber: #ffb648;
+
+  /* Phosphor — the whole interface voice. */
+  --phosphor: #7dffc4;
+  --phosphor-dim: #35d998;
+  --hud-line: rgba(61, 224, 160, 0.58);
+  --hud-line-soft: rgba(61, 224, 160, 0.24);
+  --hud-fill: rgba(18, 43, 40, 0.55);
+  --hud-fill-lit: rgba(28, 66, 60, 0.7);
+
+  --text-hi: #eaf2ff;
+  --text-lo: #8e9bbe;
+  --text-dim: #5d6689;
+
+  --rule: #1e2340;
+  --rule-lit: #2d3660;
+
+  --glow-cyan: 0 0 8px rgba(34, 232, 255, 0.55), 0 0 26px rgba(34, 232, 255, 0.2);
+  --glow-magenta: 0 0 8px rgba(255, 46, 136, 0.55), 0 0 26px rgba(255, 46, 136, 0.2);
+
+  --font-display: "Bahnschrift", "DIN Alternate", "Oswald",
+    "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui,
+    sans-serif;
+  --font-console: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono",
+    "Roboto Mono", "Consolas", monospace;
+
+  /* Blade geometry — collapsed is a narrow icon rail, expanded shows labels.
+     The <a> list is plain markup; retraction is a class toggle (client.js),
+     so the blade works with JS disabled and with no inline handlers. */
+  --blade-collapsed: 3.75rem;
+  --blade-expanded: 15rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--void);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3rem) 4rem;
+  background: transparent;
+  color: var(--text-hi);
+  font-family: var(--font-console);
+  font-size: 1rem;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* One ambient layer: fine diagonal rain over the whole ground. Same pattern
+   and rationale as green — on html, not body, for the iOS clipping fix. */
+html::before {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    100deg,
+    transparent 0 9px,
+    rgba(190, 255, 225, 0.07) 9px 10px,
+    transparent 10px 23px
+  );
+  animation: rain 1.1s linear infinite;
+}
+
+@keyframes rain {
+  from { transform: translate3d(0, -23px, 0); }
+  to   { transform: translate3d(0, 23px, 0); }
+}
+
+/* The whole page lives inside one framed instrument. The blade is the frame's
+   left spine; the welcome content sits in the remaining field. */
+.hub {
+  position: relative;
+  z-index: 1;
+  min-height: calc(100vh - 8rem);
+  display: grid;
+  grid-template-columns: var(--blade-collapsed) minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 2rem);
+  transition: grid-template-columns 160ms ease;
+}
+
+/* Expanded state toggled by client.js. Spacing belongs to the container (gap),
+   never to the components inside. */
+.hub.is-open {
+  grid-template-columns: var(--blade-expanded) minmax(0, 1fr);
+}
+
+/* ---------------------------------------------------------------------------
+ * The blade
+ * ------------------------------------------------------------------------- */
+
+.blade {
+  position: relative;
+  align-self: stretch;
+  border: 1px solid var(--hud-line);
+  background: linear-gradient(
+    180deg,
+    var(--hud-fill),
+    rgba(10, 16, 24, 0.85)
+  );
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tag label straddling the top border (instrument signature: overlap is the
+   point). Opaque background so the border shows through around it. */
+.blade__tag {
+  position: absolute;
+  top: 0;
+  left: 1rem;
+  transform: translateY(-50%);
+  background: var(--void);
+  padding: 0 0.4rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--rule);
+}
+
+.blade__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 2rem 0.5rem 0.5rem;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Each item: icon rail on the left of an <a>; the label is hidden in the
+   collapsed rail and shown when the blade opens. The anchor is the whole
+   row — keyboard-reachable for free. */
+.blade__item {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.4rem;
+  color: var(--text-lo);
+  text-decoration: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.blade__item:hover,
+.blade__item:focus-visible {
+  color: var(--phosphor);
+  background: var(--hud-fill-lit);
+  border-color: var(--hud-line-soft);
+}
+
+/* :active pairs every hover for touch — a phone gets feedback too. */
+.blade__item:active {
+  background: var(--hud-fill);
+}
+
+.blade__glyph {
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+.blade__item:hover .blade__glyph,
+.blade__item:focus-visible .blade__glyph {
+  color: var(--phosphor);
+  text-shadow: none;
+}
+
+.blade__label {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+/* A future-app slot: present, marked as empty, not a link. */
+.blade__item.is-slot {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.hub.is-open .blade__label {
+  opacity: 1;
+}
+
+/* Retract control pinned to the blade's foot. Plain <button> + class toggle
+   in client.js — no inline handler, no dependency. */
+.blade__toggle {
+  margin: 0 0.5rem 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--rule);
+  font-family: var(--font-console);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.blade__toggle:hover,
+.blade__toggle:focus-visible {
+  color: var(--phosphor);
+  border-color: var(--hud-line-soft);
+}
+
+/* ---------------------------------------------------------------------------
+ * Welcome field
+ * ------------------------------------------------------------------------- */
+
+.welcome {
+  border: 1px solid var(--hud-line);
+  background: linear-gradient(
+    135deg,
+    var(--hud-fill),
+    rgba(10, 16, 24, 0.9)
+  );
+  padding: clamp(1.5rem, 4vw, 3rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.welcome__wordmark {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 8vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--text-hi);
+  text-shadow: var(--glow-magenta);
+}
+
+/* The glow name — magenta and cyan played against each other, never blended. */
+.welcome__wordmark .glow {
+  color: var(--magenta);
+}
+
+.welcome__lede {
+  max-width: 42rem;
+  margin: 0;
+  color: var(--text-lo);
+  font-size: clamp(0.9rem, 2.4vw, 1.05rem);
+}
+
+/* Label/value cells: tiny uppercase letterspaced label left, value right. */
+.welcome__status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-top: 1px solid var(--rule);
+  padding-top: 1rem;
+}
+
+.welcome__status b {
+  color: var(--phosphor);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.05em;
+  text-align: right;
+}
+
+/* The blade collapses for JS-off or unsupported too (mobile default), and the
+   toggle still works without JS by being the only control in the collapsed
+   rail. With JS, the open state persists in localStorage. */
+
+@media (prefers-reduced-motion: reduce) {
+  html::before {
+    animation: none;
+  }
+  .hub,
+  .hub.is-open,
+  .blade__label {
+    transition: none;
+  }
+}
+
+/* Mobile: the blade becomes a horizontal rail so a phone keeps the icons
+   usable; the grid becomes one column. */
+@media (max-width: 40rem) {
+  .hub,
+  .hub.is-open {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .blade {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .blade__tag {
+    display: none;
+  }
+  .blade__nav {
+    flex-direction: row;
+    padding: 0.5rem;
+    gap: 0.25rem;
+  }
+  .blade__item {
+    grid-template-columns: 2.5rem;
+    padding: 0.35rem;
+  }
+  .blade__label {
+    display: none;
+  }
+  .hub.is-open .blade__label {
+    display: inline;
+  }
+  .blade__toggle {
+    margin: 0.5rem;
+  }
+}
