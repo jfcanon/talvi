@@ -790,3 +790,47 @@ node scripts/chat-ws-smoke.mjs wss://…/chat/alpha/ws cap --cap-test 65
 Filter the apply by your own HEAD sha:
 `gh run list --workflow terraform.yml` → the run whose
 `headSha == $(git rev-parse HEAD)` → `gh run view <id>`.
+
+---
+
+## 10. Hub — app.ygdcbtmc4u.uk (the power-app front door)
+
+The talvi power app (blueprint: `plans/talvi-hub-blueprint.md`). The hub is a
+welcome page + retractable blade whose mini icons link to each app. It lives in
+`hub/` — its own worker, own state key, own CI workflow — and owns the `/*`
+fallback route on `app.*`. The relay, chat, and cinto mount at more-specific
+paths later (most-specific-pattern wins).
+
+### Live URL
+`https://app.ygdcbtmc4u.uk` — `/healthz` is the uptime check; `/` is the blade.
+
+### How to change the hub
+1. Edit `hub/src/` (pages + blade) and/or `hub/main.tf` (infrastructure).
+2. PR → `terraform-hub.yml` runs `plan`; merge → `apply`. Terraform never runs
+   locally. The hub worker is `content = file(dist/index.js)`, rebuilt by
+   `npm run build` in CI — so a src edit plans as "1 to change" on the worker.
+3. Verify live after apply, with the artifact a user actually runs:
+   ```bash
+   cd hub
+   npm i --no-save playwright-core     # already in node_modules; else `npx playwright-core install chromium-headless-shell`
+   node scripts/hub-browser-test.mjs   # defaults to https://app.ygdcbtmc4u.uk
+   ```
+   The one expected red line is the Cloudflare Browser Insights beacon (see
+   below). Zero *own-page* CSP violations must hold.
+
+### The Cloudflare Browser Insights beacon
+The edge injects `static.cloudflareinsights.com/beacon.min.js` into HTML on
+real browser navigations on this zone. The CSP blocks it (correctly), and the
+browser test reports it as its own named failure. **Fix: disable the zone
+feature (Web Analytics / Browser Insights) in the Cloudflare dashboard — never
+add the host to `script-src`.** It is injected on `app.*` and `talvi.*` alike.
+
+### Add a future app
+One row in `hub/src/ui/hubpage.js` (`APPS`), plus its own worker mounted at a
+more-specific route. When an app migrates to `app.*/<path>`, update its blade
+href in the same PR.
+
+### CSP
+`default-src 'none'`; assets are self-hosted, versioned (`/h.css?v=`,
+`/h.js?v=`), never inlined. `grep dist/index.js` for
+`unsafe-|eval(|new Function|on(click|load|error)=` must return 0.
