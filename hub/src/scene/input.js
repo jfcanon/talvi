@@ -15,8 +15,8 @@ export class OrbitController {
     this.yaw = 0.5;
     this.pitch = 0.42;
     this.radius = radius;
-    this.minRadius = 7;
-    this.maxRadius = 46;
+    this.minRadius = 5;
+    this.maxRadius = 32;
     this.apply();
   }
 
