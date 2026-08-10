@@ -27,7 +27,7 @@ const APPS = [
   {
     glyph: "▤",
     label: "CHAT",
-    href: "https://talvi.ygdcbtmc4u.uk/chat",
+    href: "https://app.ygdcbtmc4u.uk/chat",
     title: "Chat",
   },
   {
