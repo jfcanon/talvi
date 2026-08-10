@@ -94,13 +94,11 @@ resource "cloudflare_workers_script" "talvi_hub" {
   # refuses the create-migration once the class has live objects (code 10074 —
   # the same trap that cost green hours, fixed in PR #51). So: this PR creates
   # the AgentDO class; the IMMEDIATELY-FOLLOWING PR removes this block. Do not
-  # leave it in place across more than one apply.
-  migrations = [
-    {
-      tag                = "agent-do-v1"
-      new_sqlite_classes = ["AgentDO"]
-    },
-  ]
+  # leave it in place across more than one apply. Map object, not a list; the
+  # free plan rejects `new_classes` (only `new_sqlite_classes` is accepted).
+  migrations = {
+    new_sqlite_classes = ["AgentDO"]
+  }
 }
 
 # The `/*` fallback route. More-specific routes (app.ygdcbtmc4u.uk/relay/*,
