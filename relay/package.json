@@ -1,0 +1,12 @@
+{
+  "name": "talvi-relay",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}
