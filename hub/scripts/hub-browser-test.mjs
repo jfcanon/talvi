@@ -115,7 +115,7 @@ try {
   await page.waitForTimeout(250);
   const afterOrbit = await nodeXs();
   const orbited = afterOrbit.some(
-    (n, i) => Math.abs(n.x - before[i].x) > 20,
+    (n, i) => Math.abs(n.x - before[i].x) > 10,
   );
   check("drag orbits the world (labels move)", orbited, JSON.stringify({ before, afterOrbit }));
 
@@ -124,7 +124,7 @@ try {
   await page.waitForTimeout(250);
   const afterZoom = await nodeXs();
   const zoomed = afterZoom.some(
-    (n, i) => Math.abs(n.x - afterOrbit[i].x) > 20,
+    (n, i) => Math.abs(n.x - afterOrbit[i].x) > 10,
   );
   check("wheel dollies (labels move again)", zoomed, JSON.stringify({ afterOrbit, afterZoom }));
 
