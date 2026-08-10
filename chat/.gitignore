@@ -1,0 +1,3 @@
+# chat build output (built in CI; a Terraform input) — same rule as green's dist/
+/dist/
+/src/generated/
