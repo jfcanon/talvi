@@ -356,9 +356,25 @@ body {
   }
 }
 
+/* The agent slot (PR2): the old disabled "future app" span became a REAL
+   <button> that opens the agent panel. It must be clickable and look like the
+   rail items — the default button chrome (grey fill, outset border) and the
+   old slot's `pointer-events: none` must not apply. */
 .blade__item.is-slot {
-  opacity: 0.4;
-  pointer-events: none;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.blade__item.is-slot:hover,
+.blade__item.is-slot:focus-visible {
+  color: var(--phosphor);
+  background: rgba(28, 66, 60, 0.45);
+  opacity: 1;
 }
 
 /* Icon controls at the blade's foot: the retract toggle and the login
