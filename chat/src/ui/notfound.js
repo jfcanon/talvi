@@ -17,7 +17,7 @@ export function notFoundPage() {
     "on purpose.</p>" +
     '<a class="btn" href="/">Drop a file</a>';
 
-  return renderPage("talvi — nothing here", {
+  return renderPage("chat — nothing here", {
     lede: "NO RECORD. This address is dead, or was never alive.",
     content,
   });

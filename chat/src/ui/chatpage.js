@@ -49,10 +49,17 @@ export function chatLandingPage() {
     nickInput() +
     '<div class="tagline"><span class="tagline__box">pin</span>' +
     '<span class="chat__optional">optional</span></div>' +
-    '<input class="chat__field" id="pin" type="password" ' +
+    // The PIN is masked by default (owner 2026-08-10); the SHOW/HIDE toggle
+    // reveals it — needed for the autopopulated PIN, which the user has to
+    // share with the people they let in.
+    '<div class="chat__pinslot">' +
+    '<input class="chat__field chat__pin" id="pin" type="password" ' +
     'maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
     'autocapitalize="off" spellcheck="false" ' +
     'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, optional">' +
+    '<button class="chat__eye" id="pin-eye" type="button" aria-pressed="false" ' +
+    'aria-label="Show or hide the PIN">SHOW</button>' +
+    "</div>" +
     '<p class="msg hidden" id="msg"></p>' +
     '<button class="btn" type="button" id="join">ENTER</button>' +
     '<p class="chat__fineprint">Names are secrets — pick one, nick yourself, and ' +
@@ -117,6 +124,8 @@ export function chatRoomPage(name) {
     'inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
     'autocapitalize="off" spellcheck="false" ' +
     'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, if the channel has one">' +
+    '<button class="chat__eye" id="roompin-eye" type="button" aria-pressed="false" ' +
+    'aria-label="Show or hide the PIN">SHOW</button>' +
     '<button class="chat__reconnect" id="roomreconnect" type="button" ' +
     'aria-label="Reconnect with this PIN">↻</button>' +
     "</div>" +

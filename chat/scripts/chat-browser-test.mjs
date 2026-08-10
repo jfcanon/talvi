@@ -26,7 +26,7 @@
 // The script exits 2 with instructions if playwright-core is absent, so a
 // missing dependency reads as "not installed", never as a failing test.
 
-const BASE = process.argv[2] ?? "https://talvi-web.ygdcbtmc4u.workers.dev";
+const BASE = process.argv[2] ?? "https://app.ygdcbtmc4u.uk/chat";
 const PIN = "4729";
 const SECRET = "meet at the north pier at 0300";
 
@@ -144,9 +144,14 @@ const B = await openContext("B");
 // ---- A creates a gated channel through the real landing form --------------
 
 await A.page.goto(`${BASE}/chat`, { waitUntil: "domcontentloaded" });
-await A.page.click("#create");
+// The landing autofills everything now (owner 2026-08-10): default channel
+// name ≤5 chars of letters+digits, nick ≤5 lowercase letters, a random PIN.
+// There is no NEW NAME button anymore.
 const channel = await A.page.inputValue("#channel");
-check("NEW NAME generates a slug", /^[a-z0-9-]{1,64}$/.test(channel), channel);
+check("autofilled default channel name is ≤5 letters+digits",
+  /^[a-z0-9]{1,5}$/.test(channel), channel);
+check("autofilled nick is ≤5 lowercase letters",
+  /^[a-z]{1,5}$/.test(await A.page.inputValue("#nick")), await A.page.inputValue("#nick"));
 
 await A.page.fill("#nick", "alice");
 await A.page.fill("#pin", "1234"); // blocklisted keypad run — must trip the D5 floor
@@ -163,20 +168,18 @@ check("strong PIN admits the creator", true);
 check("room reports ENCRYPTED",
   /^ENCRYPTED/.test(((await A.page.textContent("#mode")) ?? "").trim()));
 
-// The PIN must never be persisted — only the value derived from it.
+// Only the derived key — plus, tab-scoped, the PIN when THIS tab generated it —
+// is persisted in sessionStorage. Never localStorage, never the server.
 const stored = await A.page.evaluate(() => ({
-  gate: sessionStorage.getItem("talvi.chat.gate"),
+  gates: JSON.parse(sessionStorage.getItem("talvi.chat.gates") ?? "{}"),
   nick: sessionStorage.getItem("talvi.chat.nick"),
 }));
-// A substring check would be flaky now that the PIN is 4 digits — "4729" can
-// appear inside 64 hex chars by chance. Assert the SHAPE instead: exactly the
-// two expected fields, and a master that is nothing but hex.
-const blob = JSON.parse(stored.gate ?? "{}");
-check("stored blob holds only channel name and derived key",
-  JSON.stringify(Object.keys(blob).sort()) === '["master","name"]');
+const blob = stored.gates[channel] ?? {};
+check("per-channel key blob holds master + pin + generated flag",
+  JSON.stringify(Object.keys(blob).sort()) === '["generated","master","pin"]');
 check("stored key is 32 bytes of hex and nothing else",
   /^[0-9a-f]{64}$/.test(blob.master ?? ""));
-check("stored blob is bound to this channel", blob.name === channel);
+check("a PIN typed by the user is not marked generated", blob.generated === false);
 check("nick is stored", stored.nick === "alice");
 
 // ---- B joins with the same PIN --------------------------------------------
@@ -214,7 +217,7 @@ check("message is attributed to alice", ((await B.page.textContent("#msgs")) ?? 
 const C = await openContext("C");
 await C.page.goto(`${BASE}/chat`, { waitUntil: "domcontentloaded" });
 await C.page.fill("#channel", channel);
-await C.page.fill("#nick", "mallory");
+await C.page.fill("#nick", "mally");
 await C.page.fill("#pin", "8153");
 await C.page.click("#join");
 await C.page.waitForURL(`**/chat/${channel}`, { timeout: 20000 });

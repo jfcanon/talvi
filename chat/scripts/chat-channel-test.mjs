@@ -388,7 +388,7 @@ check("differing port is refused",
 
   for (let i = 0; i < 5; i += 1) {
     const x = await connect(ch);
-    x.recv({ t: "join", nick: "x" + i, gate: await talvi.answerHex(WRONG, x.first("challenge").nonce) });
+    x.recv({ t: "join", nick: "x" + "abcde"[i], gate: await talvi.answerHex(WRONG, x.first("challenge").nonce) });
     await settle();
   }
   check("five misses arm the lockout", ch.lockedUntil > Date.now());

@@ -16,7 +16,7 @@ export function limitedPage() {
     "minute wide, so waiting one is the whole fix.</p>" +
     "</div>";
 
-  return renderPage("talvi — slow down", {
+  return renderPage("relay — slow down", {
     lede: "THROTTLED. This address is asking faster than the line allows.",
     content,
   });
@@ -31,7 +31,7 @@ export function closedPage() {
     "earliest uploads from yesterday free up capacity first.</p>" +
     "</div>";
 
-  return renderPage("talvi — closed for the day", {
+  return renderPage("relay — closed for the day", {
     lede: "CLOSED FOR THE DAY. The daily budget is spent.",
     content,
   });

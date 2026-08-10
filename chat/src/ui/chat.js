@@ -27,7 +27,7 @@
   "use strict";
 
   const NICK_STORAGE = "talvi.chat.nick";
-  const GATE_STORAGE = "talvi.chat.gate";
+  const GATES_STORE = "talvi.chat.gates"; // per-channel derived keys (tab-scoped)
   const MEMBER_STORAGE = "talvi.chat.id"; // per-tab presence id (C5)
   const CHANNELS_STORE = "talvi.chat.channels"; // names only — the PIN is never stored
   const MAX_CHANNELS = 20;
@@ -37,21 +37,71 @@
   const CLOSE_GATE = 4003; // uniform gate refusal (D8)
   const encoder = new TextEncoder();
 
-  // The unambiguous 32-char alphabet chatcrypto uses for slugs (l/1, o/0
-  // omitted — these strings get read aloud and copied by hand).
-  const SLUG_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
+  // Default channel names (owner 2026-08-10): at most 5 chars, lowercase
+  // letters and digits — short enough to type and say aloud. Recorded tradeoff:
+  // ~26 bits is GUESSABLE, so a default channel leans on its PIN gate; typed
+  // names can still be the full 64 chars.
+  const NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+  // Nicks (owner 2026-08-10): at most 5 lowercase letters, no caps, no digits.
+  // The server enforces ^[a-z]{1,5}$ (src/chat/name.js); this generates a
+  // conforming one.
+  const NICK_ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 
   function $(id) {
     return document.getElementById(id);
   }
 
-  // A fresh random nick, "rv" + 10 unambiguous chars — display-only, and it
-  // satisfies the server's nick rule by construction (no whitespace/control).
-  function randomNick() {
-    const bytes = crypto.getRandomValues(new Uint8Array(10));
-    let s = "rv";
-    for (const b of bytes) s += SLUG_ALPHABET[b % SLUG_ALPHABET.length];
+  function randomName() {
+    const bytes = crypto.getRandomValues(new Uint8Array(5));
+    let s = "";
+    for (const b of bytes) s += NAME_ALPHABET[b % NAME_ALPHABET.length];
     return s;
+  }
+
+  function randomNick() {
+    const bytes = crypto.getRandomValues(new Uint8Array(5));
+    let s = "";
+    for (const b of bytes) s += NICK_ALPHABET[b % NICK_ALPHABET.length];
+    return s;
+  }
+
+  // Per-channel derived key (and the generated PIN, when this tab made it).
+  // sessionStorage is tab-scoped and gone when the tab closes — same trust
+  // boundary as the page. Keyed by channel name so a channel you have entered
+  // never asks for its PIN again in this tab (owner 2026-08-10).
+  function readKey(name) {
+    try {
+      const raw = window.sessionStorage.getItem(GATES_STORE);
+      const map = raw ? JSON.parse(raw) : {};
+      const k = map[name];
+      return k && typeof k.master === "string" ? k : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeKey(name, data) {
+    try {
+      const raw = window.sessionStorage.getItem(GATES_STORE);
+      const map = raw ? JSON.parse(raw) : {};
+      map[name] = data;
+      window.sessionStorage.setItem(GATES_STORE, JSON.stringify(map));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function removeKey(name) {
+    try {
+      const raw = window.sessionStorage.getItem(GATES_STORE);
+      const map = raw ? JSON.parse(raw) : {};
+      delete map[name];
+      window.sessionStorage.setItem(GATES_STORE, JSON.stringify(map));
+    } catch {
+      /* nothing to clear */
+    }
   }
 
   // The per-tab presence id (C5). Survives a dropped socket so the server can
@@ -128,15 +178,26 @@
   }
 
   // Mirrors isValidNick in src/chat/name.js (server is authoritative; this is
-  // a courtesy so a bad nick fails before a socket opens). Whitespace OR
-  // control chars — NUL, backspace, DEL — all reject.
+  // a courtesy so a bad nick fails before a socket opens). Owner 2026-08-10:
+  // at most 5 lowercase letters, no caps, no digits.
   function validNick(s) {
-    return (
-      typeof s === "string" &&
-      s.length >= 1 &&
-      s.length <= 32 &&
-      !/[\s\u0000-\u001f\u007f]/.test(s)
-    );
+    return typeof s === "string" && /^[a-z]{1,5}$/.test(s);
+  }
+
+  // Mask/unmask toggle for a PIN input (owner 2026-08-10). Masked by default;
+  // the button flips input.type and its own label, and reports the state in
+  // aria-pressed. Real <button>, no inline handlers (CSP).
+  function wirePinEye(inputId, eyeId) {
+    const input = $(inputId);
+    const eye = $(eyeId);
+    if (!input || !eye) return;
+    eye.addEventListener("click", () => {
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      eye.setAttribute("aria-pressed", String(show));
+      eye.textContent = show ? "HIDE" : "SHOW";
+      input.focus();
+    });
   }
 
   // sessionStorage is unavailable in some private modes. Every call site
@@ -177,13 +238,20 @@
     }
 
     // Autopopulate, per the owner: name, nick and PIN are prefilled with fresh
-    // random values, everything stays editable, ENTER joins. A 100-bit name
-    // (D9) and a uniform 4-digit PIN (clears the weak-PIN floor by
-    // construction) — the two things a person is worst at making up are the
-    // two this generates.
-    if (!channel.value) channel.value = gate.randomSlug();
+    // random values, everything stays editable, ENTER joins. A short name
+    // (owner: ≤5 chars) and a uniform 4-digit PIN (clears the weak-PIN floor
+    // by construction) — the two things a person is worst at making up are
+    // the two this generates.
+    let pinAuto = true; // true while the PIN is the generated one
+    if (!channel.value) channel.value = randomName();
     if (!nick.value) nick.value = randomNick();
     if (pin && !pin.value) pin.value = randomPin();
+    if (pin) {
+      pin.addEventListener("input", () => {
+        pinAuto = false; // a typed PIN is the user's own knowledge
+      });
+    }
+    wirePinEye("pin", "pin-eye");
 
     // There is no "create" mode, deliberately. Supplying a PIN IS the intent,
     // and the server resolves what that means from the channel's actual state:
@@ -204,7 +272,7 @@
         return;
       }
       if (!validNick(who)) {
-        say("NICK — one word, no spaces, up to 32 characters.");
+        say("NICK — up to 5 lowercase letters, no numbers.");
         return;
       }
 
@@ -235,7 +303,10 @@
         say("DERIVING KEY — a moment.");
         try {
           const master = await gate.deriveMasterHex(secret, name);
-          if (!writeStore(GATE_STORAGE, JSON.stringify({ name, master }))) {
+          // The key rides per-channel in sessionStorage, so this room never
+          // asks for its PIN again in this tab. The PIN rides alongside only
+          // so the room can show the first line when this tab generated it.
+          if (!writeKey(name, { master, pin: secret, generated: pinAuto })) {
             say("STORAGE BLOCKED — cannot carry the key into the room.");
             join.disabled = false;
             return;
@@ -246,13 +317,9 @@
           return;
         }
       } else {
-        // No PIN: an open channel (D10). Clear any key left from a previous
-        // channel so the room does not answer a challenge with a stale value.
-        try {
-          window.sessionStorage.removeItem(GATE_STORAGE);
-        } catch {
-          /* nothing stored to clear */
-        }
+        // No PIN: an open channel (D10). Clear any key left for this name so
+        // the room does not answer a challenge with a stale value.
+        removeKey(name);
       }
 
       // Remember this channel in the sidebar (names only — never the PIN).
@@ -303,17 +370,16 @@
     // newcomer. Cleared on an explicit DISCONNECT so a rejoin is fresh.
     const myId = memberId();
 
-    // Key material, if the landing derived any. It is bound to the channel it
-    // was derived for: a stale blob from another channel would produce a
-    // wrong gate answer and burn a lockout attempt, so it is ignored.
-    let keys = null;
-    try {
-      const raw = readStore(GATE_STORAGE);
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && parsed.name === channelName) keys = parsed;
-    } catch {
-      keys = null; // malformed blob — treat as no key
-    }
+    // Key material for THIS channel, if this tab ever entered it (per-channel
+    // in sessionStorage — a channel you have entered never asks for its PIN
+    // again in this tab).
+    let keys = readKey(channelName);
+    // The generated PIN rides with the key so the room can show the first
+    // line ("this channel's PIN") when THIS tab generated it — the user may
+    // have connected without ever unmasking the field. A typed PIN is the
+    // user's own knowledge; it never prints back.
+    const generatedPin = keys?.generated ? keys.pin || null : null;
+    let pinLineShown = false;
 
     // The in-room join form. Shown whenever this tab cannot yet join: no nick,
     // or a gated channel we hold no key for. The channel name is NOT asked for
@@ -570,6 +636,17 @@
       say("");
       // Admitted → remember this channel for the sidebar (names only).
       saveChannel(channelName, nick);
+      // Automatic first line (owner 2026-08-10): when THIS tab generated the
+      // channel's PIN, show it in the transcript so it is not lost even if
+      // the user connected without ever unmasking the field. Local to this
+      // tab — the PIN is not broadcast to the room.
+      if (generatedPin && !pinLineShown) {
+        pinLineShown = true;
+        const rule = document.createElement("li");
+        rule.className = "chat__line chat__line--rule";
+        rule.textContent = "PIN " + generatedPin + " — share it with the people you let in.";
+        msgs.appendChild(rule);
+      }
       renderMembers();
       text.focus();
     }
@@ -771,8 +848,8 @@
         say("DERIVING KEY — a moment.");
         try {
           const master = await gate.deriveMasterHex(secret, channelName);
-          keys = { name: channelName, master };
-          writeStore(GATE_STORAGE, JSON.stringify(keys));
+          keys = { master, pin: secret, generated: false };
+          writeKey(channelName, keys);
         } catch {
           say("KEY FAILED — this browser refused the crypto this needs.");
           if (roomjoin) roomjoin.disabled = false;
@@ -783,11 +860,7 @@
         // No PIN offered: clear any stale key so we do not answer a challenge
         // with the wrong value and spend a lockout attempt doing it.
         keys = null;
-        try {
-          window.sessionStorage.removeItem(GATE_STORAGE);
-        } catch {
-          /* nothing to clear */
-        }
+        removeKey(channelName);
       }
 
       hideJoin();
@@ -800,6 +873,7 @@
     // It is the same join as ENTER.
     const roomreconnect = $("roomreconnect");
     if (roomreconnect) roomreconnect.addEventListener("click", () => submitJoin());
+    wirePinEye("roompin", "roompin-eye");
     for (const el of [roomnick, roompin, roomreconnect]) {
       if (el) {
         el.addEventListener("keydown", (e) => {
@@ -836,20 +910,20 @@
         } catch {
           /* socket already gone */
         }
-        // Reset this tab's chat state: a fresh presence id next time, so a
-        // rejoin is a clean arrival (with history) rather than a resume.
+        // Back to the landing (owner 2026-08-10). The per-channel key stays in
+        // sessionStorage, so returning to this channel won't ask for the PIN
+        // again — but the presence id is reset so a rejoin is a fresh arrival.
         try {
           window.sessionStorage.removeItem(MEMBER_STORAGE);
         } catch {
           /* nothing stored to clear */
         }
-        msgs.textContent = "";
-        // The server closes the socket; closed() shows the YOU LEFT message.
         try {
           if (ws) ws.close(1000, "bye");
         } catch {
           /* already closing */
         }
+        window.location.href = "/chat/";
       });
     }
 
