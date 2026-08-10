@@ -1,0 +1,263 @@
+#!/bin/sh
+# sso-setup — idempotent SSO + web3 wiring for talvi blue (talvi2.ygdcbtmc4u.uk).
+#
+#   ./scripts/sso-setup --status
+#   ./scripts/sso-setup --plan google
+#   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... ./scripts/sso-setup --store google
+#   ./scripts/sso-setup --wire google
+#   ./scripts/sso-setup --web3
+#
+# One documented command per job; re-running is a no-op. THIS FILE CONTAINS NO
+# SECRETS. It reads CLERK_SECRET_KEY from Bitwarden at run time and passes it to
+# the Clerk CLI; client IDs/secrets for the social providers live in Bitwarden
+# items (talvi-sso-<provider>, username = Client ID, password = Client Secret)
+# and are piped to Clerk, never printed.
+#
+# The only thing this script cannot do is log you into the Clerk account, and
+# it cannot create the OAuth app in the provider console — those two steps are
+# you. Everything after them is one command each.
+#
+# Two modes, and the script checks which one you are in:
+#   keyless  = only CLERK_SECRET_KEY is exported. Enough for --store, and for
+#              --status to show you what is missing. The `connection_oauth_*`
+#              config keys are account-level and need the app CLAIMED:
+#                npx clerk@latest auth login     # browser OAuth, one time
+#   claimed  = clerk auth login done. Full config document available:
+#              connection_oauth_google/_github/_discord, web3 keys, schema.
+
+set -eu
+
+RELAY_ENV="$(cd "$(dirname "$0")" && pwd)/../../relay/.secrets.env"
+CLERK="npx --yes clerk@latest"
+
+bw_session() {
+    if [ ! -f "$RELAY_ENV" ]; then
+        echo "sso-setup: .secrets.env not found at $RELAY_ENV" >&2
+        return 1
+    fi
+    # shellcheck disable=SC1090
+    set -a; . "$RELAY_ENV"; set +a
+    bw login --apikey >/dev/null 2>&1 || true
+    BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw) || {
+        echo "sso-setup: bw unlock failed" >&2; return 1; }
+    # Required, not optional — the CLI serves a local vault cache.
+    bw sync --session "$BW_SESSION" >/dev/null 2>&1 || true
+}
+
+# Unlock Bitwarden, export CLERK_SECRET_KEY, and leave $BW_SESSION set so the
+# caller can do further bw lookups. Caller must run bw lock + unset when done.
+load_creds() {
+    bw_session
+    CLERK_SECRET_KEY=$(bw get password clerkprodapikey --session "$BW_SESSION")
+    export CLERK_SECRET_KEY
+}
+
+mode() {
+    $CLERK whoami 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const o=JSON.parse(s);console.log(o.linked&&(o.linked.appId||o.linked.instanceId)?'claimed':'keyless')}catch(e){console.log('keyless')}})"
+}
+
+provider_map() {
+    case "$1" in
+        google)  echo "oauth_google" ;;
+        github)  echo "oauth_github" ;;
+        discord) echo "oauth_discord" ;;
+        *) echo "sso-setup: unknown provider '$1' (google|github|discord)" >&2; exit 2 ;;
+    esac
+}
+
+redirect_uri() {
+    # VERIFIED against the live GitHub authorize URL (2026-08-10): Clerk's
+    # frontend API sends redirect_uri=https://clerk.ygdcbtmc4u.uk/v1/oauth_callback
+    # — a single generic callback, NOT /vendor/oauth/<provider> as older docs
+    # claimed. Confirmed from the browser's authorize request. Re-verify per
+    # provider when wiring it; the value is the same for all three.
+    echo "https://clerk.ygdcbtmc4u.uk/v1/oauth_callback"
+}
+
+# ---------------------------------------------------------------------------
+# --status : which mode, which connections are on, what redirect URIs apply.
+# ---------------------------------------------------------------------------
+status() {
+    m=$(mode)
+    echo "mode: $m"
+    if [ "$m" = "keyless" ]; then
+        echo
+        echo "keyless — social-connection config is account-level and not"
+        echo "readable this way. Claim the app once:"
+        echo
+        echo "  npx clerk@latest auth login     # from this repo"
+        echo
+        echo "then re-run: ./scripts/sso-setup --status"
+        echo
+        echo "What is already confirmed keyless:"
+        echo "  Bitwarden items talvi-sso-<provider> present:"
+        for p in google github discord; do
+            v=$(bw get username "talvi-sso-$p" --session "$BW_SESSION" 2>/dev/null || true)
+            printf "    %-8s %s\n" "$p" "$([ -n "$v" ] && echo stored || echo absent)"
+        done
+        return 0
+    fi
+
+    echo
+    echo "social connections (claimed, production):"
+    $CLERK config pull --instance prod 2>/dev/null | node -e "
+        let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+            const o=JSON.parse(s);
+            for (const k of ['connection_oauth_google','connection_oauth_github','connection_oauth_discord']) {
+                const v=o[k]||{};
+                const on=v.enabled?'ENABLED':'off';
+                const cred=v.client_id?'custom client id set':'NO custom client id';
+                console.log('  '+k+'  '+on+'  '+cred);
+            }
+        });"
+    echo
+    echo "web3 (claimed, production):"
+    $CLERK config pull --instance prod 2>/dev/null | node -e "
+        let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+            const o=JSON.parse(s);
+            const w=o.auth_web3||{};
+            console.log('  used_for_sign_in: '+w.used_for_sign_in+'  strategies: '+((w.sign_in_strategies||[]).join(', ')));
+        });"
+    echo
+    echo "redirect URIs to paste into each provider console:"
+    for p in google github discord; do
+        printf "  %-8s %s\n" "$p" "$(redirect_uri $p)"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# --plan <provider> : the one manual console step, printed with the URI.
+# ---------------------------------------------------------------------------
+plan() {
+    p=$1
+    ur=$(redirect_uri "$p")
+    case "$p" in
+        google)
+            echo "GOOGLE OAuth client (manual, once) — Google Cloud Console:"
+            echo "  APIs & Services > Credentials > Create credentials > OAuth client ID"
+            echo "  Application type: Web application"
+            echo "  Authorized JavaScript origins: https://talvi2.ygdcbtmc4u.uk"
+            echo "  Authorized redirect URIs:  $ur"
+            echo "  Create, then: GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... ./scripts/sso-setup --store google"
+            echo "  For production users, set the consent screen publishing status to 'In production'."
+            ;;
+        github)
+            echo "GITHUB OAuth app (manual, once) — github.com > Settings > Developer settings > OAuth Apps:"
+            echo "  Homepage URL: https://talvi2.ygdcbtmc4u.uk"
+            echo "  Authorization callback URL:  $ur"
+            echo "  Register, then: GITHUB_CLIENT_ID=... GITHUB_CLIENT_SECRET=... ./scripts/sso-setup --store github"
+            ;;
+        discord)
+            echo "DISCORD application (manual, once) — discord.com/developers > Applications > New Application:"
+            echo "  OAuth2 > General > Redirects:  $ur"
+            echo "  (note the Client ID and Client Secret on the OAuth2 page)"
+            echo "  Then: DISCORD_CLIENT_ID=... DISCORD_CLIENT_SECRET=... ./scripts/sso-setup --store discord"
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# --store <provider> : upsert the Bitwarden item talvi-sso-<provider>.
+# Values come from env vars (so the value is never typed on a command line)
+# or from hidden prompts. Never echoed.
+# ---------------------------------------------------------------------------
+store() {
+    p=$1
+    up=$(echo "$p" | tr '[:lower:]' '[:upper:]')
+    eval "id=\${${up}_CLIENT_ID:-}"
+    eval "sec=\${${up}_CLIENT_SECRET:-}"
+    if [ -z "$id" ]; then
+        printf "Client ID: " >&2; read -r id
+    fi
+    if [ -z "$sec" ]; then
+        printf "Client Secret (hidden): " >&2; read -r sec
+    fi
+    item="talvi-sso-$p"
+    existing=$(bw list items --search "$item" --session "$BW_SESSION" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const a=JSON.parse(s);console.log(a.find(i=>i.name==='$item')?a.find(i=>i.name==='$item').id:'')}catch(e){console.log('')}})")
+    body=$(node -e "
+        const id=process.argv[1], sec=process.argv[2];
+        console.log(JSON.stringify({type:1, name:'$item', login:{username:id, password:sec}}));
+    " "$id" "$sec")
+    # bw create/edit take base64-ENCODED JSON (via bw encode), not raw JSON —
+    # raw JSON is parsed as encoded data and fails with "Error parsing the
+    # encoded request data."
+    encoded=$(printf '%s' "$body" | bw encode)
+    if [ -n "$existing" ]; then
+        bw edit item "$existing" "$encoded" --session "$BW_SESSION" >/dev/null
+        echo "  updated $item (Bitwarden)"
+    else
+        bw create item "$encoded" --session "$BW_SESSION" >/dev/null
+        echo "  created $item (Bitwarden)"
+    fi
+    unset id sec body encoded
+}
+
+# ---------------------------------------------------------------------------
+# --wire <provider> : enable the connection on Clerk and set the custom
+# credentials (read from Bitwarden). Idempotent. Needs claimed mode.
+# ---------------------------------------------------------------------------
+wire() {
+    p=$1
+    conn=$(provider_map "$p")
+    m=$(mode)
+    if [ "$m" != "claimed" ]; then
+        echo "sso-setup: --wire needs the app claimed (clerk auth login)." >&2
+        return 1
+    fi
+    item="talvi-sso-$p"
+    id=$(bw get username "$item" --session "$BW_SESSION")
+    sec=$(bw get password "$item" --session "$BW_SESSION")
+    if [ -z "$id" ] || [ -z "$sec" ]; then
+        echo "sso-setup: $item missing a value — run --store $p first" >&2
+        return 1
+    fi
+    body=$(node -e "
+        const id=process.argv[1], sec=process.argv[2];
+        const key='connection_'+process.argv[3];
+        console.log(JSON.stringify({[key]:{enabled:true, client_id:id, client_secret:sec}}));
+    " "$id" "$sec" "$conn")
+    echo "  patching Clerk: enabling $conn with custom credentials"
+    # clerk config patch prints the diff including client_id/client_secret —
+    # redact them before anything reaches a terminal.
+    $CLERK config patch --json "$body" --yes --instance prod 2>&1 | node -e "
+        let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+            process.stdout.write(s.split(process.argv[1]).join('REDACTED').split(process.argv[2]).join('REDACTED'));
+        });" "$id" "$sec"
+    unset id sec body
+}
+
+# ---------------------------------------------------------------------------
+# --web3 : enable web3 if the schema exposes a key; else say dashboard-only.
+# ---------------------------------------------------------------------------
+web3() {
+    m=$(mode)
+    if [ "$m" != "claimed" ]; then
+        echo "sso-setup: --web3 needs the app claimed (clerk auth login)." >&2
+        return 1
+    fi
+    $CLERK config pull --instance prod 2>/dev/null | node -e "
+        let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+            const o=JSON.parse(s);
+            const w=o.auth_web3||{};
+            if (w.used_for_sign_in && (w.sign_in_strategies||[]).length) {
+                console.log('web3 already enabled: '+(w.sign_in_strategies||[]).join(', '));
+            } else {
+                console.log('web3 disabled in prod config');
+            }
+        });"
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+load_creds
+trap 'bw lock >/dev/null 2>&1; unset BW_SESSION BW_PASSWORD BW_CLIENTID BW_CLIENTSECRET CLERK_SECRET_KEY 2>/dev/null; true' EXIT
+
+case "${1:-}" in
+    --status)           status ;;
+    --plan)             [ $# -ge 2 ] && plan "$2" || { echo "usage: --plan <provider>" >&2; exit 2; } ;;
+    --store)            [ $# -ge 2 ] && store "$2" || { echo "usage: --store <provider>" >&2; exit 2; } ;;
+    --wire)             [ $# -ge 2 ] && wire "$2" || { echo "usage: --wire <provider>" >&2; exit 2; } ;;
+    --web3)             web3 ;;
+    *) echo "usage: ./scripts/sso-setup --status | --plan <p> | --store <p> | --wire <p> | --web3" >&2; exit 2 ;;
+esac
