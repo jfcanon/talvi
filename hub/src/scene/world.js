@@ -29,7 +29,7 @@ const REST = 0.35; // restitution — the "barely/slightly bounce"
 const TILE_CFG = [
   { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -1.8, baseY: 6.6, z: 0 },
   { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 1.8, baseY: 6.6, z: 0 },
-  { key: "cinto", glyph: "◈", href: "https://cinto.ygdcbtmc4u.uk", x: -1.8, baseY: 3.4, z: 0 },
+  { key: "cinto", glyph: "◈", href: "/cinto", x: -1.8, baseY: 3.4, z: 0 },
   { key: "future", glyph: "＋", href: null, x: 1.8, baseY: 3.4, z: 0 },
 ];
 

@@ -43,6 +43,18 @@ variable "talvi_zone_id" {
   type = string
 }
 
+variable "clerk_secret_key" {
+  type = string
+}
+
+variable "clerk_publishable_key" {
+  type = string
+}
+
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # Proxied DNS record for app.ygdcbtmc4u.uk. 192.0.2.1 is a documentation
 # address placeholder: proxied traffic is matched by the route patterns below
 # and never actually resolved to it (same approach as blue's talvi2 record).
@@ -86,6 +98,27 @@ resource "cloudflare_workers_script" "talvi_hub" {
       type       = "durable_object_namespace"
       name       = "AGENT"
       class_name = "AgentDO"
+    },
+
+    # Clerk auth (owner 2026-08-10 — the sign-in moved to the app ROOT). The
+    # hub serves /sign-in, /sso-callback, /api/signout; the relay keeps a
+    # gate that verifies the same host-wide __session cookie. CLERK_SECRET_KEY
+    # is a secret_text binding (never in state); the publishable and JWT keys
+    # are public by design. Same shapes as the relay's pre-removal bindings.
+    {
+      type = "secret_text"
+      name = "CLERK_SECRET_KEY"
+      text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = var.clerk_jwt_key
     },
   ]
 
