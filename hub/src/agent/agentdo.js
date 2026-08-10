@@ -119,13 +119,13 @@ export class AgentDO extends WrappedAgent {
         this.send(server, { t: "err", code: "toolarge" });
         return;
       }
-      console.log("agent msg", event.data.slice(0, 80));
       try {
         await this.handleFrame(server, this.ws, event.data);
-        console.log("agent frame done");
       } catch (err) {
-        console.log("agent fault", String(err?.message ?? err).slice(0, 120), String(err?.stack ?? "").slice(0, 300));
-        this.send(server, { t: "err", code: "fault", detail: String(err?.message ?? err).slice(0, 120) });
+        // handleFrame is fully guarded; a listener-level fault is a bug. Report
+        // the code without content — the workspace files are the record, never
+        // the logs (the DO's no-logging contract).
+        this.send(server, { t: "err", code: "fault" });
       }
     });
 
