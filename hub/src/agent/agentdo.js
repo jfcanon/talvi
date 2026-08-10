@@ -118,7 +118,7 @@ export class AgentDO extends WrappedAgent {
         await this.handleFrame(server, ws, event.data);
         console.log("agent frame done");
       } catch (err) {
-        console.log("agent fault", String(err?.message ?? err).slice(0, 120));
+        console.log("agent fault", String(err?.message ?? err).slice(0, 120), String(err?.stack ?? "").slice(0, 300));
         this.send(server, { t: "err", code: "fault", detail: String(err?.message ?? err).slice(0, 120) });
       }
     });
