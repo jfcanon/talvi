@@ -117,6 +117,9 @@ export function hubPage() {
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +
     '<div class="wear" aria-hidden="true"></div>' +
+    // The lightning storm's screen flash (v4.3.1). Normally invisible; the
+    // scene drives its opacity when the world crashes.
+    '<div class="storm" aria-hidden="true"></div>' +
     "</body></html>"
   );
 }
