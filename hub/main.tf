@@ -80,8 +80,8 @@ resource "cloudflare_workers_script" "talvi_hub" {
     # The AgentDO — one Durable Object per agent name (the owner's prototype
     # agent is "main"; the Worker routes /agent/ws to it). class_name matches
     # the named export of dist/index.js (src/agent/agentdo.js). SQLite-backed
-    # namespace, required by the free plan — the migrations block below creates
-    # it on this apply.
+    # namespace, created by the PR2 (agent-2-do) apply's new_sqlite_classes
+    # migration.
     {
       type       = "durable_object_namespace"
       name       = "AGENT"
@@ -89,16 +89,21 @@ resource "cloudflare_workers_script" "talvi_hub" {
     },
   ]
 
-  # ONE apply only. The `migrations` argument is WriteOnly in provider v5:
-  # Terraform does not store it and re-sends it on EVERY apply, and Cloudflare
-  # refuses the create-migration once the class has live objects (code 10074 —
-  # the same trap that cost green hours, fixed in PR #51). So: this PR creates
-  # the AgentDO class; the IMMEDIATELY-FOLLOWING PR removes this block. Do not
-  # leave it in place across more than one apply. Map object, not a list; the
-  # free plan rejects `new_classes` (only `new_sqlite_classes` is accepted).
-  migrations = {
-    new_sqlite_classes = ["AgentDO"]
-  }
+  # NO `migrations` ARGUMENT — deliberate, and it must stay that way.
+  #
+  # PR2 (agent-2-do) shipped `migrations = { new_sqlite_classes = ["AgentDO"] }`
+  # to create the SQLite-backed namespace (free plan requirement), and the PR2
+  # apply ran it. Provider v5 marks `migrations` WriteOnly: Terraform does not
+  # store it and re-sends it on EVERY apply, and Cloudflare refuses the
+  # create-migration once the class is depended on by live Durable Objects
+  # (code 10074 — the same trap that cost green hours, fixed there in PR #51,
+  # and which bit the follow-up apply on 2026-08-10). Omitting the argument is
+  # how Terraform sends null.
+  #
+  # Add a `migrations` block again ONLY to declare a genuinely NEW class, and
+  # remove it again in the very next PR once applied. If this script is ever
+  # destroyed and recreated from scratch, the create-migration must be
+  # temporarily restored — the namespace would not exist then.
 }
 
 # The `/*` fallback route. More-specific routes (app.ygdcbtmc4u.uk/relay/*,
