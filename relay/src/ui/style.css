@@ -2150,3 +2150,53 @@ a {
   flex: 1 1 9rem;
   justify-content: center;
 }
+
+/* ===========================================================================
+ * Fragment-key encryption toggle (blueprint B1). A real checkbox styled as a
+ * switch: a box that fills when checked, keyboard-reachable, honest copy
+ * beside it. Same quiet instrument language as the PIN field above.
+ * ========================================================================= */
+.enc {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+}
+
+.enc__in {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.enc__box {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid var(--hud-line-soft);
+  background: var(--void);
+  position: relative;
+}
+
+.enc__in:checked + .enc__box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--amber);
+}
+
+.enc__in:focus-visible + .enc__box {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.enc__label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-hi);
+}

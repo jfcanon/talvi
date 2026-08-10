@@ -103,6 +103,20 @@ export function uploadPage({ authed } = {}) {
     "a leaked link being enough on its own — it does not encrypt the file, and " +
     "anyone with both the link and the PIN can download. Four digits is a lock " +
     "on a door, not a safe.</p>" +
+    // Fragment-key E2E encryption (blueprint B1). Default ON — encryption is
+    // the point of this app. The checkbox is a real control with honest copy:
+    // the key lives only in the share link's fragment, the server stores
+    // ciphertext, and (stated plainly) whoever has the full link has the file.
+    '<div class="tagline"><span class="tagline__box">encrypt</span>' +
+    '<span class="chat__optional">on by default</span></div>' +
+    '<label class="enc"><input class="enc__in" type="checkbox" id="encrypt" checked>' +
+    '<span class="enc__box" aria-hidden="true"></span>' +
+    '<span class="enc__label">Encrypt before upload</span></label>' +
+    '<p class="chat__fineprint">Encrypts the file in this browser with AES-256-' +
+    'GCM before it leaves. The key is appended to your share link as a #k= ' +
+    'fragment and never sent to the server. Anyone with the full link can ' +
+    "decrypt and download; without the fragment the file is unreadable. " +
+    "Encrypted drops skip the 'as markdown' conversion.</p>" +
     '<button class="btn" type="button" id="send" disabled>Send it</button>' +
     '<div class="prog hidden" id="prog">' +
     '<div class="prog__track"><span class="prog__fill" id="fill"></span></div>' +

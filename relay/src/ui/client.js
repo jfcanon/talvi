@@ -214,8 +214,11 @@
       send.textContent = "SEND ANOTHER";
       send.disabled = true;
       prog.className = "prog hidden";
-      link.textContent = body.url;
-      link.setAttribute("href", body.url);
+      // Encrypted drops: the share link carries the fragment key. Appending it
+      // here (not before upload) keeps the key off the wire entirely.
+      const shareUrl = body.url + (fragment || "");
+      link.textContent = shareUrl;
+      link.setAttribute("href", shareUrl);
       expiry.textContent =
         "EXPIRES " + absolute(body.expires_at) + " — " + relative(body.expires_at) + ".";
       result.className = "panel";
@@ -283,6 +286,40 @@
         pinGate = window.talviGate.gateHex(master, name);
       }
 
+      // Fragment-key E2E encryption (blueprint B1): default ON. If enabled,
+      // encrypt the file's bytes in this browser with a fresh AES-256-GCM key,
+      // send the ciphertext, and append the key to the share URL as #k=… so it
+      // never crosses the wire. The server stores ciphertext + the flag.
+      let body = file;
+      let fragment = "";
+      const encryptBox = $("encrypt");
+      const encryptOn = encryptBox ? encryptBox.checked : false;
+      if (encryptOn) {
+        if (!window.talviCrypto) {
+          busy = false;
+          send.disabled = false;
+          send.textContent = "SEND IT";
+          prog.className = "prog hidden";
+          say("ENCRYPTION UNAVAILABLE — retry.", true);
+          return;
+        }
+        send.textContent = "ENCRYPTING";
+        try {
+          const bytes = await file.arrayBuffer();
+          const key = window.talviCrypto.newKey();
+          const ciphertext = await window.talviCrypto.encrypt(key, bytes);
+          body = new Blob([ciphertext], { type: "application/octet-stream" });
+          fragment = "#k=" + key;
+        } catch {
+          busy = false;
+          send.disabled = false;
+          send.textContent = "SEND IT";
+          prog.className = "prog hidden";
+          say("ENCRYPTION FAILED — nothing was sent.", true);
+          return;
+        }
+      }
+
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/relay/api/upload", true);
       xhr.setRequestHeader("x-drop-ttl", ttlDays());
@@ -295,6 +332,9 @@
       if (pinGate) {
         xhr.setRequestHeader("x-drop-pin-gate", pinGate);
       }
+      if (encryptOn) {
+        xhr.setRequestHeader("x-drop-encrypted", "1");
+      }
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) setProgress(e.loaded, e.total);
@@ -303,9 +343,7 @@
       xhr.upload.onload = () => {
         // Bytes are up; the Worker is still writing to R2 and D1.
         pct.textContent = "STORING — holding the line";
-      };
-
-      xhr.onerror = () => {
+      };      xhr.onerror = () => {
         // A network/edge failure (not a status we can read — the request
         // never completed). Navigate to the upload page so the visitor can
         // retry; the chosen file is lost, and the message says so.
@@ -328,7 +366,7 @@
         fail(failureText(xhr.status, body));
       };
 
-      xhr.send(file);
+      xhr.send(body);
     });
 
     copy?.addEventListener("click", () => copyText(link.textContent, copy, "COPIED"));
@@ -361,6 +399,74 @@
           md.textContent = label;
           md.removeAttribute("aria-busy");
         }, 10000);
+      });
+    }
+
+    // Fragment-key E2E encryption (blueprint B1). The server rendered a
+    // "Decrypt & download" button whose href still points at /d (ciphertext).
+    // Intercept it: fetch the ciphertext, decrypt in this browser with the key
+    // from the link's #k= fragment, and offer the plaintext as a download. The
+    // key never leaves the page — it is read from location.hash, which no
+    // request ever carries.
+    const enc = document.querySelector("a.dl[data-encrypted]");
+    if (enc && window.talviCrypto) {
+      const slug = enc.getAttribute("href");
+      const msg = $("encmsg");
+      const nameEl = document.querySelector(".hud__value--verbatim");
+
+      function encSay(text, isError) {
+        if (!msg) return;
+        msg.textContent = text;
+        msg.classList.remove("hidden");
+        msg.classList.toggle("msg--bad", Boolean(isError));
+      }
+
+      enc.addEventListener("click", async (e) => {
+        e.preventDefault();
+        // A gated drop: the server cookie from the PIN answer is required for
+        // the /d fetch. If the button was revealed by initGate, the cookie is
+        // set; otherwise the fetch 401s and we hand back to the server.
+        const keyStr = window.talviCrypto.parseFragmentKey(window.location.hash);
+        if (!keyStr) {
+          encSay(
+            "NO KEY IN THIS LINK — the #k= fragment is missing. Ask the sender " +
+              "for the full link.",
+            true,
+          );
+          return;
+        }
+        if (enc.classList.contains("hidden")) return;
+        enc.disabled = true;
+        enc.textContent = "DECRYPTING…";
+        try {
+          const res = await fetch(slug);
+          if (!res.ok) {
+            // No gate cookie / expired drop: let the server route decide.
+            window.location.href = slug;
+            return;
+          }
+          const ciphertext = await res.arrayBuffer();
+          const plain = await window.talviCrypto.decrypt(keyStr, ciphertext);
+          const blob = new Blob([plain], { type: "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = nameEl?.textContent?.trim() || "file";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+          enc.textContent = "DOWNLOADING…";
+        } catch {
+          // GCM tag failure = wrong key or tampered ciphertext.
+          encSay(
+            "WRONG KEY — this link's #k= fragment does not decrypt this file. " +
+              "Check the link is complete.",
+            true,
+          );
+          enc.textContent = "Decrypt & download";
+        }
+        enc.disabled = false;
       });
     }
   }

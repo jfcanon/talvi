@@ -69,7 +69,8 @@ async function ensureSchema(db) {
         pin_gate_nonce TEXT,
         pin_gate_nonce_expires TEXT,
         pin_gate_token TEXT,
-        pin_gate_token_expires TEXT
+        pin_gate_token_expires TEXT,
+        encrypted      INTEGER NOT NULL DEFAULT 0
       )`,
     ),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_drops_expires_at  ON drops(expires_at)`),
@@ -90,6 +91,11 @@ async function ensureSchema(db) {
   await addColumn("pin_gate_nonce_expires", "TEXT");
   await addColumn("pin_gate_token", "TEXT");
   await addColumn("pin_gate_token_expires", "TEXT");
+  // B1: fragment-key E2E encryption. 1 = the R2 object is ciphertext and the
+  // share link carries the key in #k=…; 0 = plaintext (every existing drop,
+  // and every upload that opts out). Additive and nullable-defaulted so green
+  // and old rows are untouched.
+  await addColumn("encrypted", "INTEGER NOT NULL DEFAULT 0");
 }
 
 function json(body, status = 200) {
@@ -180,6 +186,13 @@ async function handleUpload(request, env) {
     return json({ error: "invalid pin gate" }, 400);
   }
 
+  // Fragment-key E2E encryption (B1). The browser encrypts with AES-256-GCM
+  // and sends ciphertext; the key travels only in the share link's #k=…
+  // fragment, which never reaches the server. The flag is stored so the view
+  // page can render the right state and refuse to sniff ciphertext. The
+  // server never sees the key in any form.
+  const encrypted = request.headers.get("x-drop-encrypted") === "1" ? 1 : 0;
+
   const slug = newSlug();
   const r2Key = "d" + ttl + "/" + slug;
 
@@ -245,10 +258,10 @@ async function handleUpload(request, env) {
 
   await env.DB.prepare(
     `INSERT INTO drops
-       (slug, r2_key, filename, content_type, size_bytes, uploaded_at, expires_at, pin_gate)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (slug, r2_key, filename, content_type, size_bytes, uploaded_at, expires_at, pin_gate, encrypted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(slug, r2Key, filename, contentType, counted, uploadedAt, expiresAt, pinGate)
+    .bind(slug, r2Key, filename, contentType, counted, uploadedAt, expiresAt, pinGate, encrypted)
     .run();
 
   const url = new URL(request.url);
@@ -257,6 +270,7 @@ async function handleUpload(request, env) {
     url: `${url.origin}${PREFIX}/${slug}`,
     expires_at: expiresAt,
     size_bytes: counted,
+    encrypted,
   });
 }
 
@@ -306,12 +320,18 @@ async function getLiveDrop(env, slug) {
 // The view page is the app's only stored-XSS sink (B.7 item 3). Whether the
 // "as markdown" action is offered is decided by the object's own bytes
 // (sniffed here, a 16-byte range read) — never the declared content type.
+// An ENCRYPTED drop (B1) is never sniffed: its bytes are ciphertext, and a
+// range-read would be a wasted subrequest that tells us nothing.
 async function handleView(env, row, slug) {
-  const kind = await imageKindOf(env, row.r2_key);
-  return new Response(viewPage(row, slug, kind !== null, Boolean(row.pin_gate)), {
-    status: 200,
-    headers: HTML_HEADERS,
-  });
+  const encrypted = Boolean(row.encrypted);
+  const kind = encrypted ? null : await imageKindOf(env, row.r2_key);
+  return new Response(
+    viewPage(row, slug, kind !== null, Boolean(row.pin_gate), encrypted),
+    {
+      status: 200,
+      headers: HTML_HEADERS,
+    },
+  );
 }
 
 async function handleDownload(env, row, ctx) {

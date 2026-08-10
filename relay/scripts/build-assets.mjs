@@ -38,6 +38,9 @@ const css = await readFile(join(root, "src/ui/style.css"), "utf8");
 const clientJs = await readFile(join(root, "src/ui/client.js"), "utf8");
 const ambientJs = await readFile(join(root, "src/ui/ambient.js"), "utf8");
 const chatCryptoJs = await readFile(join(root, "src/ui/chatcrypto.js"), "utf8");
+// Fragment-key E2E encryption (blueprint B1) — window.talviCrypto. Same
+// self-booting IIFE shape; client.js calls it lazily from handlers.
+const fragmentCryptoJs = await readFile(join(root, "src/ui/fragmentcrypto.js"), "utf8");
 // The shared shell's blade retraction (same bytes as hub/chat).
 const bladeClientJs = await readFile(join(root, "src/ui/blade-client.js"), "utf8");
 
@@ -60,6 +63,8 @@ const js =
   ambientJs +
   "\n" +
   chatCryptoJs +
+  "\n" +
+  fragmentCryptoJs +
   "\n" +
   bladeClientJs +
   "\n" +

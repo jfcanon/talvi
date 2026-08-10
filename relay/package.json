@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js",
     "test:gate": "npm run build && node scripts/gate-test.mjs",
-    "test:auth": "npm run build && node scripts/auth-test.mjs"
+    "test:auth": "npm run build && node scripts/auth-test.mjs",
+    "test:encryption": "npm run build && node scripts/encryption-test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
