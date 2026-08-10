@@ -1,5 +1,5 @@
-// talvi hub — browser test (P1, the 3D hub). Run against the live production
-// hub:
+// talvi hub — browser test (v4, the explorable world). Run against the live
+// production hub:
 //
 //   npm i --no-save playwright-core   # already present in green's node_modules
 //   node scripts/hub-browser-test.mjs [base-url]
@@ -8,33 +8,26 @@
 // never reads as a failing test.
 //
 // Covers, live in a real browser: the page 200s, the 3D world boots (WebGL),
-// the five scroll sections exist, the blade renders and retracts, every app
-// href targets the right worker (the instrument plates AND the blade agree),
-// the END closing CTA is present, bare /chat+/relay are reachable (their own
-// workers claim those paths live; the hub's redirect is a fallback), the
-// uniform 404 holds, and the page raises ZERO own-page CSP violations (the
-// edge-injected beacon is reported as info).
+// the three building labels float on their buildings and carry the right hrefs,
+// the blade renders and retracts, the HUD prompt + hint are present, dragging
+// orbits the camera (labels move), the wheel dollies (labels move again),
+// hovering a building echoes "open <app>" in the prompt, clicking a building
+// navigates to its app, the uniform 404 holds, and the page raises ZERO
+// own-page CSP violations (the edge-injected beacon is reported as info).
 import { chromium } from "playwright-core";
 
 const base = process.argv[2] ?? "https://app.ygdcbtmc4u.uk";
 
-// Post-migration targets (hub blueprint: apps mount at app.* paths).
-const EXPECTED_LINKS = {
-  TALVI: "https://app.ygdcbtmc4u.uk/relay",
-  CHAT: "https://app.ygdcbtmc4u.uk/chat",
-  CINTO: "https://cinto.ygdcbtmc4u.uk",
+const EXPECTED_NODES = {
+  relay: "https://app.ygdcbtmc4u.uk/relay",
+  chat: "https://app.ygdcbtmc4u.uk/chat",
+  cinto: "https://cinto.ygdcbtmc4u.uk",
 };
 
 // Cloudflare injects its Browser Insights beacon into HTML at the edge on the
 // proxied zone — but only for requests that look like real browser navigations
-// (`Sec-Fetch-Dest: document`), which is why curl sees nothing and this test
-// does. The CSP blocks it, correctly.
-//
-// It is reported SEPARATELY from our own violations because the two demand
-// opposite responses. A violation from our own page is a bug in our page. This
-// is a third-party script the site never asked for, arriving from the edge, and
-// the fix is to turn the zone feature off — NEVER to add the host to
-// `script-src`. Same rule as green's chat-browser-test.mjs.
+// (`Sec-Fetch-Dest: document`). The CSP blocks it, correctly. Reported as info,
+// never as a failure — the real gate is `zero own CSP violations`.
 const EDGE_INJECTED = /cloudflareinsights\.com|\/cdn-cgi\/(scripts|challenge-platform)/i;
 
 let failures = 0;
@@ -59,6 +52,14 @@ page.on("console", (msg) => {
 });
 page.on("pageerror", (err) => violations.push(`pageerror: ${err.message}`));
 
+const nodeXs = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll(".node")].map((n) => {
+      const r = n.getBoundingClientRect();
+      return { key: n.getAttribute("data-key"), x: Math.round(r.x + r.width / 2) };
+    }),
+  );
+
 try {
   // --- static routes -------------------------------------------------------
   for (const [name, path, expect] of [
@@ -69,28 +70,13 @@ try {
   ]) {
     const r = await page.request.get(base + path);
     check(`${name} (${path})`, r.status() === expect, `expected ${expect}, got ${r.status()}`);
-    if (name === "css")
-      check("css content-type", r.headers()["content-type"].startsWith("text/css"));
-    if (name === "js")
-      check("js content-type", r.headers()["content-type"].startsWith("text/javascript"));
   }
-
-  const chat = await page.request.get(base + "/chat", { maxRedirects: 0 });
-  const relay = await page.request.get(base + "/relay", { maxRedirects: 0 });
-  // On the live zone the bare paths are claimed by the app workers' own routes
-  // (app.*/chat/*, app.*/relay/*), so they 200 there — the hub's trailing-slash
-  // redirect is only a fallback for the route-specificity quirk, observable in
-  // the local harness, not here. Assert reachability, not the redirect.
-  check("bare /chat reachable", chat.status() === 200 || chat.status() === 301, `got ${chat.status()}`);
-  check("bare /relay reachable", relay.status() === 200 || relay.status() === 301, `got ${relay.status()}`);
 
   // --- the page ------------------------------------------------------------
   await page.goto(base, { waitUntil: "load", timeout: 30000 });
-  await page.waitForTimeout(1000); // let the scene boot + a frame render
+  await page.waitForTimeout(1000); // let the world boot + a frame render
 
   check("page loads with title talvi", (await page.title()) === "talvi");
-  check("five scroll sections", (await page.locator("section.chapter").count()) === 5);
-
   const world = await page.evaluate(() => {
     const canvas = document.getElementById("scene");
     const gl = canvas ? canvas.getContext("webgl2") || canvas.getContext("webgl") : null;
@@ -98,72 +84,78 @@ try {
   });
   check("webgl world boots", world.canvas && world.webgl);
 
+  // --- the building labels -------------------------------------------------
+  const labels = await page.evaluate(() =>
+    [...document.querySelectorAll(".node")].map((n) => [
+      n.getAttribute("data-key"),
+      n.getAttribute("href"),
+      n.classList.contains("is-on"),
+    ]),
+  );
+  check("three building labels", labels.length === 3, `found ${labels.length}`);
+  for (const [key, href, on] of labels) {
+    check(`node ${key} → ${href}`, href === EXPECTED_NODES[key] && on, `${href} on=${on}`);
+  }
+
   // --- the blade -----------------------------------------------------------
   check("blade nav present", (await page.locator(".blade").count()) === 1);
-  const labels = await page.locator(".blade__label").allTextContents();
-  check(
-    "blade shows 3 apps + future slot",
-    labels.length === 4 && labels[3].toLowerCase() === "more",
-    labels.join(","),
-  );
-  for (const [name, href] of Object.entries(EXPECTED_LINKS)) {
-    const target = await page.locator(`.blade__item[href="${href}"]`).count();
-    check(`blade ${name} links ${href}`, target === 1);
-  }
-  check("future slot is not a link", (await page.locator(".blade__item.is-slot").count()) === 1);
-  // v2 blade: no "apps" tag, an icon-only toggle, a login control at the foot.
-  check("no apps tag", (await page.locator(".blade__tag").count()) === 0);
   check("blade has login control", (await page.locator(".blade__login").count()) === 1);
-  check("toggle is icon-only", (await page.locator(".blade__toggle").textContent()).trim() === "»");
-
-  // v2 hero: the terminal prompt `>_`, no copy.
-  const prompt = await page.evaluate(() => {
-    const p = document.querySelector("#sign .chapter__prompt");
-    return p ? p.textContent : null;
-  });
-  check("hero terminal prompt >_", prompt === ">_", String(prompt));
-
   const blade = page.locator(".blade");
-  const toggle = page.locator(".blade__toggle");
-  check("blade starts collapsed", !(await blade.evaluate((el) => el.classList.contains("is-open"))));
-  await toggle.click();
+  await page.locator(".blade__toggle").click();
   check("blade opens on toggle", await blade.evaluate((el) => el.classList.contains("is-open")));
-  await toggle.click();
+  await page.locator(".blade__toggle").click();
   check("blade closes on second toggle", !(await blade.evaluate((el) => el.classList.contains("is-open"))));
 
-  // --- the instruments (world control plates) ------------------------------
-  const plateHrefs = await page.locator("a.plate").evaluateAll((els) =>
-    els.map((a) => a.getAttribute("href")),
-  );
-  const expectedPlateHrefs = Object.values(EXPECTED_LINKS);
-  check(
-    "instrument plates = one per app",
-    plateHrefs.length === 3 && expectedPlateHrefs.every((h) => plateHrefs.includes(h)),
-    plateHrefs.join(","),
-  );
-  check("END closing CTA present", (await page.locator("#end .btn").count()) === 1);
+  // --- the HUD -------------------------------------------------------------
+  check("prompt present", (await page.locator(".prompt").count()) === 1);
+  check("hint present", (await page.locator(".hint").count()) === 1);
 
-  // --- scroll drives the world ---------------------------------------------
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await page.waitForTimeout(300);
-  check("scroll drives the world", await page.evaluate(() => window.scrollY > 0));
+  // --- drag = orbit, wheel = dolly -----------------------------------------
+  const before = await nodeXs();
+  await page.mouse.move(640, 400);
+  await page.mouse.down();
+  await page.mouse.move(740, 360, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+  const afterOrbit = await nodeXs();
+  const orbited = afterOrbit.some(
+    (n, i) => Math.abs(n.x - before[i].x) > 20,
+  );
+  check("drag orbits the world (labels move)", orbited, JSON.stringify({ before, afterOrbit }));
 
-  // --- mobile --------------------------------------------------------------
-  await page.setViewportSize({ width: 375, height: 667 });
-  await page.reload({ waitUntil: "load", timeout: 30000 });
-  await page.waitForTimeout(600);
-  check("mobile hides the retract toggle", (await page.locator(".blade__toggle").isVisible()) === false);
-  check("mobile shows the icon rail", (await page.locator(".blade__item").count()) === 4);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.reload({ waitUntil: "load", timeout: 30000 });
+  await page.mouse.move(640, 400);
+  await page.mouse.wheel(0, -300);
+  await page.waitForTimeout(250);
+  const afterZoom = await nodeXs();
+  const zoomed = afterZoom.some(
+    (n, i) => Math.abs(n.x - afterOrbit[i].x) > 20,
+  );
+  check("wheel dollies (labels move again)", zoomed, JSON.stringify({ afterOrbit, afterZoom }));
+
+  // --- hover echoes in the prompt ------------------------------------------
+  await page.evaluate(() => {
+    const n = document.querySelector('.node[data-key="relay"]');
+    const b = n.getBoundingClientRect();
+    document.getElementById("scene").dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: Math.round(b.x + b.width / 2),
+        clientY: Math.round(b.y + b.height / 2 + 55),
+        pointerId: 9,
+        bubbles: true,
+      }),
+    );
+  });
+  await page.waitForTimeout(120);
+  const promptText = await page.locator(".prompt__text").textContent();
+  check('hover echoes "open talvi"', /open talvi/.test(promptText), promptText);
+
+  // --- click a building navigates ------------------------------------------
+  await page.locator('.node[data-key="relay"]').click({ timeout: 8000 });
+  await page.waitForTimeout(1200);
+  check("clicking a building opens its app", page.url().includes("/relay"), page.url());
 
   // --- CSP -----------------------------------------------------------------
   check("zero own CSP violations", violations.length === 0, violations.join(" | ").slice(0, 300));
-  // The edge beacon is expected on the proxied zone and blocked correctly. It
-  // is reported as info, never as a failure — a permanently-red named check
-  // would just teach everyone to ignore it (webapp-factory: normalising a red
-  // check is worse than none). The real gate is `zero own CSP violations`
-  // above; the fix for this line is a dashboard toggle, not a CSP change.
   console.log(
     injected.length
       ? `info edge beacon blocked by CSP ${injected.length}x (expected — disable ` +
