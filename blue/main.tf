@@ -1,6 +1,9 @@
-# Blue release (talvi2.ygdcbtmc4u.uk) — Next.js on Cloudflare Workers via
-# @opennextjs/cloudflare. Green (talvi.ygdcbtmc4u.uk, root main.tf) is
-# untouched. See plans/talvi-blue-release-blueprint.md in sagwebapp.
+# Blue release — DECOMMISSIONED 2026-08-10. talvi2.ygdcbtmc4u.uk is legacy and
+# deprecated; the serving surface (Worker + route + DNS) was removed when the
+# Clerk login re-accommodated onto app.ygdcbtmc4u.uk (s7/talvi-blue-auth-
+# handover.md). What remains here is the blue STORAGE (D1 talvi-blue-meta, R2
+# talvi-blue-drop + lifecycle), kept deliberately — see the note at the bottom
+# of this file. Green (talvi.ygdcbtmc4u.uk, root main.tf) is untouched.
 terraform {
   required_providers {
     cloudflare = {
@@ -113,121 +116,20 @@ resource "cloudflare_r2_bucket_lifecycle" "talvi_blue_drop_expiry" {
 }
 
 # ---------------------------------------------------------------------------
-# talvi2.ygdcbtmc4u.uk — DNS + routes.
+# ---------------------------------------------------------------------------
+# talvi2.ygdcbtmc4u.uk — DECOMMISSIONED 2026-08-10.
 #
-# Green uses cloudflare_workers_custom_domain (whole hostname, one Worker).
-# Blue splits one hostname across two Workers by path (blueprint L2/L3), which
-# needs a proxied DNS record plus explicit routes; the most specific pattern
-# wins. 192.0.2.1 is a documentation-address placeholder: proxied traffic is
-# matched by the route patterns below and never actually resolved to it.
+# The Clerk login was re-accommodated onto app.ygdcbtmc4u.uk (the relay's
+# in-worker session gate, s7/talvi-blue-auth-handover.md). talvi2 is legacy and
+# deprecated; the serving surface is removed: the talvi-blue Worker, its route,
+# and the talvi2 DNS record are gone, so the host stops resolving and no worker
+# answers it. Links to talvi2.ygdcbtmc4u.uk break by design (blueprint A8).
+#
+# The blue STORAGE below (D1 talvi-blue-meta, R2 talvi-blue-drop + lifecycle)
+# is deliberately KEPT: destroying storage destroys data (CLAUDE.md), and no
+# decision has been made on the blue drops. Nothing references it anymore, so
+# it is inert. If it is ever wanted back, the storage is ready; the serving
+# surface would need to be recreated.
 # ---------------------------------------------------------------------------
+# (The worker script, its route, and the talvi2 DNS record were removed.)
 
-resource "cloudflare_dns_record" "talvi2" {
-  zone_id = var.talvi_zone_id
-  name    = "talvi2"
-  content = "192.0.2.1"
-  type    = "A"
-  proxied = true
-  ttl     = 1 # 1 = automatic; required by the provider and only valid when proxied
-}
-
-# ---------------------------------------------------------------------------
-# talvi-blue — the Next.js app (OpenNext). PR 1 is the inert skeleton:
-# placeholder page + /api/healthz, no bindings. PR 2 adds D1/R2/AI/ratelimit
-# bindings; PR 3 adds the Clerk secret bindings.
-# ---------------------------------------------------------------------------
-
-# The OpenNext build emits a multi-file `.open-next/` directory; its entry
-# worker.js imports sibling modules, so it is bundled to ONE file in CI
-# (`wrangler deploy --dry-run --outdir=dist-worker`) before Terraform sees it.
-# Content is referenced via content_file/content_sha256 (provider v5.7+), NOT
-# content: the built script is ~5MB of minified JS — a single multiline string
-# — and Terraform's plan renderer diffs string attributes with a Longest
-# Common Subsequence that is O(lines²); rendering a changed 5MB script there
-# OOM'd the plan step (fatal error: runtime: out of memory). content_file also
-# keeps the script out of state.
-resource "cloudflare_workers_script" "talvi_blue" {
-  account_id          = var.cloudflare_account_id
-  script_name         = "talvi-blue"
-  main_module         = "index.js"
-  content_file        = "${path.module}/dist-worker/worker.js"
-  content_sha256      = filesha256("${path.module}/dist-worker/worker.js")
-  compatibility_date  = "2026-08-07"
-  compatibility_flags = ["nodejs_compat"]
-
-  # PR 2: the write/read path bindings. Same shapes as green (main.tf), fresh
-  # resources: D1 talvi-blue-meta, R2 talvi-blue-drop, and rate-limit
-  # namespace ids 2101/2102 (green uses 2001/2002 — per-script identifiers,
-  # chosen to stay visibly distinct from the relay's 1001/1002).
-  bindings = [
-    { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_blue_meta.id },
-    { type = "r2_bucket", name = "BUCKET", bucket_name = cloudflare_r2_bucket.talvi_blue_drop.name },
-
-    # Workers-native rate limiting (green Step 6). Chosen over
-    # cloudflare_rate_limit because that resource is zone-scoped. See the
-    # KNOWN UNRESOLVED caveat in src/lib/rate.js — on green these never
-    # fired; the code is correct against the documented API and inert.
-    {
-      type         = "ratelimit"
-      name         = "RL_UPLOAD"
-      namespace_id = "2101"
-      simple = {
-        limit  = 3
-        period = 60
-      }
-    },
-    {
-      type         = "ratelimit"
-      name         = "RL_READ"
-      namespace_id = "2102"
-      simple = {
-        limit  = 60
-        period = 60
-      }
-    },
-
-    # Workers AI (markdown sidequest). Powers GET /:slug/md — the "as
-    # markdown" image conversion. No secret, no egress; usage is metered in
-    # neurons and bounded by on-demand + R2 caching.
-    {
-      type = "ai"
-      name = "AI"
-    },
-
-    # Clerk auth (PR 3). CLERK_SECRET_KEY is a secret_text binding (never in
-    # state); CLERK_PUBLISHABLE_KEY and CLERK_JWT_KEY are public by design. The
-    # worker verifies the __session cookie locally via @clerk/backend using
-    # jwtKey (no network per request, no clerk-js on any page except /sign-in,
-    # no CSP change anywhere else).
-    {
-      type = "secret_text"
-      name = "CLERK_SECRET_KEY"
-      text = var.clerk_secret_key
-    },
-    {
-      type = "plain_text"
-      name = "CLERK_PUBLISHABLE_KEY"
-      text = var.clerk_publishable_key
-    },
-    {
-      type = "plain_text"
-      name = "CLERK_JWT_KEY"
-      text = var.clerk_jwt_key
-    },
-  ]
-
-  # OpenNext static assets (public/ + _next/static). The provider uploads the
-  # directory and wires the ASSETS binding (provider v5.11+).
-  assets = {
-    directory = "${path.module}/.open-next/assets"
-  }
-
-  # NO `migrations` BLOCK — same rule as green. The OpenNext worker here has no
-  # Durable Objects of its own; the chat DO lives in talvi-blue-chat (PR 4).
-}
-
-resource "cloudflare_workers_route" "talvi2_app" {
-  zone_id = var.talvi_zone_id
-  pattern = "talvi2.ygdcbtmc4u.uk/*"
-  script  = cloudflare_workers_script.talvi_blue.script_name
-}
