@@ -1,0 +1,3 @@
+# talvi 3d build output (built in CI; a Terraform input) — same rule as hub's dist/
+/dist/
+/src/generated/
