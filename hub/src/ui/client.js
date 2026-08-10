@@ -1,23 +1,37 @@
-// talvi hub — blade retraction (A1).
+// talvi hub — boots the 3D world and drives the blade (blueprint A2/A5).
 //
-// Self-booting plain script, not an ES module: /h.js is a raw file
-// concatenated by scripts/build-assets.mjs (no module loader), so no `export`
-// and no shared globals — this file owns its own DOMContentLoaded hook, the
-// same pattern green's client.js and ambient.js use.
+// This file is the client entry and IS bundled by scripts/build-assets.mjs
+// (esbuild: three.js + the scene modules + this file → the /h.js payload), so
+// unlike the old raw-concatenated client it can use imports and an ES module
+// graph. It owns its own DOMContentLoaded hook.
 //
-// The blade is a class toggle on .hub (is-open) driven by a real <button>.
-// No inline handlers anywhere (CSP: script-src 'self' — which is WHY the
-// toggle is a button + addEventListener, not an onclick attribute). The
-// retract state is remembered in localStorage so the rail stays the way the
-// visitor left it.
+// Two jobs:
+//   1. Boot the world if WebGL exists (the page still works without it: the
+//      captions and the film overlays sit on the plain dark ground).
+//   2. The blade: a class toggle on .blade (is-open) driven by a real
+//      <button>. No inline handlers anywhere (CSP: script-src 'self' — which
+//      is WHY the toggle is a button + addEventListener, not an onclick
+//      attribute). The retract state is remembered in localStorage so the rail
+//      stays the way the visitor left it.
+import { bootScene } from "../scene/main.js";
+
 (function () {
   "use strict";
 
+  function bootWorld() {
+    if (window.WebGLRenderingContext) bootScene();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootWorld);
+  } else {
+    bootWorld();
+  }
+
   const STORAGE_KEY = "talvi.hub.blade";
-  const HUB = document.querySelector(".hub");
+  const BLADE = document.querySelector(".blade");
   const TOGGLE = document.querySelector(".blade__toggle");
 
-  if (!HUB || !TOGGLE) return;
+  if (!BLADE || !TOGGLE) return;
 
   // The toggle's label says what the NEXT click does, so a closed rail reads
   // "expand" and an open one "retract". On mobile the toggle is hidden by CSS
@@ -30,11 +44,11 @@
   // Restore: default collapsed. A saved "open" only applies when the visitor
   // explicitly opened it — absence of the key is not "open".
   const restored = localStorage.getItem(STORAGE_KEY) === "open";
-  if (restored) HUB.classList.add("is-open");
+  if (restored) BLADE.classList.add("is-open");
   refreshToggle(restored);
 
   TOGGLE.addEventListener("click", function () {
-    const open = HUB.classList.toggle("is-open");
+    const open = BLADE.classList.toggle("is-open");
     refreshToggle(open);
     try {
       if (open) localStorage.setItem(STORAGE_KEY, "open");
