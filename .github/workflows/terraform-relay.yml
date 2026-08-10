@@ -17,7 +17,6 @@ env:
   TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   TF_VAR_talvi_zone_id:         ${{ vars.TALVI_ZONE_ID }}
   TF_VAR_clerk_secret_key:      ${{ secrets.CLERK_SECRET_KEY }}
-  TF_VAR_clerk_publishable_key: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
   TF_VAR_clerk_jwt_key:         ${{ secrets.CLERK_JWT_KEY }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}

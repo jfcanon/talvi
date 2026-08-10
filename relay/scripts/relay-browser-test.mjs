@@ -96,18 +96,16 @@ try {
   const signedOut = await page.evaluate(() => {
     return {
       closed: document.body.innerText.includes("SESSION CLOSED"),
-      signIn: !!document.querySelector('a[href="/relay/sign-in"]'),
+      signIn: !!document.querySelector('a[href="/sign-in"]'),
     };
   });
   check("upload page shows SESSION CLOSED when signed out", signedOut.closed);
-  check("upload page offers SIGN IN", signedOut.signIn);
+  check("upload page SIGN IN points at the app root", signedOut.signIn);
 
+  // Sign-in lives at the app root (the hub worker), not on /relay anymore —
+  // a direct hit is a uniform 404.
   const siResp = await page.goto(base + "/sign-in", { waitUntil: "load", timeout: 30000 });
-  const csp = siResp?.headers()["content-security-policy"] || "";
-  check("sign-in page renders form", (await page.locator("#si-form").count()) === 1);
-  check("sign-in CSP is nonce + strict-dynamic", csp.includes("'nonce-") && csp.includes("'strict-dynamic'"), csp.slice(0, 120));
-  check("sign-in CSP has no unsafe-inline", !csp.includes("unsafe-inline"));
-  check("clerk-js loaded from the instance", (await page.evaluate(() => !!window.Clerk)) === true);
+  check("relay no longer serves /sign-in", siResp?.status() === 404, String(siResp?.status()));
 
   check("zero own CSP violations", violations.length === 0, violations.join(" | ").slice(0, 300));
   // The edge beacon is expected on the proxied zone and blocked correctly. It

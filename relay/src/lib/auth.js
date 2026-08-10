@@ -33,12 +33,6 @@ export function getClerkClient(env) {
   });
 }
 
-// The publishable key is public by design; the sign-in pages need it to point
-// clerk-js at the right instance.
-export function getPublishableKey(env) {
-  return env.CLERK_PUBLISHABLE_KEY;
-}
-
 // True when the request carries a valid __session cookie for an allowed party.
 // Catches every verification error as "not authenticated" — a bad cookie is
 // the same as no cookie for the gate.
