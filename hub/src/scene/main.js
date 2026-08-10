@@ -25,9 +25,6 @@ export function bootScene() {
   renderer.setClearColor(0x05060b, 1);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  // v4.3.1: the tiles cast soft shadows onto the floor (the sunrise sun).
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05060b);

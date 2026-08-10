@@ -473,26 +473,6 @@ body {
     radial-gradient(110% 90% at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.88) 100%);
 }
 
-/* ======================================================= lightning (v4.3.1) */
-
-/* The storm's screen flash — a wide green-white bloom the scene drives to
-   full opacity for ~120ms when the world crashes. Above the film stack so the
-   flash lights the whole frame; below the blade. */
-.storm {
-  position: fixed;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 110ms ease-out;
-  background: radial-gradient(
-    120% 95% at 50% 50%,
-    rgba(224, 255, 238, 0.95) 0%,
-    rgba(157, 255, 176, 0.45) 55%,
-    transparent 82%
-  );
-}
-
 /* ========================================================== reduced motion */
 
 /* The WebGL scene freezes its own autonomous motion in JS (scene/main.js).
@@ -501,12 +481,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .grain {
     animation: none;
-  }
-  /* No lightning under reduced motion — the scene never flashes it, and the
-     overlay stays invisible even if a transition were mid-flight. */
-  .storm {
-    opacity: 0 !important;
-    transition: none;
   }
   .blade,
   .blade.is-open {
