@@ -109,7 +109,7 @@ function bootAgentPanel() {
       }
       if (frame.t === "ready") return;
       if (frame.t === "ok") log("ok  " + frame.result);
-      else if (frame.t === "err") log("err " + frame.code);
+      else if (frame.t === "err") log("err " + frame.code + (frame.detail ? " — " + frame.detail : ""));
     });
     ws.addEventListener("close", () => {
       setStatus("offline");
