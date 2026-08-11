@@ -19,11 +19,17 @@
 //   scheduled 03:00 UTC   the nightly purge (blueprint L8: the chat worker
 //                         owns it — it is a plain Worker and can hold a
 //                         scheduled handler; the Next.js worker cannot).
+//
+// OWNER DECISION 2026-08-11: chat is now behind a Clerk sign-in (the old
+// "chat reads no session" contract is overridden — see
+// plans/clerk-app-root-requirements.md §2.5). The gate is a worker-EDGE
+// check; the DO and its gate logic are untouched.
 import { STYLE_CSS, CLIENT_JS, ASSET_VERSION } from "./generated/assets.js";
 import { chatLandingPage, chatRoomPage } from "./ui/chatpage.js";
 import { notFoundPage } from "./ui/notfound.js";
 import { isValidChannelName } from "./chat/name.js";
 import { PREFIX } from "./prefix.js";
+import { isAuthenticated } from "./lib/auth.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
 
@@ -130,7 +136,25 @@ export default {
         return new Response("ok", { status: 200, headers: { "x-robots-tag": ROBOTS_TAG } });
       }
       if (p.endsWith("/s.css") || p.endsWith("/s.js")) return handleAsset(p);
+    }
 
+    // Clerk session gate (owner 2026-08-11). Everything user-facing — the
+    // landing, the room pages, and the WebSocket upgrade — requires a valid
+    // __session cookie. Pages redirect to the app root sign-in, carrying the
+    // return path; the WS upgrade cannot redirect, so it refuses (401) — a
+    // browser that passed the page gate carries the same cookie on the
+    // upgrade, so this only catches direct/scripted upgrades.
+    if (!(await isAuthenticated(request, env))) {
+      if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
+        return new Response("unauthorized", { status: 401 });
+      }
+      return Response.redirect(
+        new URL("/sign-in?redirect=" + encodeURIComponent(pathname), request.url).toString(),
+        302,
+      );
+    }
+
+    if (method === "GET") {
       const ws = CHAT_WS_ROUTE.exec(p);
       if (ws) {
         const name = ws[1];

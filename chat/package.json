@@ -12,6 +12,7 @@
     "esbuild": "0.28.1"
   },
   "dependencies": {
+    "@clerk/backend": "^3.16.1",
     "three": "0.185.1"
   }
 }
