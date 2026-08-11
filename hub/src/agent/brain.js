@@ -45,7 +45,9 @@ export function systemPrompt() {
     "actions array (never multiple objects, never multiple arrays): " +
     "{\"reply\":\"...\"} to just talk, or {\"actions\":[{\"op\":\"write\",\"path\":\"customcinto/<feature>/<file>\",\"content\":\"...\"}]} " +
     "to write a file, and/or {\"actions\":[{\"op\":\"pr\",\"branch\":\"<branch>\",\"title\":\"<title>\"}]} " +
-    "to open a pull request shipping everything staged under customcinto/. " +
+    "to open pull requests shipping everything staged under customcinto/ (the " +
+    "agent opens BOTH the feature PR and the cinto deploy PR — the human merges " +
+    "feature first, then deploy). " +
     "Put ALL actions in that one array, in order. " +
     "You may use op or action as the field name. " +
     "All paths must start with customcinto/. You CANNOT run code, build, or " +
@@ -272,5 +274,74 @@ export async function openCustomCintoPR(env, { branch, title, body, files }) {
     body: { title, head: branch, base, body },
   });
 
-  return { t: "ok", cmd: "pr", result: pr.html_url };
+  return { t: "ok", cmd: "pr", result: pr.html_url, headSha: pr.head.sha };
+}
+
+// The deploy half of the loop. customcinto is a PINNED build dependency of
+// cinto (D9a): merging a customcinto PR changes the source but the site only
+// changes once cinto points its `customcinto` dep at the new SHA. This opens
+// that pin-bump PR on jfcanon/cinto, so the whole flow is two merges:
+//   merge customcinto PR  → feature is in the source
+//   merge cinto pin PR    → cinto rebuilds from the new SHA → site updates
+// The body tells the reviewer the required merge order.
+export async function openCintoPinPR(env, { headSha, featurePrUrl }) {
+  const repo = env.CINTO_REPO || "jfcanon/cinto";
+  const base = "main";
+  const short = headSha.slice(0, 8);
+  const branch = "chore/customcinto-" + short;
+
+  // Current package.json on cinto main.
+  const current = await gh(env, `/repos/${repo}/contents/package.json?ref=${base}`);
+  const pkg = Buffer.from(current.content, "base64").toString("utf8");
+  const next = pkg.replace(
+    /(archive\/)[0-9a-f]{40}(\.tar\.gz)/,
+    `$1${headSha}$2`,
+  );
+  if (next === pkg) {
+    return { t: "err", code: "pinunchanged" };
+  }
+
+  // Git-data flow on the cinto repo: blob → tree → commit → ref → PR.
+  const baseRef = await gh(env, `/repos/${repo}/git/ref/heads/${base}`);
+  const baseCommit = await gh(env, `/repos/${repo}/git/commits/${baseRef.object.sha}`);
+  const baseTree = baseCommit.tree.sha;
+
+  const blob = await gh(env, `/repos/${repo}/git/blobs`, {
+    method: "POST",
+    body: { content: next, encoding: "utf-8" },
+  });
+  const tree = await gh(env, `/repos/${repo}/git/trees`, {
+    method: "POST",
+    body: {
+      base_tree: baseTree,
+      tree: [{ path: "package.json", mode: "100644", type: "blob", sha: blob.sha }],
+    },
+  });
+  const commit = await gh(env, `/repos/${repo}/git/commits`, {
+    method: "POST",
+    body: {
+      message: `customcinto: bump pin to ${short}`,
+      tree: tree.sha,
+      parents: [baseRef.object.sha],
+    },
+  });
+  await gh(env, `/repos/${repo}/git/refs`, {
+    method: "POST",
+    body: { ref: "refs/heads/" + branch, sha: commit.sha },
+  });
+  const pr = await gh(env, `/repos/${repo}/pulls`, {
+    method: "POST",
+    body: {
+      title: `customcinto: bump pin to ${short}`,
+      head: branch,
+      base,
+      body:
+        "Auto-opened by the talvi agent (deploy step).\n\n" +
+        "MERGE ORDER: merge the customcinto feature PR first, THEN this one. " +
+        "Feature PR: " + (featurePrUrl || "(unknown)") + "\n\n" +
+        "Merging this points cinto's pinned customcinto dep at the new SHA and " +
+        "deploys the change to app.ygdcbtmc4u.uk/cinto/customcinto.",
+    },
+  });
+  return { t: "ok", cmd: "deploy-pr", result: pr.html_url };
 }
