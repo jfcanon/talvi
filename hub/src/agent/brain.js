@@ -2,12 +2,15 @@
 //
 // Two capabilities, both reached from the panel protocol:
 //
-//   1. `chat` — natural language. Sends the user's message (plus a system
-//      prompt that grounds the model in the workspace + customcinto context)
-//      to a free Workers AI model via env.AI.run(). Returns the reply. The
-//      model is a plain text assistant: it may WRITE a feature for the user,
-//      and the `pr` command ships it. There is no autonomous tool loop yet
-//      (that needs @cloudflare/think + a paid model — see blueprint PR3).
+//   1. `chat` — natural language with a CONSTRAINED tool loop. The model is
+//      told it may reply as JSON with a list of actions it wants to take:
+//        { "reply": "..." }                                   — just talk
+//        { "actions": [ {"op":"write", "path": "...", "content":"..."} ] }
+//        { "actions": [ {"op":"pr", "branch":"...", "title":"..."} ] }
+//      The DO executes those actions directly (path-locked to the customcinto
+//      subtree; no code execution, no new deps). This is what makes "add a
+//      copyright footer" a single exchange instead of the model punting the
+//      file-write back to the user.
 //
 //   2. `pr` — the contractor step. Commits files from the workspace into
 //      jfcanon/customcinto via the GitHub Contents + Pulls API and opens a
@@ -24,24 +27,58 @@ export const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 export const CUSTOMCINTO_REPO = "jfcanon/customcinto";
 export const CUSTOMCINTO_BASE = "main";
 
-// The system prompt grounds the model in what it can actually do. Keep it
-// minimal and truthful: it can read/write the workspace via the panel
-// commands, and the user ships features via `pr`. It cannot run code, and it
-// must never claim otherwise.
+const MAX_ACTIONS = 8; // model may request at most this many ops per turn
+const MAX_ACTION_CONTENT = 32 * 1024; // per-file bytes the model may write
+
+// The system prompt grounds the model in what it can actually do: it may
+// PROPOSE files, and — via the JSON action protocol — write them into the
+// customcinto subtree and open a PR. It cannot run code. Style guidance
+// anchors it to customcinto's actual instrument UI (cinto's CSS classes),
+// not Tailwind or an invented design language.
 export function systemPrompt() {
   return (
     "You are the talvi agent inside the customcinto surface. " +
-    "You can propose code and files for the /customcinto feature surface, " +
-    "and the user writes them into the workspace and ships them with `pr`. " +
-    "You CANNOT run code, build, or typecheck. " +
-    "Do not claim you executed anything. " +
-    "Keep replies short and practical. " +
-    "Do not invent file contents beyond what the user asked for. " +
+    "customcinto is a compliance app whose UI uses these CSS classes only: " +
+    "stack, hud, hud__row, hud__cell, hud__label, hud__value, tagline, " +
+    "tagline__box, muted, tiny, link. Do not use Tailwind or external styles. " +
+    "To DO something, reply with ONLY a JSON object, no markdown fences, no " +
+    "prose around it. Two shapes: {\"reply\":\"...\"} to just talk, or " +
+    "{\"actions\":[{\"op\":\"write\",\"path\":\"customcinto/<feature>/<file>\",\"content\":\"...\"}]} " +
+    "to write a file, and/or {\"actions\":[{\"op\":\"pr\",\"branch\":\"<branch>\",\"title\":\"<title>\"}]} " +
+    "to open a pull request shipping everything staged under customcinto/. " +
+    "All paths must start with customcinto/. You CANNOT run code, build, or " +
+    "typecheck; do not claim you did. Keep replies short. " +
     "Never ask for secrets or tokens."
   );
 }
 
-export async function chat(env, ws, message) {
+// Parse the model's reply into either plain text or a list of actions.
+// Returns { reply } or { actions }. Tolerates a single markdown code fence
+// around the JSON; otherwise falls back to treating the whole output as a
+// reply if it is not valid JSON in the expected shape.
+export function parseModelOutput(text) {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) return { reply: "" };
+  // Strip ```json … ``` (or ``` … ```) around the payload if present.
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```\s*$/.exec(trimmed);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  let parsed;
+  try {
+    parsed = JSON.parse(candidate);
+  } catch {
+    return { reply: trimmed };
+  }
+  if (typeof parsed?.reply === "string") return { reply: parsed.reply };
+  if (Array.isArray(parsed?.actions)) {
+    const actions = parsed.actions
+      .slice(0, MAX_ACTIONS)
+      .filter((a) => a && typeof a === "object" && (a.op === "write" || a.op === "pr"));
+    if (actions.length) return { actions };
+  }
+  return { reply: trimmed };
+}
+
+export async function chat(env, ws, message, runAction) {
   if (!env.AI) return { t: "err", code: "noai" };
   const model = env.AGENT_MODEL || DEFAULT_MODEL;
   try {
@@ -53,7 +90,19 @@ export async function chat(env, ws, message) {
     });
     const text = String(results?.response ?? "").trim();
     if (!text) return { t: "err", code: "empty" };
-    return { t: "ok", cmd: "chat", result: text };
+
+    const parsed = parseModelOutput(text);
+    if (parsed.actions) {
+      // Execute each action via the DO's controlled runner; collect a summary.
+      const lines = [];
+      for (const action of parsed.actions) {
+        const out = await runAction(action);
+        if (out.t === "ok") lines.push(out.result);
+        else lines.push("err " + (out.code || "io") + (out.detail ? " — " + out.detail : ""));
+      }
+      return { t: "ok", cmd: "chat", result: lines.join("\n") };
+    }
+    return { t: "ok", cmd: "chat", result: parsed.reply || "(no reply)" };
   } catch (err) {
     // Surface the failure mode (not content) so the panel can report it.
     return { t: "err", code: "ai", detail: String(err?.message ?? err).slice(0, 120) };

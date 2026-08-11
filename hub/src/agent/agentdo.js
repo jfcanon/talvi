@@ -34,6 +34,7 @@ import { chat, openCustomCintoPR } from "./brain.js";
 
 const MAX_SOCKETS = 16; // open sockets per agent — bounds memory
 const MAX_WIRE_BYTES = 64 * 1024; // per-frame ceiling, UTF-8 bytes
+const MAX_ACTION_CONTENT = 32 * 1024; // per-file bytes the model may author
 
 // Origin gate — structural, same as chat: a browser's WS upgrade always sends
 // Origin, and it must match the host the request arrived on. Absent Origin is
@@ -181,7 +182,7 @@ export class AgentDO extends WrappedAgent {
           .join("\n");
         this.send(server, { t: "ok", cmd, result: names });
       } else if (cmd === "chat") {
-        const out = await chat(this.env, ws, frame.data || "");
+        const out = await chat(this.env, ws, frame.data || "", (action) => this.runAction(action));
         this.send(server, out);
       } else if (cmd === "pr") {
         const out = await this.handlePr(frame);
@@ -224,6 +225,39 @@ export class AgentDO extends WrappedAgent {
       body: "Opened by the talvi agent. Review before merging.",
       files,
     });
+  }
+
+  // runAction — the model's tool loop. The chat brain may request `write`
+  // (path-locked to the customcinto subtree, size-capped) and `pr`. This is
+  // the controlled boundary: the model proposes, the DO executes within the
+  // locked surface, and a human still reviews the resulting PR (D3/D6).
+  async runAction(action) {
+    if (action.op === "write") {
+      const path = String(action.path ?? "").trim();
+      const content = String(action.content ?? "");
+      // The model may only author inside /workspace/customcinto/<feature>/…
+      if (!isWorkspacePath(path)) return { t: "err", code: "badpath" };
+      const rel = path.slice(WORKSPACE_ROOT.length + 1);
+      if (!rel.startsWith("customcinto/") || rel === "customcinto") {
+        return { t: "err", code: "badpath" };
+      }
+      if (new TextEncoder().encode(content).length > MAX_ACTION_CONTENT) {
+        return { t: "err", code: "toolarge" };
+      }
+      const parent = path.slice(0, path.lastIndexOf("/")) || "/";
+      if (isWorkspacePath(parent)) {
+        await this.ws.fs.mkdir(parent, { recursive: true }).catch(() => {});
+      }
+      await this.ws.fs.writeFile(path, content);
+      return { t: "ok", result: "wrote " + rel };
+    }
+    if (action.op === "pr") {
+      const branch = String(action.branch ?? "").trim();
+      const title = String(action.title ?? "").trim();
+      if (!branch || !title) return { t: "err", code: "badcmd" };
+      return this.handlePr({ branch, title });
+    }
+    return { t: "err", code: "badcmd" };
   }
 
   // Recursively list every file under a workspace path.
