@@ -12,20 +12,28 @@
 // proves the DO + workspace + panel wiring; the AI brain and exec come later.
 //
 // Wire protocol (JSON frames):
-//   Client→server:  {t:"cmd", cmd:"write"|"read"|"ls", path, data?}
+//   Client→server:  {t:"cmd", cmd:"write"|"read"|"ls"|"chat"|"pr", path, data?}
 //   Server→client:  {t:"ready"}
 //                   {t:"ok", cmd, result}
 //                   {t:"err", code}        — "toolarge" | "badcmd" | "badpath"
-//                                            | "io"
+//                                            | "io" | "noai" | "empty"
+//
+//   chat <message>   — natural language → Workers AI (free model). The model
+//                      is grounded in the workspace/customcinto context and
+//                      may PROPOSE code, but never runs anything (PR3b).
+//   pr <branch> <title> [files...] — open a PR on jfcanon/customcinto. Files
+//                      are read from the workspace subtree and shipped via
+//                      the GitHub API (PR4). See src/agent/brain.js.
 //
 // Bounds mirror chat's (D11): origin-gated upgrade, socket cap, wire-frame
 // cap. NOTHING HERE LOGS content — the workspace files are the record, not
 // the logs.
 import { withWorkspace, getWorkspace } from "@cloudflare/computer";
+import { isWorkspacePath, WORKSPACE_ROOT } from "./paths.js";
+import { chat, openCustomCintoPR } from "./brain.js";
 
 const MAX_SOCKETS = 16; // open sockets per agent — bounds memory
 const MAX_WIRE_BYTES = 64 * 1024; // per-frame ceiling, UTF-8 bytes
-const WORKSPACE_ROOT = "/workspace";
 
 // Origin gate — structural, same as chat: a browser's WS upgrade always sends
 // Origin, and it must match the host the request arrived on. Absent Origin is
@@ -172,12 +180,62 @@ export class AgentDO extends WrappedAgent {
           .map((e) => (e.isDirectory ? e.name + "/" : e.name))
           .join("\n");
         this.send(server, { t: "ok", cmd, result: names });
+      } else if (cmd === "chat") {
+        const out = await chat(this.env, ws, frame.data || "");
+        this.send(server, out);
+      } else if (cmd === "pr") {
+        const out = await this.handlePr(frame);
+        this.send(server, out);
       } else {
         this.send(server, { t: "err", code: "badcmd" });
       }
     } catch (err) {
       this.send(server, { t: "err", code: "io" });
     }
+  }
+
+  // pr — open a PR on jfcanon/customcinto. Ships EVERY file staged under
+  // /workspace/customcinto/ (the route-group subtree) as the PR's diff. The
+  // agent authors in the sandbox; this command turns the staged bytes into a
+  // real, reviewable PR — the change-management boundary is never bypassed.
+  async handlePr(frame) {
+    const branch = String(frame.branch ?? "").trim();
+    const title = String(frame.title ?? "").trim();
+    if (!branch || !title) return { t: "err", code: "badcmd" };
+    if (!this.env.GITHUB_TOKEN) return { t: "err", code: "notoken" };
+
+    const files = {};
+    const root = WORKSPACE_ROOT + "/customcinto";
+    const entries = await this.walk(root);
+    for (const p of entries) {
+      const rel = p.slice(WORKSPACE_ROOT.length + 1);
+      if (!rel.startsWith("customcinto/")) continue;
+      try {
+        files[rel] = await this.ws.fs.readFile(p, "utf8");
+      } catch {
+        return { t: "err", code: "io" };
+      }
+    }
+    if (Object.keys(files).length === 0) return { t: "err", code: "nofiles" };
+
+    return openCustomCintoPR(this.env, {
+      branch,
+      title,
+      body: "Opened by the talvi agent. Review before merging.",
+      files,
+    });
+  }
+
+  // Recursively list every file under a workspace path.
+  async walk(path) {
+    const out = [];
+    const entries = await this.ws.fs.readdir(path).catch(() => []);
+    for (const e of entries) {
+      const full = path.replace(/\/$/, "") + "/" + e.name;
+      if (e.isDirectory) out.push(...(await this.walk(full)));
+      else out.push(full);
+    }
+    return out;
   }
 
   send(server, frame) {
@@ -191,13 +249,4 @@ export class AgentDO extends WrappedAgent {
   drop(server) {
     this.sockets.delete(server);
   }
-}
-
-// Paths are absolute, inside the workspace root, and must not escape it. The
-// fs surface already rejects absolute escapes; this is the routing gate.
-function isWorkspacePath(p) {
-  if (typeof p !== "string") return false;
-  if (!p.startsWith(WORKSPACE_ROOT)) return false;
-  if (p.includes("..")) return false;
-  return true;
 }

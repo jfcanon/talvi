@@ -55,6 +55,20 @@ variable "clerk_jwt_key" {
   type = string
 }
 
+# The agent brain (PR3b). GITHUB_TOKEN is a repo-scoped PAT for
+# jfcanon/customcinto — CI supplies it as TF_VAR_github_token from a GH
+# secret. AGENT_MODEL defaults to a free Workers AI model; leave "" to keep
+# the default in code (brain.js), or set to override.
+variable "github_token" {
+  type    = string
+  default = ""
+}
+
+variable "agent_model" {
+  type    = string
+  default = ""
+}
+
 # Proxied DNS record for app.ygdcbtmc4u.uk. 192.0.2.1 is a documentation
 # address placeholder: proxied traffic is matched by the route patterns below
 # and never actually resolved to it (same approach as blue's talvi2 record).
@@ -72,10 +86,10 @@ resource "cloudflare_dns_record" "app" {
 # content_file + content_sha256 reference is only needed past ~5 MB, the size
 # that OOM'd blue's plan renderer).
 #
-# The hub is a dumb launcher of links (A4) — EXCEPT the agent (PR2): the MORE
-# blade slot opens a chat panel that speaks to the AgentDO, a Durable Object
-# owning a filesystem-only @cloudflare/computer Workspace. That is the only DO,
-# storage, or secret-free surface the hub carries; nothing else will be added.
+# The hub is a dumb launcher of links (A4) — EXCEPT the agent (PR2/3b): the
+# MORE blade slot opens a chat panel that speaks to the AgentDO, a Durable
+# Object owning a @cloudflare/computer Workspace plus the agent brain (PR3b:
+# Workers AI chat + the customcinto PR path). Nothing else will be added.
 resource "cloudflare_workers_script" "talvi_hub" {
   account_id         = var.cloudflare_account_id
   script_name        = "talvi-hub"
@@ -119,6 +133,25 @@ resource "cloudflare_workers_script" "talvi_hub" {
       type = "plain_text"
       name = "CLERK_JWT_KEY"
       text = var.clerk_jwt_key
+    },
+    # The agent brain (PR3b). Workers AI for the `chat` command (free model by
+    # default, overridable via AGENT_MODEL), and the repo-scoped GitHub token
+    # that powers `pr` (a secret_text binding, never in state — same shape as
+    # the Clerk keys above). The token is invoked only by the DO's controlled
+    # PR function and never touches the workspace (D10).
+    {
+      type = "ai"
+      name = "AI"
+    },
+    {
+      type = "secret_text"
+      name = "GITHUB_TOKEN"
+      text = var.github_token
+    },
+    {
+      type = "plain_text"
+      name = "AGENT_MODEL"
+      text = var.agent_model
     },
   ]
 
