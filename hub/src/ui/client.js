@@ -131,10 +131,34 @@ function bootAgentPanel() {
       return;
     }
     log("> " + value);
-    // Parse "cmd path [data]" from the input into a frame.
+    // Parse "cmd [args...]" from the input into a frame.
     const space = value.indexOf(" ");
     const cmd = space === -1 ? value : value.slice(0, space);
     const rest = space === -1 ? "" : value.slice(space + 1).trim();
+
+    if (cmd === "chat") {
+      // chat <message> — the whole rest is the user's natural-language text.
+      ws.send(JSON.stringify({ t: "cmd", cmd: "chat", data: rest }));
+      return;
+    }
+
+    if (cmd === "pr") {
+      // pr <branch> <title> — ships the files currently staged in the
+      // workspace under customcinto/ (see `stage`-style usage in the log
+      // hint). Parses branch + title from the first two tokens.
+      const bSpace = rest.indexOf(" ");
+      const branch = bSpace === -1 ? rest : rest.slice(0, bSpace);
+      const title = bSpace === -1 ? "customcinto: agent change" : rest.slice(bSpace + 1).trim();
+      if (!branch) {
+        log("err pr needs a branch name: pr <branch> <title>");
+        return;
+      }
+      // Stage: everything under /workspace/customcinto/ is the candidate set.
+      ws.send(JSON.stringify({ t: "cmd", cmd: "pr", branch, title }));
+      return;
+    }
+
+    // write/read/ls: "cmd path [data]"
     const restSpace = rest.indexOf(" ");
     const path = restSpace === -1 ? rest : rest.slice(0, restSpace);
     const data = restSpace === -1 ? undefined : rest.slice(restSpace + 1);
