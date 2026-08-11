@@ -409,32 +409,24 @@ function markdownResponse(body, row) {
   });
 }
 
-async function handleMarkdown(env, row) {
-  // The route exists only for images — decided by the object's own bytes,
-  // never the declared type. A non-image gets the byte-identical 404 (B.7 item
-  // 5), so a viewer cannot tell "not an image" from "no such file".
-  const kind = await imageKindOf(env, row.r2_key);
-  if (!kind) return notFound();
-
-  // Derived cache at <r2_key>.md — same prefix, so the existing lifecycle
-  // rules expire it with the same TTL as the original object (blueprint §4).
-  // This is what makes "one image is converted once, ever" true.
+// OCR conversion shared by BOTH markdown paths: the plaintext GET /:slug/md
+// (reads the R2 object) and the encrypted POST /:slug/md (the client decrypts
+// in the browser and POSTs the image — see handleEncryptedMd). Caches the
+// result at <r2_key>.md so one image is converted once, ever.
+async function convertImageToMarkdown(env, row, imageBytes, kind) {
   const cacheKey = row.r2_key + ".md";
   const cached = await env.BUCKET.get(cacheKey);
-  if (cached) return markdownResponse(cached.body, row);
+  if (cached) return { cached: true, md: cached.body };
 
   if (!env.AI) {
     return json({ error: "conversion unavailable" }, 502);
   }
 
-  const object = await env.BUCKET.get(row.r2_key);
-  if (object === null) return notFound();
-
   let md;
   try {
     const results = await env.AI.toMarkdown({
       name: "image." + kind,
-      blob: new Blob([await object.arrayBuffer()], { type: imageMime(kind) }),
+      blob: new Blob([imageBytes], { type: imageMime(kind) }),
     });
     const result = Array.isArray(results) ? results[0] : results;
     if (!result || result.format === "error") {
@@ -450,7 +442,55 @@ async function handleMarkdown(env, row) {
     httpMetadata: { contentType: "text/markdown; charset=utf-8" },
   });
 
-  return markdownResponse(md, row);
+  return { cached: false, md };
+}
+
+async function handleMarkdown(env, row) {
+  // The route exists only for images — decided by the object's own bytes,
+  // never the declared type. A non-image gets the byte-identical 404 (B.7 item
+  // 5), so a viewer cannot tell "not an image" from "no such file".
+  const kind = await imageKindOf(env, row.r2_key);
+  if (!kind) return notFound();
+
+  const object = await env.BUCKET.get(row.r2_key);
+  if (object === null) return notFound();
+
+  const result = await convertImageToMarkdown(
+    env,
+    row,
+    await object.arrayBuffer(),
+    kind,
+  );
+  if (result instanceof Response) return result;
+  return markdownResponse(result.md, row);
+}
+
+// POST /:slug/md — OCR for an ENCRYPTED drop. The client decrypts the image
+// in the browser (the key is in the #k= fragment and never leaves it) and
+// POSTs the plaintext here for conversion. HONEST COPY (owner 2026-08-11):
+// this is the one action that sends the decrypted image to the server — it is
+// processed, never stored; only the .md result is cached (same <r2_key>.md
+// cache as the plaintext path). Without this, an encrypted drop could never
+// offer "as markdown" — the server cannot OCR ciphertext.
+async function handleEncryptedMd(env, row, request) {
+  // Bounded read of the decrypted image (same ceiling as uploads).
+  const clRaw = request.headers.get("content-length");
+  const contentLength = Number(clRaw);
+  if (!Number.isInteger(contentLength) || contentLength < 0 || contentLength > MAX_BYTES) {
+    return json({ error: "invalid body" }, 400);
+  }
+  let imageBytes;
+  try {
+    imageBytes = await request.arrayBuffer();
+  } catch {
+    return json({ error: "invalid body" }, 400);
+  }
+  const kind = sniffImageKind(new Uint8Array(imageBytes));
+  if (!kind) return notFound(); // byte-identical 404 for a non-image
+
+  const result = await convertImageToMarkdown(env, row, imageBytes, kind);
+  if (result instanceof Response) return result;
+  return markdownResponse(result.md, row);
 }
 
 // Real assets (Step 5). Step 4 served stubs with `no-store` deliberately, so
@@ -697,6 +737,9 @@ const SLUG_ROUTE = /^\/([^/]+)(\/(d|md))?$/;
 // One trailing segment, so it cannot collide with SLUG_ROUTE (which is used
 // only for GET).
 const GATE_ROUTE = /^\/([^/]+)\/gate$/;
+// POST /<slug>/md — OCR for an ENCRYPTED drop (the client decrypts and POSTs
+// the image bytes). One trailing segment, like the gate route.
+const MD_ROUTE = /^\/([^/]+)\/md$/;
 
 async function handleSlugRoute(match, env, request, ctx) {
   const slug = match[1];
@@ -860,6 +903,22 @@ async function route(request, method, env, ctx) {
       const row = await getLiveDrop(env, gateSlug);
       if (!row || !row.pin_gate) return notFound(); // ungated or unknown → 404
       return handleGate(env, row, request);
+    }
+
+    // POST /<slug>/md — OCR for an ENCRYPTED drop (the client decrypts in the
+    // browser and POSTs the image; see handleEncryptedMd). Rate-limited like
+    // the read path; a PIN-gated drop requires the same gate cookie as /d.
+    const mdMatch = MD_ROUTE.exec(stripped);
+    if (mdMatch && method === "POST") {
+      const mdSlug = mdMatch[1];
+      if (!isValidSlug(mdSlug)) return notFound();
+      if (!(await withinLimit(env.RL_READ, request))) return limitedHtml();
+      const row = await getLiveDrop(env, mdSlug);
+      if (!row) return notFound();
+      if (row.pin_gate && !(await gateCookieValid(env, request, row))) {
+        return json({ error: "gate required" }, 403);
+      }
+      return handleEncryptedMd(env, row, request);
     }
 
     return notFound();

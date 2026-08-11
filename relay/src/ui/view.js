@@ -77,6 +77,24 @@ export function viewPage(row, slug, isImage, gated, encrypted = false) {
       : 'Download<span class="dl__arrow" aria-hidden="true">&darr;</span>') +
     "</a>";
 
+  // The "as markdown" action. On a plaintext drop it is a plain link to the
+  // server-side OCR (GET /md). On an ENCRYPTED drop the server cannot OCR
+  // ciphertext, so the client decrypts and POSTs the image (data-encrypted-md
+  // tells client.js to intercept); the copy below says honestly that this one
+  // action sends the decrypted image to the server, processed but never stored.
+  const markdown =
+    (isImage && !encrypted) || encrypted
+      ? '<a class="dl--alt' +
+        (gated ? " hidden" : "") +
+        '" href="' +
+        PREFIX +
+        "/" +
+        escapeHtml(slug) +
+        '/md"' +
+        (encrypted ? ' data-encrypted-md="1"' : "") +
+        ' data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
+      : "";
+
   const actions =
     '<div class="actions" data-encrypted="' +
     (encrypted ? "1" : "0") +
@@ -97,15 +115,7 @@ export function viewPage(row, slug, isImage, gated, encrypted = false) {
         "</div>"
       : "") +
     download +
-    (isImage && !encrypted
-      ? '<a class="dl--alt' +
-        (gated ? " hidden" : "") +
-        '" href="' +
-        PREFIX +
-        "/" +
-        escapeHtml(slug) +
-        '/md" data-md>as markdown<span class="dl__arrow" aria-hidden="true">&darr;</span></a>'
-      : "") +
+    markdown +
     "</div>";
 
   const content =
@@ -146,7 +156,10 @@ export function viewPage(row, slug, isImage, gated, encrypted = false) {
         "server holds ciphertext and cannot read it. The key rides in this " +
         "link's #k= fragment, which never reaches the server. It is the strongest " +
         "protection this site offers, and it protects only what it says: anyone " +
-        "with this full link (fragment included) can decrypt and download.</p>" +
+        "with this full link (fragment included) can decrypt and download. " +
+        "OCR is the one exception: 'as markdown' decrypts the image in this " +
+        "browser and sends it to the server for conversion — it is processed, " +
+        "never stored.</p>" +
         '<p class="msg hidden" id="encmsg"></p>'
       : "") +
     "</div>";

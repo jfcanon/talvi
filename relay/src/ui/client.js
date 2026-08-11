@@ -475,6 +475,59 @@
         enc.disabled = false;
       });
     }
+
+    // Encrypted drop → "as markdown" (owner 2026-08-11). The server cannot OCR
+    // ciphertext, so this decrypts the image here, POSTs the plaintext to
+    // /md (processed, never stored), and offers the .md result as a download.
+    const encMd = document.querySelector("a.dl--alt[data-encrypted-md]");
+    if (encMd && window.talviCrypto) {
+      const mdHref = encMd.getAttribute("href");
+      const mdLabel = "as markdown";
+      encMd.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const keyStr = window.talviCrypto.parseFragmentKey(window.location.hash);
+        if (!keyStr) {
+          encSay(
+            "NO KEY IN THIS LINK — the #k= fragment is missing. Ask the sender " +
+              "for the full link.",
+            true,
+          );
+          return;
+        }
+        encMd.textContent = "CONVERTING…";
+        try {
+          const cipher = await fetch(mdHref.replace(/\/md$/, "/d"));
+          if (!cipher.ok) {
+            window.location.href = mdHref;
+            return;
+          }
+          const plain = await window.talviCrypto.decrypt(
+            keyStr,
+            await cipher.arrayBuffer(),
+          );
+          const mdRes = await fetch(mdHref, { method: "POST", body: plain });
+          if (!mdRes.ok) {
+            encSay("CONVERSION FAILED — try again.", true);
+            return;
+          }
+          const stem = (nameEl?.textContent?.trim() || "file").replace(
+            /\.[A-Za-z0-9]{1,5}$/,
+            "",
+          );
+          const url = URL.createObjectURL(await mdRes.blob());
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = stem + ".md";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch {
+          encSay("CONVERSION FAILED — wrong key or the server refused.", true);
+        }
+        encMd.textContent = mdLabel;
+      });
+    }
   }
 
   // ------------------------------------------------------- download PIN gate
