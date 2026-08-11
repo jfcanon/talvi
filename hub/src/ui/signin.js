@@ -180,8 +180,8 @@ function bootstrapScript(nonce, publishableKey, redirect) {
     "        return;\n" +
     "      }\n" +
     "    } catch (err) {\n" +
-    "      var code = (err && err.errors && err.errors[0]) ? err.errors[0].code : '';\n" +
-    "      if (code === 'session_exists' || /session already exists/i.test(String(err && err.message))) { sessionAlreadyExists(); return; }\n" +
+    "      var errCode = (err && err.errors && err.errors[0]) ? err.errors[0].code : '';\n" +
+    "      if (errCode === 'session_exists' || /session already exists/i.test(String(err && err.message))) { sessionAlreadyExists(); return; }\n" +
     "      var detail = (err && err.errors && err.errors[0]) ? (err.errors[0].long_message || err.errors[0].message) : (err && err.message ? err.message : 'sign in failed');\n" +
     "      setMsg('bad', 'REFUSED — ' + detail);\n" +
     "    }\n" +
@@ -279,8 +279,8 @@ function bootstrapScript(nonce, publishableKey, redirect) {
     "      msg.textContent = 'REQUIRED: ' + (attempt.status || 'additional factor');\n" +
     "    } catch (err) {\n" +
     "      msg.className = 'msg msg--bad';\n" +
-    "      var code = (err && err.errors && err.errors[0]) ? err.errors[0].code : '';\n" +
-    "      if (code === 'session_exists' || /session already exists/i.test(String(err && err.message))) { sessionAlreadyExists(); return; }\n" +
+    "      var errCode = (err && err.errors && err.errors[0]) ? err.errors[0].code : '';\n" +
+    "      if (errCode === 'session_exists' || /session already exists/i.test(String(err && err.message))) { sessionAlreadyExists(); return; }\n" +
     "      var detail = (err && err.errors && err.errors[0]) ? (err.errors[0].long_message || err.errors[0].message) : (err && err.message ? err.message : 'sign in failed');\n" +
     "      msg.textContent = 'REFUSED — ' + detail;\n" +
     "    }\n" +
