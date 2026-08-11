@@ -414,18 +414,24 @@
     // from the link's #k= fragment, and offer the plaintext as a download. The
     // key never leaves the page — it is read from location.hash, which no
     // request ever carries.
+    // Shared by both encrypted actions below (decrypt-download and
+    // decrypt-then-OCR): the message line, the filename element, and the
+    // message writer. Hoisted to initView scope — encSay lived inside the
+    // first handler's block, which made the "as markdown" handler crash with
+    // "encSay is not defined" (owner report 2026-08-11).
+    const msg = $("encmsg");
+    const nameEl = document.querySelector(".hud__value--verbatim");
+
+    function encSay(text, isError) {
+      if (!msg) return;
+      msg.textContent = text;
+      msg.classList.remove("hidden");
+      msg.classList.toggle("msg--bad", Boolean(isError));
+    }
+
     const enc = document.querySelector("a.dl[data-encrypted]");
     if (enc && window.talviCrypto) {
       const slug = enc.getAttribute("href");
-      const msg = $("encmsg");
-      const nameEl = document.querySelector(".hud__value--verbatim");
-
-      function encSay(text, isError) {
-        if (!msg) return;
-        msg.textContent = text;
-        msg.classList.remove("hidden");
-        msg.classList.toggle("msg--bad", Boolean(isError));
-      }
 
       enc.addEventListener("click", async (e) => {
         e.preventDefault();
