@@ -120,6 +120,12 @@
     const link = $("link");
     const copy = $("copy");
     const expiry = $("expiry");
+    // The encrypted-share fragment key (B1). Set inside the send handler after
+    // a successful encrypted upload; succeed() reads it to build the share
+    // URL. Declared HERE (initUpload scope) — a `let` inside the click handler
+    // was invisible to succeed(), so a successful upload threw a ReferenceError
+    // and the link never rendered.
+    let fragment = "";
     if (!drop || !input || !send) return; // not this page
 
     let file = null;
@@ -291,7 +297,7 @@
       // send the ciphertext, and append the key to the share URL as #k=… so it
       // never crosses the wire. The server stores ciphertext + the flag.
       let body = file;
-      let fragment = "";
+      fragment = "";
       const encryptBox = $("encrypt");
       const encryptOn = encryptBox ? encryptBox.checked : false;
       if (encryptOn) {

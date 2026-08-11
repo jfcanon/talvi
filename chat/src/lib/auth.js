@@ -20,6 +20,12 @@ const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
 function getClerkClient(env) {
   return createClerkClient({
     secretKey: env.CLERK_SECRET_KEY,
+    // The publishable key is REQUIRED — authenticateRequest throws without it
+    // ("Publishable key is missing"), which made the chat gate return false
+    // for everyone and bounce /chat → /sign-in → /chat in an infinite loop
+    // with the hub's own signed-in bounce. The binding exists in main.tf; the
+    // lib must actually pass it.
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
     jwtKey: env.CLERK_JWT_KEY,
   });
 }
