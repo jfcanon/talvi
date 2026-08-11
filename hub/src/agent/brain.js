@@ -44,15 +44,20 @@ export function systemPrompt() {
 export async function chat(env, ws, message) {
   if (!env.AI) return { t: "err", code: "noai" };
   const model = env.AGENT_MODEL || DEFAULT_MODEL;
-  const results = await env.AI.run(model, {
-    messages: [
-      { role: "system", content: systemPrompt() },
-      { role: "user", content: message },
-    ],
-  });
-  const text = String(results?.response ?? "").trim();
-  if (!text) return { t: "err", code: "empty" };
-  return { t: "ok", cmd: "chat", result: text };
+  try {
+    const results = await env.AI.run(model, {
+      messages: [
+        { role: "system", content: systemPrompt() },
+        { role: "user", content: message },
+      ],
+    });
+    const text = String(results?.response ?? "").trim();
+    if (!text) return { t: "err", code: "empty" };
+    return { t: "ok", cmd: "chat", result: text };
+  } catch (err) {
+    // Surface the failure mode (not content) so the panel can report it.
+    return { t: "err", code: "ai", detail: String(err?.message ?? err).slice(0, 120) };
+  }
 }
 
 // Ship workspace files to customcinto as a PR.
