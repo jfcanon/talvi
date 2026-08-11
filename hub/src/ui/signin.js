@@ -76,13 +76,16 @@ export function signInCsp(nonce) {
 // the server-rendered HTML, this only toggles visibility and attaches handlers,
 // which keeps the "no inline style, no inline script that renders content" rule
 // intact (the server renders everything).
-function bootstrapScript(nonce, publishableKey) {
+function bootstrapScript(nonce, publishableKey, redirect) {
   return (
     '<script nonce="' + nonce + '">' +
     "(async function () {\n" +
     "  'use strict';\n" +
     "  var pub = " + JSON.stringify(publishableKey) + ";\n" +
     "  var root = window.location.origin + " + JSON.stringify(PREFIX) + ";\n" +
+    // The return target: the page the visitor came from (?redirect=), or home.
+    "  var target = " + JSON.stringify(redirect || "") + " || root + '/';\n" +
+    "  if (target.charAt(0) !== '/') target = root + '/';\n" +
     "  var form = document.getElementById('si-form');\n" +
     "  var email = document.getElementById('si-email');\n" +
     "  var password = document.getElementById('si-pass');\n" +
@@ -163,7 +166,7 @@ function bootstrapScript(nonce, publishableKey) {
     "        var attempt = await c.client.signIn[web3Method(w3)]();\n" +
     "        if (attempt.status === 'complete') {\n" +
     "          await c.setActive({ session: attempt.createdSessionId });\n" +
-    "          window.location.href = root + '/';\n" +
+    "          window.location.href = target;\n" +
     "          return;\n" +
     "        }\n" +
     "        setMsg('', 'REQUIRED: ' + attempt.status);\n" +
@@ -171,12 +174,14 @@ function bootstrapScript(nonce, publishableKey) {
     "        // Full-page redirect to the provider; the browser leaves this page.\n" +
     "        await c.client.signIn.authenticateWithRedirect({\n" +
     "          strategy: strategy,\n" +
-    "          redirectUrl: root + '/sso-callback',\n" +
-    "          redirectUrlComplete: root + '/'\n" +
+    "          redirectUrl: root + '/sso-callback?redirect=' + encodeURIComponent(target),\n" +
+    "          redirectUrlComplete: target\n" +
     "        });\n" +
     "        return;\n" +
     "      }\n" +
     "    } catch (err) {\n" +
+    "      var code = (err && err.errors && err.errors[0]) ? err.errors[0].code : '';\n" +
+    "      if (code === 'session_exists' || /session already exists/i.test(String(err && err.message))) { sessionAlreadyExists(); return; }\n" +
     "      var detail = (err && err.errors && err.errors[0]) ? err.errors[0].message : 'sign in failed';\n" +
     "      setMsg('bad', 'REFUSED — ' + detail);\n" +
     "    }\n" +
@@ -195,6 +200,20 @@ function bootstrapScript(nonce, publishableKey) {
     "      runAlternate(b.getAttribute('data-strategy'));\n" +
     "    });\n" +
     "  }\n" +
+    // An active session already exists (e.g. the sign-in page was left open
+    // after signing in elsewhere, or the server-side bounce missed): don't
+    // show a form that Clerk will refuse with "Session already exists" — send
+    // the visitor straight back where they were going.
+    "  function sessionAlreadyExists() {\n" +
+    "    window.location.href = target;\n" +
+    "  }\n" +
+    "  async function checkExisting() {\n" +
+    "    try {\n" +
+    "      var c = await loadClerk();\n" +
+    "      if (c.session) { sessionAlreadyExists(); return; }\n" +
+    "    } catch (err) {}\n" +
+    "  }\n" +
+    "  checkExisting();\n" +
     "  wireAlternates();\n" +
     // ---- the form: email + password, email-link fallback, 2FA code ----
     "  function showCodeStep(attempt) {\n" +
@@ -218,7 +237,7 @@ function bootstrapScript(nonce, publishableKey) {
     "        var done = await current.attemptSecondFactor({ strategy: 'email_code', code: code.value.trim() });\n" +
     "        if (done.status === 'complete') {\n" +
     "          await c.setActive({ session: done.createdSessionId });\n" +
-    "          window.location.href = root + '/';\n" +
+    "          window.location.href = target;\n" +
     "          return;\n" +
     "        }\n" +
     "        msg.className = 'msg msg--bad';\n" +
@@ -231,7 +250,7 @@ function bootstrapScript(nonce, publishableKey) {
     "      var attempt = await c.client.signIn.create({ identifier: email.value.trim() });\n" +
     "      if (attempt.status === 'complete') {\n" +
     "        await c.setActive({ session: attempt.createdSessionId });\n" +
-    "        window.location.href = root + '/';\n" +
+    "        window.location.href = target;\n" +
     "        return;\n" +
     "      }\n" +
     "      var factors = factorsOf(attempt);\n" +
@@ -239,7 +258,7 @@ function bootstrapScript(nonce, publishableKey) {
     "        var withPass = await attempt.attemptFirstFactor({ strategy: 'password', password: password.value });\n" +
     "        if (withPass.status === 'complete') {\n" +
     "          await c.setActive({ session: withPass.createdSessionId });\n" +
-    "          window.location.href = root + '/';\n" +
+    "          window.location.href = target;\n" +
     "          return;\n" +
     "        }\n" +
     "        if (withPass.status === 'needs_second_factor') {\n" +
@@ -249,7 +268,7 @@ function bootstrapScript(nonce, publishableKey) {
     "        }\n" +
     "      }\n" +
     "      if (factors.indexOf('email_link') !== -1) {\n" +
-    "        await attempt.attemptFirstFactor({ strategy: 'email_link', redirectUrl: root + '/' });\n" +
+    "        await attempt.attemptFirstFactor({ strategy: 'email_link', redirectUrl: target });\n" +
     "        msg.className = 'msg';\n" +
     "        msg.textContent = 'CHECK YOUR EMAIL — a sign-in link is on its way.';\n" +
     "        btn.disabled = true;\n" +
@@ -260,6 +279,8 @@ function bootstrapScript(nonce, publishableKey) {
     "      msg.textContent = 'REQUIRED: ' + (attempt.status || 'additional factor');\n" +
     "    } catch (err) {\n" +
     "      msg.className = 'msg msg--bad';\n" +
+    "      var code = (err && err.errors && err.errors[0]) ? err.errors[0].code : '';\n" +
+    "      if (code === 'session_exists' || /session already exists/i.test(String(err && err.message))) { sessionAlreadyExists(); return; }\n" +
     "      var detail = (err && err.errors && err.errors[0]) ? err.errors[0].message : 'sign in failed';\n" +
     "      msg.textContent = 'REFUSED — ' + detail;\n" +
     "    }\n" +
@@ -276,13 +297,15 @@ function bootstrapScript(nonce, publishableKey) {
 // finished. load clerk-js, let handleRedirectCallback swap the OAuth result for
 // a session, then send the browser home. On failure (user cancelled, no OAuth
 // app registered, etc.) fall back to the sign-in page.
-function callbackScript(nonce, publishableKey) {
+function callbackScript(nonce, publishableKey, redirect) {
   return (
     '<script nonce="' + nonce + '">' +
     "(async function () {\n" +
     "  'use strict';\n" +
     "  var pub = " + JSON.stringify(publishableKey) + ";\n" +
     "  var root = window.location.origin + " + JSON.stringify(PREFIX) + ";\n" +
+    "  var target = " + JSON.stringify(redirect || "") + " || root + '/';\n" +
+    "  if (target.charAt(0) !== '/') target = root + '/';\n" +
     "  try {\n" +
     "    var c = await new Promise(function (resolve, reject) {\n" +
     "      (function wait() {\n" +
@@ -293,18 +316,18 @@ function callbackScript(nonce, publishableKey) {
     "    });\n" +
     "    await c.load({ publishableKey: pub });\n" +
     "    await c.handleRedirectCallback({\n" +
-    "      signInFallbackRedirectUrl: root + '/',\n" +
-    "      signUpFallbackRedirectUrl: root + '/'\n" +
+    "      signInFallbackRedirectUrl: target,\n" +
+    "      signUpFallbackRedirectUrl: target\n" +
     "    });\n" +
     "  } catch (err) {\n" +
-    "    window.location.href = root + '/sign-in';\n" +
+    "    window.location.href = root + '/sign-in?redirect=' + encodeURIComponent(target);\n" +
     "  }\n" +
     "})();" +
     "</script>"
   );
 }
 
-export function signInPage({ publishableKey, nonce }) {
+export function signInPage({ publishableKey, nonce, redirect }) {
   const v = encodeURIComponent(ASSET_VERSION);
   const options = SSO_OPTIONS.map(
     (o) =>
@@ -365,12 +388,12 @@ export function signInPage({ publishableKey, nonce }) {
     content +
     "</main>" +
     "</div></div>" +
-    bootstrapScript(nonce, publishableKey) +
+    bootstrapScript(nonce, publishableKey, redirect) +
     "</body></html>"
   );
 }
 
-export function ssoCallbackPage({ publishableKey, nonce }) {
+export function ssoCallbackPage({ publishableKey, nonce, redirect }) {
   const v = encodeURIComponent(ASSET_VERSION);
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
@@ -393,7 +416,7 @@ export function ssoCallbackPage({ publishableKey, nonce }) {
     "COMPLETING SIGN-IN — one moment.</p></div>" +
     "</header>" +
     "</div></div>" +
-    callbackScript(nonce, publishableKey) +
+    callbackScript(nonce, publishableKey, redirect) +
     "</body></html>"
   );
 }

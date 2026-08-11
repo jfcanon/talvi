@@ -85,7 +85,7 @@ export function hubPage({ authed } = {}) {
   const login =
     authed
       ? '<a class="blade__login" href="/api/signout" aria-label="sign out">SIGN OUT</a>'
-      : '<a class="blade__login" href="/sign-in" aria-label="sign in">SIGN IN</a>';
+      : '<a class="blade__login" href="/sign-in?redirect=/" aria-label="sign in">SIGN IN</a>';
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +

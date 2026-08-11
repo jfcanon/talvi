@@ -43,8 +43,18 @@ const HTML_HEADERS = {
     "frame-ancestors 'none'; base-uri 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
+  "cache-control": "no-store",
   "x-robots-tag": ROBOTS_TAG,
 };
+
+// The ?redirect= return target for the auth flow. Only a same-origin PATH is
+// accepted (starts with "/" and not "//"); anything else falls back to home —
+// a redirect param must never be a way to bounce a visitor off this origin.
+function returnTarget(url, fallback) {
+  const r = new URL(url).searchParams.get("redirect");
+  if (typeof r === "string" && r.startsWith("/") && !r.startsWith("//")) return r;
+  return fallback || "/";
+}
 
 // Assets are versioned at build time (the asset hash) and served with a
 // year-long immutable cache — safe ONLY because every page requests them as
@@ -99,51 +109,70 @@ export default {
     // "/sign-in" and "/sso-callback" — the two clerk-js pages (s7 handover §4).
     // The ONLY pages whose CSP widens to the strict nonce + strict-dynamic
     // Clerk CSP (signInCsp); everything else keeps HTML_HEADERS byte-for-byte.
-    // An already-authenticated visitor to /sign-in is bounced straight home.
+    // An already-authenticated visitor is bounced straight to the return
+    // target (the page they came from, via ?redirect=).
     if (pathname === "/sign-in") {
+      const target = returnTarget(request.url, "/");
       if (await isAuthenticated(request, env)) {
-        return Response.redirect(new URL("/", request.url).toString(), 302);
+        return Response.redirect(new URL(target, request.url).toString(), 302);
       }
       const n = nonce();
-      return new Response(signInPage({ publishableKey: getPublishableKey(env), nonce: n }), {
-        status: 200,
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "content-security-policy": signInCsp(n),
-          "x-content-type-options": "nosniff",
-          "referrer-policy": "no-referrer",
-          "x-robots-tag": ROBOTS_TAG,
+      return new Response(
+        signInPage({ publishableKey: getPublishableKey(env), nonce: n, redirect: target }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "content-security-policy": signInCsp(n),
+            "x-content-type-options": "nosniff",
+            "referrer-policy": "no-referrer",
+            "cache-control": "no-store",
+            "x-robots-tag": ROBOTS_TAG,
+          },
         },
-      });
+      );
     }
 
     if (pathname === "/sso-callback") {
+      const target = returnTarget(request.url, "/");
       const n = nonce();
-      return new Response(ssoCallbackPage({ publishableKey: getPublishableKey(env), nonce: n }), {
-        status: 200,
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "content-security-policy": signInCsp(n),
-          "x-content-type-options": "nosniff",
-          "referrer-policy": "no-referrer",
-          "x-robots-tag": ROBOTS_TAG,
+      return new Response(
+        ssoCallbackPage({ publishableKey: getPublishableKey(env), nonce: n, redirect: target }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "content-security-policy": signInCsp(n),
+            "x-content-type-options": "nosniff",
+            "referrer-policy": "no-referrer",
+            "cache-control": "no-store",
+            "x-robots-tag": ROBOTS_TAG,
+          },
         },
-      });
+      );
     }
 
     // GET /api/signout — a link target (works with JS off): revoke the active
-    // session on Clerk's side, drop the __session cookie, send the browser
-    // home.
+    // session on Clerk's side, drop EVERY __session cookie (Clerk also sets a
+    // suffixed __session_<hash> variant — clearing only the plain one leaves
+    // the session alive, which is why SIGN OUT used to appear to do nothing),
+    // then send the browser to the return target.
     if (pathname === "/api/signout") {
       const sessionId = await getSessionId(request, env);
       if (sessionId) await revokeSession(env, sessionId);
-      const headers = new Headers({
-        Location: "/",
-      });
-      // Clearing the cookie is the important half: the browser must stop
-      // sending it even if Clerk's revocation round-trip fails. Same flags
-      // Clerk sets — __session is HttpOnly and SameSite=Lax.
-      headers.append("Set-Cookie", "__session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax");
+      const headers = new Headers({ Location: returnTarget(request.url, "/") });
+      const cookieHeader = request.headers.get("cookie") || "";
+      const names = new Set(["__session", "clerk_active_context", "__client_uat"]);
+      for (const part of cookieHeader.split(";")) {
+        const name = part.split("=")[0].trim();
+        if (name.startsWith("__session") || name.startsWith("__client_uat")) names.add(name);
+      }
+      for (const name of names) {
+        headers.append(
+          "Set-Cookie",
+          name + "=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        );
+      }
       return new Response(null, { status: 302, headers });
     }
 
