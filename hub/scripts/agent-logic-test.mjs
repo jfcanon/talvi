@@ -41,6 +41,15 @@ try {
   check("write/read round-trip", t === "hello agent", JSON.stringify(t));
   const entries = await ws.fs.readdir("/workspace");
   check("ls lists the file", entries.some((e) => e.name === "note.txt"), JSON.stringify(entries.map((e) => e.name)));
+
+  // Nested write (the mkdir fix): mirror the AgentDO's write path — mkdir the
+  // parent chain first, then write. Proves a path like /workspace/project/…
+  // lands instead of throwing `io`.
+  const parent = "/workspace/project/notes";
+  await ws.fs.mkdir(parent, { recursive: true });
+  await ws.fs.writeFile("/workspace/project/notes/plan.md", "nested");
+  const nested = await ws.fs.readFile("/workspace/project/notes/plan.md", "utf8");
+  check("write creates parent dirs", nested === "nested", JSON.stringify(nested));
 } catch (e) {
   check("write/read round-trip", false, "threw: " + e.message);
 }

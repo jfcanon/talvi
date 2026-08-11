@@ -154,6 +154,13 @@ export class AgentDO extends WrappedAgent {
 
     try {
       if (cmd === "write") {
+        // Create the parent directory chain before writing — writes to a
+        // not-yet-existing path throw `io` otherwise. Idempotent recursive
+        // mkdir; the fs surface handles it.
+        const parent = path.slice(0, path.lastIndexOf("/")) || "/";
+        if (isWorkspacePath(parent)) {
+          await ws.fs.mkdir(parent, { recursive: true }).catch(() => {});
+        }
         await ws.fs.writeFile(path, frame.data);
         this.send(server, { t: "ok", cmd, result: "wrote " + path });
       } else if (cmd === "read") {
