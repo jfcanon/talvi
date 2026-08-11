@@ -47,6 +47,10 @@ variable "clerk_secret_key" {
   type = string
 }
 
+variable "clerk_publishable_key" {
+  type = string
+}
+
 variable "clerk_jwt_key" {
   type = string
 }
@@ -110,15 +114,21 @@ resource "cloudflare_workers_script" "talvi_relay" {
       name = "AI"
     },
 
-    # Clerk auth (port of blue's PR 3 bindings, minus the publishable key —
-    # the relay no longer serves clerk-js pages; sign-in lives at the app root).
-    # CLERK_SECRET_KEY is a secret_text binding (never in state);
-    # CLERK_JWT_KEY is public by design. The worker verifies the __session
-    # cookie locally via @clerk/backend using jwtKey — no network per request.
+    # Clerk auth — the relay verifies the host-wide __session cookie with
+    # @clerk/backend + jwtKey. ALL THREE keys are required: authenticateRequest
+    # throws without the publishable key, which is how the gate silently
+    # failed after #124 dropped this binding (#128's guard relaxation did not
+    # help). CLERK_SECRET_KEY is a secret_text binding (never in state); the
+    # publishable and JWT keys are public by design.
     {
       type = "secret_text"
       name = "CLERK_SECRET_KEY"
       text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
     },
     {
       type = "plain_text"

@@ -21,11 +21,16 @@ const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
 // open the write path. A misconfigured deploy should refuse uploads loudly,
-// not accept them. The relay serves no clerk-js pages, so only the secret key
-// (and the jwtKey PEM, verified below) are required — no publishable key.
+// not accept them. The publishable key IS required — @clerk/backend's
+// authenticateRequest throws without it ("Publishable key is missing"), which
+// is why an earlier guard-relaxation (#128) did not fix the gate.
 export function getClerkClient(env) {
   return createClerkClient({
     secretKey: env.CLERK_SECRET_KEY,
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    // jwtKey = Clerk's PEM public key. Passing it makes session verification
+    // networkless: the __session JWT is verified in the V8 isolate with no
+    // JWKS fetch per request.
     jwtKey: env.CLERK_JWT_KEY,
   });
 }
@@ -34,7 +39,7 @@ export function getClerkClient(env) {
 // Catches every verification error as "not authenticated" — a bad cookie is
 // the same as no cookie for the gate.
 export async function isAuthenticated(request, env) {
-  if (!env.CLERK_SECRET_KEY) return false;
+  if (!env.CLERK_SECRET_KEY || !env.CLERK_PUBLISHABLE_KEY) return false;
   try {
     const state = await getClerkClient(env).authenticateRequest(request, {
       authorizedParties: AUTHORIZED_PARTIES,
