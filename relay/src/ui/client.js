@@ -603,9 +603,21 @@
     initTyping();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
+  // CRITICAL ordering bug (fixed 2026-08-11): with `defer`, this script runs
+  // when readyState is already "interactive", so the old `else { boot(); }`
+  // fired boot() IMMEDIATELY — while client.js is the FIRST file in the /s.js
+  // concatenation and chatcrypto.js/fragmentcrypto.js run AFTER it. At boot
+  // time window.talviGate / window.talviCrypto were still undefined, so the
+  // download-PIN gate and the encrypted "Decrypt & download" handler never
+  // attached — gated drops asked for no PIN, and an encrypted drop's button
+  // just navigated to /d and downloaded the CIPHERTEXT (unusable file).
+  //
+  // Always wait for DOMContentLoaded, which fires after the whole /s.js has
+  // executed, so every concatenated helper exists. The `complete` branch is
+  // only for a script loaded without defer after the page finished.
+  if (document.readyState === "complete") {
     boot();
+  } else {
+    document.addEventListener("DOMContentLoaded", boot);
   }
 })();
