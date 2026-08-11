@@ -28,13 +28,16 @@
 //   pr <branch> <title> [paths] — open a PR on jfcanon/customcinto. Default
 //                              ships everything staged under customcinto/; an
 //                              explicit path list ships only those files.
+//                              ALSO opens the cinto pin-bump PR (the deploy
+//                              half): merge feature PR → merge deploy PR →
+//                              the change goes live.
 //
 // Bounds mirror chat's (D11): origin-gated upgrade, socket cap, wire-frame
 // cap. NOTHING HERE LOGS content — the workspace files are the record, not
 // the logs.
 import { withWorkspace, getWorkspace } from "@cloudflare/computer";
 import { isWorkspacePath, WORKSPACE_ROOT } from "./paths.js";
-import { chat, openCustomCintoPR } from "./brain.js";
+import { chat, openCustomCintoPR, openCintoPinPR } from "./brain.js";
 
 const MAX_SOCKETS = 16; // open sockets per agent — bounds memory
 const MAX_WIRE_BYTES = 64 * 1024; // per-frame ceiling, UTF-8 bytes
@@ -245,12 +248,32 @@ export class AgentDO extends WrappedAgent {
     }
     if (Object.keys(files).length === 0) return { t: "err", code: "nofiles" };
 
-    return openCustomCintoPR(this.env, {
+    // Feature PR on customcinto.
+    const pr = await openCustomCintoPR(this.env, {
       branch,
       title,
       body: "Opened by the talvi agent. Review before merging.",
       files,
     });
+    if (pr.t !== "ok") return pr;
+
+    // Deploy PR on cinto: bump its pinned customcinto dep to the feature PR's
+    // head SHA, so merging feature → deploy actually updates the site. Both
+    // PRs are reported; the merge order is in the deploy PR's body.
+    let deploy = { t: "err", code: "pinunchanged" };
+    try {
+      deploy = await openCintoPinPR(this.env, {
+        headSha: pr.headSha,
+        featurePrUrl: pr.result,
+      });
+    } catch (err) {
+      deploy = { t: "err", code: "pinfailed", detail: String(err?.message ?? err).slice(0, 120) };
+    }
+
+    const lines = ["feature PR: " + pr.result];
+    if (deploy.t === "ok") lines.push("deploy PR: " + deploy.result);
+    else lines.push("deploy PR: failed (" + deploy.code + (deploy.detail ? " — " + deploy.detail : "") + ")");
+    return { t: "ok", cmd: "pr", result: lines.join("\n") };
   }
 
   // runAction — the model's tool loop. The chat brain may request `write`
