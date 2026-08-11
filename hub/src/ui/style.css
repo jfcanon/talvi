@@ -905,6 +905,16 @@ body {
   opacity: 0.7;
 }
 
+/* The sign-in pages — a quiet night around the instrument. The film overlays
+   give texture; this gives depth (a soft phosphor-cyan haze so the ground is
+   not flat black, matching the depth the other pages get from their world). */
+body.signin {
+  background:
+    radial-gradient(95% 75% at 80% 6%, rgba(125, 255, 196, 0.07), transparent 62%),
+    radial-gradient(70% 55% at 6% 92%, rgba(34, 232, 255, 0.06), transparent 62%),
+    var(--void);
+}
+
 .si__label {
   display: block;
   margin-bottom: 0.25rem;

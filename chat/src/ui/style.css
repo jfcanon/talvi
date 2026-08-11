@@ -917,44 +917,6 @@ html::after {
 
 
 
-/* Four-frame walk cycle. The wrapper is a single-frame window; the strip
-   inside it slides by exactly one frame per step. steps(4) is what makes it
-   read as animation rather than as a slide — an eased or linear transform
-   would show the frames mid-slide, which is a smear, not a walk. */
-.figure {
-  display: block;
-  width: 93px;
-  height: 96px;
-  overflow: hidden;
-}
-
-/* The supplied art is full-colour — brown coat, blue shirt. It is mapped into
-   the instrument's single green by FILTER rather than by recolouring the
-   source: grayscale flattens to luminance, sepia tints, hue-rotate swings the
-   tint to green, saturate pushes it back up. The source PNG stays pristine, so
-   a different palette later is one line here.
-
-   image-rendering: pixelated is essential — without it the browser smooths the
-   upscale and the pixel edges turn to mush. */
-.figure__strip {
-  display: block;
-  width: 372px;
-  height: 96px;
-  max-width: none; /* beats any inherited img { max-width: 100% } */
-  image-rendering: pixelated;
-  filter:
-    grayscale(1) sepia(1) hue-rotate(88deg) saturate(2.6) brightness(1.05)
-    drop-shadow(0 0 4px rgba(125, 255, 196, 0.4))
-    drop-shadow(0 0 12px rgba(53, 217, 152, 0.25));
-  animation: walkcycle 1.2s steps(4, end) infinite;
-}
-
-@keyframes walkcycle {
-  to {
-    transform: translateX(-372px);
-  }
-}
-
 .btn--quiet {
   font-size: 0.72rem;
   letter-spacing: 0.16em;
@@ -1606,16 +1568,8 @@ a {
 
   /* The glitch is removed, not slowed: a jitter at 0.001ms still lands as a
      single displaced frame. */
-  .glitch {
+   .glitch {
     animation: none;
-  }
-
-  /* Hold frame one rather than freezing mid-stride: the transform must be
-     reset, or a cancelled animation can leave the strip parked on a partial
-     offset showing two half-frames. */
-  .figure__strip {
-    animation: none;
-    transform: none;
   }
 
   .head,
