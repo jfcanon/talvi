@@ -20,7 +20,7 @@
 // repository.
 import { isWorkspacePath, WORKSPACE_ROOT } from "./paths.js";
 
-export const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+export const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 export const CUSTOMCINTO_REPO = "jfcanon/customcinto";
 export const CUSTOMCINTO_BASE = "main";
 
