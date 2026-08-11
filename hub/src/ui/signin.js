@@ -371,7 +371,7 @@ export function signInPage({ publishableKey, nonce, redirect }) {
     "<title>talvi — sign in</title>" +
     '<link rel="stylesheet" href="' + "/h.css?v=" + v + '">' +
     '<script nonce="' + nonce + '" defer src="' + CLERK_JS_URL + '" data-clerk-publishable-key="' + publishableKey + '"></script>' +
-    "</head><body>" +
+    "</head><body class=\"signin\">" +
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +
@@ -403,7 +403,7 @@ export function ssoCallbackPage({ publishableKey, nonce, redirect }) {
     "<title>talvi — sign in</title>" +
     '<link rel="stylesheet" href="' + "/h.css?v=" + v + '">' +
     '<script nonce="' + nonce + '" defer src="' + CLERK_JS_URL + '" data-clerk-publishable-key="' + publishableKey + '"></script>' +
-    "</head><body>" +
+    "</head><body class=\"signin\">" +
     '<div class="scan" aria-hidden="true"></div>' +
     '<div class="leak" aria-hidden="true"></div>' +
     '<div class="grain" aria-hidden="true"></div>' +

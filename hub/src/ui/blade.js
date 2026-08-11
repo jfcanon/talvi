@@ -19,7 +19,7 @@
 // worker, and the styles in each worker's style.css.
 
 // One row per app. href is a SAME-ORIGIN path for apps mounted on app.*, and
-// an absolute URL for cinto (still on its own host until the D migration).
+// a same-origin path — cinto now mounts at app.*/cinto (the D migration landed);
 // null renders the disabled future-slot.
 export const BLADE_APPS = [
   {
@@ -40,7 +40,7 @@ export const BLADE_APPS = [
     key: "cinto",
     glyph: "◈",
     label: "CINTO",
-    href: "https://cinto.ygdcbtmc4u.uk",
+    href: "/cinto",
     title: "Cinto — compliance",
   },
   {
@@ -104,12 +104,13 @@ export function bladeNav(active) {
     '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="shell" aria-label="expand rail">' +
     "»" +
     "</button>" +
-    // Login control at the bottom. A placeholder for now: auth on app.* is
-    // Cloudflare Access at the edge (no in-app session); when Clerk lands
-    // (backlog B3) this becomes the real gate.
-    '<button class="blade__login" type="button" aria-label="sign in">' +
+    // Login control at the bottom. A working icon link to the app-root
+    // sign-in (the hub worker owns /sign-in); the app only verifies the
+    // __session cookie. A plain link so it works with no JS. Kept identical
+    // in every worker — one icon, one meaning.
+    '<a class="blade__login" href="/sign-in" aria-label="sign in">' +
     "⏻" +
-    "</button>" +
+    "</a>" +
     "</nav>"
   );
 }

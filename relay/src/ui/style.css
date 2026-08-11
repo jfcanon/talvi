@@ -906,6 +906,47 @@ html::after {
   line-height: 1;
 }
 
+/* ------------------------------------------------------- the PIN gate ----- */
+
+/* The download-PIN gate on the view page (Workstream E). A locked instrument
+   cell: framed and filled, the tagline straddling the top, the 4-digit field
+   and the unlock together, the fineprint quiet below. The gate reads as "the
+   record is behind this door" — one more box on a line, never a floating
+   form. */
+.gate {
+  border: 1px solid var(--hud-line);
+  background: var(--hud-fill);
+  padding: 1.1rem 1.2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  max-width: 24rem;
+  margin-bottom: 0.75rem;
+}
+
+/* The 4-digit field inside the gate — console voice, widely spaced so it
+   reads as a code, not a word. */
+.gate .chat__field {
+  width: 100%;
+  background: var(--void);
+  letter-spacing: 0.3em;
+}
+
+.gate .chat__field:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.gate .btn {
+  align-self: flex-start;
+}
+
+.gate .chat__fineprint {
+  max-width: 24rem;
+  margin: 0;
+}
+
 /* -------------------------------------------------------- ambient controls */
 
 .ambient {

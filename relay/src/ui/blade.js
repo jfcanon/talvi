@@ -104,10 +104,11 @@ export function bladeNav(active) {
     '<button class="blade__toggle" type="button" aria-pressed="false" aria-controls="shell" aria-label="expand rail">' +
     "»" +
     "</button>" +
-    // Login control at the bottom. Points at the app ROOT sign-in (the hub
-    // worker owns /sign-in); the relay itself only verifies the __session
-    // cookie. A plain link so it works with no JS.
-    '<a class="blade__login" href="/sign-in?redirect=/relay" aria-label="sign in">' +
+    // Login control at the bottom. A working icon link to the app-root
+    // sign-in (the hub worker owns /sign-in); the app only verifies the
+    // __session cookie. A plain link so it works with no JS. Kept identical
+    // in every worker — one icon, one meaning.
+    '<a class="blade__login" href="/sign-in" aria-label="sign in">' +
     "⏻" +
     "</a>" +
     "</nav>"
