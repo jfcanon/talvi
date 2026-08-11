@@ -122,7 +122,7 @@ export function hubPage({ authed } = {}) {
     '<span class="prompt__text"> </span>' +
     '<span class="prompt__caret" aria-hidden="true">_</span>' +
     "</p>" +
-    '<p class="hint" aria-hidden="true">drag to look · scroll to zoom · click a node</p>' +
+    '<p class="hint" aria-hidden="true">drag to look · scroll to zoom · click a star</p>' +
     "</div>" +
     // The agent panel (PR2) — the agent's chat front door. Hidden by default;
     // the MORE blade button toggles it (client.js). Sits above the world but
