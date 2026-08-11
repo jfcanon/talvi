@@ -96,6 +96,12 @@ try {
   // --- the blade -----------------------------------------------------------
   check("blade nav present", (await page.locator(".blade").count()) === 1);
   check("blade has login control", (await page.locator(".blade__login").count()) === 1);
+  // UX review: the login is an ICON in the collapsed rail (⏻), never text —
+  // the rail is pure glyphs and a label would overflow it.
+  check(
+    "blade login is an icon (no SIGN text)",
+    (await page.locator(".blade__login").textContent()).trim() === "⏻",
+  );
   const blade = page.locator(".blade");
   await page.locator(".blade__toggle").click();
   check("blade opens on toggle", await blade.evaluate((el) => el.classList.contains("is-open")));
