@@ -203,7 +203,7 @@ const encRow = {
   const v = await get(env, "/relay/" + encSlug);
   check("encrypted view renders 200", v.status === 200, "status=" + v.status);
   check("encrypted view shows decrypt button", v.text.includes('data-encrypted="1"') && v.text.includes("Decrypt & download"), v.text.slice(0, 300));
-  check("encrypted view hides as-markdown", !v.text.includes("as markdown"));
+  check("encrypted view offers as-markdown (decrypt-then-OCR)", v.text.includes('data-encrypted-md="1"'));
   check("encrypted view shows honest copy", v.text.includes("#k= fragment"));
   check("encrypted view shows the record", v.text.includes("secret.txt") && v.text.includes("text/plain"));
   const d = await get(env, "/relay/" + encSlug + "/d");
@@ -229,6 +229,36 @@ const encRow = {
   const v = await get(env, "/relay/" + openSlug);
   check("plaintext view shows plain Download", v.text.includes(">Download<") && !v.text.includes("Decrypt & download"));
   check("plaintext view has no encrypted copy", !v.text.includes("#k= fragment"));
+}
+
+// 9. POST /:slug/md — encrypted-drop OCR endpoint. A non-image body gets the
+//    uniform 404; an image with no AI binding answers 502 (conversion
+//    unavailable); the decrypted-image POST is gated on the drop being live.
+{
+  const env = { DB: makeDb({ [encSlug]: encRow }), BUCKET, ctx: { waitUntil: () => {} } };
+  const postMd = async (body) => {
+    const r = await worker.fetch(
+      new Request(base + "/relay/" + encSlug + "/md", { method: "POST", headers: { "content-length": String(body.length) }, body }),
+      env,
+      { waitUntil: () => {} },
+    );
+    return r.status;
+  };
+  check("POST /md with a non-image body → 404", (await postMd(new TextEncoder().encode("not an image"))) === 404);
+  // A real PNG header with no AI binding → 502 (conversion unavailable). Use a
+  // bucket whose .md cache misses so it actually reaches the AI call.
+  const noCacheBucket = { get: async () => null, put: async () => {}, delete: async () => {} };
+  const envNoCache = { DB: makeDb({ [encSlug]: encRow }), BUCKET: noCacheBucket, ctx: { waitUntil: () => {} } };
+  const pngHead = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  const postMd2 = async (body) => {
+    const r = await worker.fetch(
+      new Request(base + "/relay/" + encSlug + "/md", { method: "POST", headers: { "content-length": String(body.length) }, body }),
+      envNoCache,
+      { waitUntil: () => {} },
+    );
+    return r.status;
+  };
+  check("POST /md with an image body, no AI → 502", (await postMd2(pngHead)) === 502);
 }
 
 // 8. ensureSchema adds the column idempotently (fresh + pre-existing table).
