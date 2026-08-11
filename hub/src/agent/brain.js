@@ -23,7 +23,7 @@
 // repository.
 import { isWorkspacePath, WORKSPACE_ROOT } from "./paths.js";
 
-export const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
+export const DEFAULT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 export const CUSTOMCINTO_REPO = "jfcanon/customcinto";
 export const CUSTOMCINTO_BASE = "main";
 
@@ -41,11 +41,11 @@ export function systemPrompt() {
     "customcinto is a compliance app whose UI uses these CSS classes only: " +
     "stack, hud, hud__row, hud__cell, hud__label, hud__value, tagline, " +
     "tagline__box, muted, tiny, link. Do not use Tailwind or external styles. " +
-    "To DO something, reply with ONLY a JSON object, no markdown fences, no " +
-    "prose around it. Two shapes: {\"reply\":\"...\"} to just talk, or " +
-    "{\"actions\":[{\"op\":\"write\",\"path\":\"customcinto/<feature>/<file>\",\"content\":\"...\"}]} " +
+    "To DO something, reply with a JSON object: {\"reply\":\"...\"} to just " +
+    "talk, or {\"actions\":[{\"op\":\"write\",\"path\":\"customcinto/<feature>/<file>\",\"content\":\"...\"}]} " +
     "to write a file, and/or {\"actions\":[{\"op\":\"pr\",\"branch\":\"<branch>\",\"title\":\"<title>\"}]} " +
     "to open a pull request shipping everything staged under customcinto/. " +
+    "You may use op or action as the field name. " +
     "All paths must start with customcinto/. You CANNOT run code, build, or " +
     "typecheck; do not claim you did. Keep replies short. " +
     "Never ask for secrets or tokens."
@@ -53,29 +53,41 @@ export function systemPrompt() {
 }
 
 // Parse the model's reply into either plain text or a list of actions.
-// Returns { reply } or { actions }. Tolerates a single markdown code fence
-// around the JSON; otherwise falls back to treating the whole output as a
-// reply if it is not valid JSON in the expected shape.
+// Returns { reply } or { actions }. Tolerant of the free models' habits:
+// JSON wrapped in markdown fences, trailing prose after the fence, and the
+// field named `op` or `action`. Falls back to treating the whole output as a
+// reply if no valid actions JSON is found.
 export function parseModelOutput(text) {
   const trimmed = String(text ?? "").trim();
   if (!trimmed) return { reply: "" };
-  // Strip ```json … ``` (or ``` … ```) around the payload if present.
-  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```\s*$/.exec(trimmed);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
-  let parsed;
-  try {
-    parsed = JSON.parse(candidate);
-  } catch {
-    return { reply: trimmed };
-  }
-  if (typeof parsed?.reply === "string") return { reply: parsed.reply };
-  if (Array.isArray(parsed?.actions)) {
-    const actions = parsed.actions
-      .slice(0, MAX_ACTIONS)
-      .filter((a) => a && typeof a === "object" && (a.op === "write" || a.op === "pr"));
-    if (actions.length) return { actions };
+
+  // Find the first balanced {...} block anywhere in the reply.
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    const candidate = trimmed.slice(start, end + 1);
+    let parsed;
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      parsed = null;
+    }
+    if (parsed && typeof parsed === "object") {
+      if (typeof parsed.reply === "string") return { reply: parsed.reply };
+      const actions = extractActions(parsed.actions);
+      if (actions.length) return { actions };
+    }
   }
   return { reply: trimmed };
+}
+
+function extractActions(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_ACTIONS)
+    .filter((a) => a && typeof a === "object")
+    .map((a) => ({ ...a, op: a.op || a.action }))
+    .filter((a) => a.op === "write" || a.op === "pr");
 }
 
 export async function chat(env, ws, message, runAction) {
@@ -87,14 +99,18 @@ export async function chat(env, ws, message, runAction) {
       { role: "user", content: message },
     ];
 
-    let results = await env.AI.run(model, { messages });
+    let results = await env.AI.run(model, {
+      messages,
+      response_format: { type: "json_object" },
+    });
     let text = String(results?.response ?? "").trim();
     if (!text) return { t: "err", code: "empty" };
 
-    // The free 8B model truncates long JSON action blocks. If the output
-    // looks like an incomplete JSON action payload, retry ONCE with a nudge
-    // to finish it — then fall back to the text reply. One retry bounds cost.
-    if (looksLikeTruncatedActions(text)) {
+    // The 8B model truncates long action payloads; json_object mode on the
+    // 70B model keeps them valid. If the reply still holds no parseable
+    // actions/reply block, retry ONCE with a finish-it nudge — then fall
+    // back to the text reply. One retry bounds cost.
+    if (!parseModelOutput(text).actions && !parseModelOutput(text).reply) {
       results = await env.AI.run(model, {
         messages: [
           ...messages,
@@ -105,6 +121,7 @@ export async function chat(env, ws, message, runAction) {
               "Your previous reply was cut off. Complete it: reply with ONLY the full JSON, finishing every action you started.",
           },
         ],
+        response_format: { type: "json_object" },
       });
       text = String(results?.response ?? "").trim();
     }
@@ -124,21 +141,6 @@ export async function chat(env, ws, message, runAction) {
   } catch (err) {
     // Surface the failure mode (not content) so the panel can report it.
     return { t: "err", code: "ai", detail: String(err?.message ?? err).slice(0, 120) };
-  }
-}
-
-// Heuristic: the model started emitting an actions array but the reply is
-// not complete JSON — either it ends inside the array, or JSON.parse of the
-// candidate failed while the raw text mentions "actions". Cheap, bounded.
-function looksLikeTruncatedActions(text) {
-  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```\s*$/.exec(text);
-  const candidate = fenced ? fenced[1].trim() : text;
-  if (!candidate.startsWith("{") || !candidate.includes('"actions"')) return false;
-  try {
-    JSON.parse(candidate);
-    return false; // valid JSON — parseModelOutput will handle it
-  } catch {
-    return true; // started actions JSON but invalid → truncated
   }
 }
 
