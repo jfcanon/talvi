@@ -45,6 +45,18 @@ variable "talvi_zone_id" {
   type = string
 }
 
+variable "clerk_secret_key" {
+  type = string
+}
+
+variable "clerk_publishable_key" {
+  type = string
+}
+
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # ---------------------------------------------------------------------------
 # Shared storage — GREEN'S existing D1/R2, looked up by name (the purge deletes
 # expired drop rows + objects, same as green's). Never renamed (CLAUDE.md).
@@ -67,6 +79,8 @@ resource "cloudflare_workers_script" "talvi_chat" {
   main_module        = "index.js"
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-08-10"
+  # nodejs_compat: @clerk/backend (the networkless JWT verifier) expects it.
+  compatibility_flags = ["nodejs_compat"]
 
   bindings = [
     # The ChatChannel Durable Object. class_name matches the named export of
@@ -80,6 +94,25 @@ resource "cloudflare_workers_script" "talvi_chat" {
     # D1 + R2 for the nightly purge (blueprint L8).
     { type = "d1", name = "DB", id = data.cloudflare_d1_database.talvi_meta.id },
     { type = "r2_bucket", name = "BUCKET", bucket_name = data.cloudflare_r2_bucket.talvi_drop.name },
+
+    # Clerk session gate (owner 2026-08-11). The worker-edge check verifies the
+    # host-wide __session cookie with @clerk/backend + jwtKey; the publishable
+    # key rides along for parity even though chat serves no clerk-js pages.
+    {
+      type = "secret_text"
+      name = "CLERK_SECRET_KEY"
+      text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = var.clerk_jwt_key
+    },
   ]
 
   # NO `migrations` ARGUMENT — deliberate, and it must stay that way. PR C1

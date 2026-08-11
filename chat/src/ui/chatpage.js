@@ -22,6 +22,32 @@
 import { renderPage } from "./layout.js";
 import { escapeHtml } from "../sanitise.js";
 
+// The PIN field with a mask/unmask EYE INSIDE the input (owner 2026-08-11 —
+// like a password field: masked while typing, the icon reveals). The eye is a
+// real <button> absolutely positioned inside a relative wrapper; the input
+// clears it with right padding.
+function pinField(id, attrs) {
+  return (
+    '<div class="chat__fieldwrap">' +
+    '<input class="chat__field chat__pin" id="' +
+    id +
+    '" type="password" ' +
+    attrs +
+    ">" +
+    '<button class="chat__eye" id="' +
+    id +
+    '-eye" type="button" aria-pressed="false" ' +
+    'aria-label="Show or hide the PIN">' +
+    '<svg class="chat__eye-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
+    '<circle cx="12" cy="12" r="3"></circle>' +
+    "</svg>" +
+    "</button>" +
+    "</div>"
+  );
+}
+
 function nickInput() {
   return (
     '<input class="chat__field chat__nick" id="nick" type="text" ' +
@@ -49,17 +75,14 @@ export function chatLandingPage() {
     nickInput() +
     '<div class="tagline"><span class="tagline__box">pin</span>' +
     '<span class="chat__optional">optional</span></div>' +
-    // The PIN is masked by default (owner 2026-08-10); the SHOW/HIDE toggle
-    // reveals it — needed for the autopopulated PIN, which the user has to
-    // share with the people they let in.
-    '<div class="chat__pinslot">' +
-    '<input class="chat__field chat__pin" id="pin" type="password" ' +
-    'maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
-    'autocapitalize="off" spellcheck="false" ' +
-    'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, optional">' +
-    '<button class="chat__eye" id="pin-eye" type="button" aria-pressed="false" ' +
-    'aria-label="Show or hide the PIN">SHOW</button>' +
-    "</div>" +
+    // The PIN is masked by default; the eye inside the field reveals it —
+    // needed for the autopopulated PIN, which the user has to share.
+    pinField(
+      "pin",
+      'maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
+        'autocapitalize="off" spellcheck="false" ' +
+        'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, optional"',
+    ) +
     '<p class="msg hidden" id="msg"></p>' +
     '<button class="btn" type="button" id="join">ENTER</button>' +
     '<p class="chat__fineprint">Names are secrets — pick one, nick yourself, and ' +
@@ -120,12 +143,12 @@ export function chatRoomPage(name) {
     '<div class="tagline"><span class="tagline__box">pin</span>' +
     '<span class="chat__optional">if this channel has one</span></div>' +
     '<div class="chat__pinslot">' +
-    '<input class="chat__field chat__pin" id="roompin" type="password" maxlength="4" ' +
-    'inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
-    'autocapitalize="off" spellcheck="false" ' +
-    'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, if the channel has one">' +
-    '<button class="chat__eye" id="roompin-eye" type="button" aria-pressed="false" ' +
-    'aria-label="Show or hide the PIN">SHOW</button>' +
+    pinField(
+      "roompin",
+      'maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" ' +
+        'autocapitalize="off" spellcheck="false" ' +
+        'placeholder="4 DIGITS" aria-label="Channel PIN, 4 digits, if the channel has one"',
+    ) +
     '<button class="chat__reconnect" id="roomreconnect" type="button" ' +
     'aria-label="Reconnect with this PIN">↻</button>' +
     "</div>" +

@@ -2229,27 +2229,44 @@ a {
 }
 
 /* ===========================================================================
- * PIN mask/unmask toggle (owner 2026-08-10) — masked by default; SHOW/HIDE
- * flips the input type. Same quiet ghost button as the reconnect icon.
+ * PIN mask/unmask EYE, INSIDE the field (owner 2026-08-11 — like a password
+ * field: masked while typing, the icon reveals). The eye is absolutely
+ * positioned in a relative wrapper; the input clears it with right padding.
  * ========================================================================= */
+.chat__fieldwrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chat__fieldwrap .chat__pin {
+  width: 100%;
+  padding-right: 2.75rem;
+}
+
 .chat__eye {
-  flex: 0 0 auto;
-  min-width: 2.4rem;
-  height: 2.4rem;
-  padding: 0 0.5rem;
-  border: 1px solid var(--hud-line-soft);
-  background: var(--void);
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  transform: translateY(-50%);
+  width: 2.1rem;
+  height: 2.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-dim);
-  font-family: var(--font-display);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
   cursor: pointer;
+}
+
+.chat__eye-icon {
+  display: block;
 }
 
 .chat__eye:hover {
   color: var(--amber);
-  border-color: var(--amber);
 }
 
 .chat__eye:focus-visible {

@@ -184,9 +184,21 @@
     return typeof s === "string" && /^[a-z]{1,5}$/.test(s);
   }
 
-  // Mask/unmask toggle for a PIN input (owner 2026-08-10). Masked by default;
-  // the button flips input.type and its own label, and reports the state in
-  // aria-pressed. Real <button>, no inline handlers (CSP).
+  // Mask/unmask toggle INSIDE the PIN input (owner 2026-08-11). Masked by
+  // default; the eye icon inside the field flips input.type and swaps the
+  // icon. aria-pressed reports the state. Real <button>, no inline handlers.
+  const EYE_OPEN =
+    '<svg class="chat__eye-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
+    '<circle cx="12" cy="12" r="3"></circle></svg>';
+  const EYE_SLASH =
+    '<svg class="chat__eye-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
+    '<path d="M4 4l16 16"></path>' +
+    '<path d="M9.5 9.5a3 3 0 0 0 4.2 4.2"></path></svg>';
+
   function wirePinEye(inputId, eyeId) {
     const input = $(inputId);
     const eye = $(eyeId);
@@ -195,7 +207,7 @@
       const show = input.type === "password";
       input.type = show ? "text" : "password";
       eye.setAttribute("aria-pressed", String(show));
-      eye.textContent = show ? "HIDE" : "SHOW";
+      eye.innerHTML = show ? EYE_SLASH : EYE_OPEN;
       input.focus();
     });
   }
