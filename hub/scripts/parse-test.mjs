@@ -37,5 +37,18 @@ check("json_object mode (fence + prose + action field)", Array.isArray(r6.action
 const r7 = parseModelOutput('{"actions":[{"op":"write","path":"customcinto/x"');
 check("truncated json falls back safely", typeof r7.reply === "string");
 
+// 8. TWO separate JSON objects in one reply (the exact live failure: the
+// model emitted {"actions":[write]} then {"actions":[pr]} — the old parser
+// spanned both and swallowed everything)
+const twoObj =
+  '{"actions":[{"op":"write","path":"customcinto/about/page.tsx","content":"x"}]} ' +
+  '{"actions":[{"op":"pr","branch":"add-about-page","title":"add about page"}]}';
+const r8 = parseModelOutput(twoObj);
+check("multiple JSON objects merged", Array.isArray(r8.actions) && r8.actions.length === 2 && r8.actions[0].op === "write" && r8.actions[1].op === "pr", JSON.stringify(r8.actions));
+
+// 9. reply object followed by an actions object → actions win
+const r9 = parseModelOutput('{"reply":"ok"} {"actions":[{"op":"write","path":"customcinto/a.tsx","content":"c"}]}');
+check("actions preferred over reply across objects", Array.isArray(r9.actions) && r9.actions.length === 1, JSON.stringify(r9));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

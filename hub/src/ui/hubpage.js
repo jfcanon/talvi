@@ -134,7 +134,7 @@ export function hubPage({ authed } = {}) {
     '<span class="agent__status" id="agent-status">offline</span></header>' +
     '<div class="agent__log" id="agent-log" role="log" aria-live="polite"></div>' +
     '<div class="agent__compose">' +
-    '<input class="agent__input" id="agent-input" type="text" autocomplete="off" spellcheck="false" aria-label="command" placeholder="chat … · write … · pr <branch> <title>">' +
+    '<input class="agent__input" id="agent-input" type="text" autocomplete="off" spellcheck="false" aria-label="command" placeholder="chat … · write/read/ls/rm … · pr <branch> <title>">' +
     '<button class="agent__send" id="agent-send" type="button" aria-label="send">▸</button>' +
     "</div>" +
     "</section>" +
