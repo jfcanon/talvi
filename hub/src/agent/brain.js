@@ -82,14 +82,32 @@ export async function chat(env, ws, message, runAction) {
   if (!env.AI) return { t: "err", code: "noai" };
   const model = env.AGENT_MODEL || DEFAULT_MODEL;
   try {
-    const results = await env.AI.run(model, {
-      messages: [
-        { role: "system", content: systemPrompt() },
-        { role: "user", content: message },
-      ],
-    });
-    const text = String(results?.response ?? "").trim();
+    const messages = [
+      { role: "system", content: systemPrompt() },
+      { role: "user", content: message },
+    ];
+
+    let results = await env.AI.run(model, { messages });
+    let text = String(results?.response ?? "").trim();
     if (!text) return { t: "err", code: "empty" };
+
+    // The free 8B model truncates long JSON action blocks. If the output
+    // looks like an incomplete JSON action payload, retry ONCE with a nudge
+    // to finish it — then fall back to the text reply. One retry bounds cost.
+    if (looksLikeTruncatedActions(text)) {
+      results = await env.AI.run(model, {
+        messages: [
+          ...messages,
+          { role: "assistant", content: text },
+          {
+            role: "user",
+            content:
+              "Your previous reply was cut off. Complete it: reply with ONLY the full JSON, finishing every action you started.",
+          },
+        ],
+      });
+      text = String(results?.response ?? "").trim();
+    }
 
     const parsed = parseModelOutput(text);
     if (parsed.actions) {
@@ -106,6 +124,21 @@ export async function chat(env, ws, message, runAction) {
   } catch (err) {
     // Surface the failure mode (not content) so the panel can report it.
     return { t: "err", code: "ai", detail: String(err?.message ?? err).slice(0, 120) };
+  }
+}
+
+// Heuristic: the model started emitting an actions array but the reply is
+// not complete JSON — either it ends inside the array, or JSON.parse of the
+// candidate failed while the raw text mentions "actions". Cheap, bounded.
+function looksLikeTruncatedActions(text) {
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```\s*$/.exec(text);
+  const candidate = fenced ? fenced[1].trim() : text;
+  if (!candidate.startsWith("{") || !candidate.includes('"actions"')) return false;
+  try {
+    JSON.parse(candidate);
+    return false; // valid JSON — parseModelOutput will handle it
+  } catch {
+    return true; // started actions JSON but invalid → truncated
   }
 }
 
