@@ -71,7 +71,7 @@ async function post(path) {
   const root = await get("/relay/");
   check("upload page renders 200", root.status === 200);
   check("upload page shows SESSION CLOSED when signed out", root.text.includes("SESSION CLOSED"), root.text.slice(0, 200));
-  check("upload page SIGN IN points at the app root", root.text.includes('href="/sign-in"'));
+  check("upload page SIGN IN points at the app root", root.text.includes('href="/sign-in?redirect=/relay"'));
 
   const assets = await get("/relay/s.css");
   check("stylesheet renders", assets.status === 200 && assets.headers.get("content-type").includes("text/css"));

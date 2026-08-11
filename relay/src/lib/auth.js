@@ -1,12 +1,12 @@
 // Clerk auth for the relay — ported from the blue release (talvi-blue-auth-
 // handover.md, s7). Server-side session verification only: the __session
 // cookie is a Clerk JWT, verified locally with @clerk/backend — no clerk-js on
-// any page except /sign-in and /sso-callback, no Clerk API call per request,
-// no CSP change anywhere except those two pages' own headers.
+// any page, no Clerk API call per request, no CSP change anywhere. The sign-in
+// itself lives at the app ROOT (the hub worker serves /sign-in); this worker
+// only verifies the host-wide __session cookie.
 //
-// This replaces the Cloudflare Access application that used to gate the
-// upload POST (relay/main.tf). The gate is now in-worker and fail-closed: a
-// missing binding or a malformed cookie reads as "not authenticated".
+// The gate is in-worker and fail-closed: a missing binding or a malformed
+// cookie reads as "not authenticated".
 import { createClerkClient } from "@clerk/backend";
 
 // The host this worker answers for. authenticateRequest rejects a session
@@ -21,14 +21,11 @@ const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
 // open the write path. A misconfigured deploy should refuse uploads loudly,
-// not accept them.
+// not accept them. The relay serves no clerk-js pages, so only the secret key
+// (and the jwtKey PEM, verified below) are required — no publishable key.
 export function getClerkClient(env) {
   return createClerkClient({
     secretKey: env.CLERK_SECRET_KEY,
-    publishableKey: env.CLERK_PUBLISHABLE_KEY,
-    // jwtKey = Clerk's PEM public key. Passing it makes session verification
-    // networkless: the __session JWT is verified in the V8 isolate with no
-    // JWKS fetch per request.
     jwtKey: env.CLERK_JWT_KEY,
   });
 }
@@ -37,7 +34,7 @@ export function getClerkClient(env) {
 // Catches every verification error as "not authenticated" — a bad cookie is
 // the same as no cookie for the gate.
 export async function isAuthenticated(request, env) {
-  if (!env.CLERK_SECRET_KEY || !env.CLERK_PUBLISHABLE_KEY) return false;
+  if (!env.CLERK_SECRET_KEY) return false;
   try {
     const state = await getClerkClient(env).authenticateRequest(request, {
       authorizedParties: AUTHORIZED_PARTIES,

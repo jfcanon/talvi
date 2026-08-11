@@ -35,14 +35,14 @@ const cb = ssoCallbackPage({ publishableKey: "pk_test_xyz", nonce });
 check("sso-callback page renders", cb.includes("COMPLETING SIGN-IN"));
 
 const out = hubPage({ authed: false });
-check("signed-out page offers SIGN IN", out.includes('href="/sign-in"'));
+check("signed-out page offers SIGN IN", out.includes('href="/sign-in?redirect=/"'));
 check("signed-out page has no SIGN OUT", !out.includes('href="/api/signout"'));
 check("signed-out page CINTO → /cinto", out.includes('href="/cinto"'));
 check("signed-out page keeps the scene canvas", out.includes('id="scene"'));
 
 const in_ = hubPage({ authed: true });
 check("signed-in page offers SIGN OUT", in_.includes('href="/api/signout"'));
-check("signed-in page has no SIGN IN", !in_.includes('href="/sign-in"'));
+check("signed-in page has no SIGN IN", !in_.includes('href="/sign-in?redirect=/"'));
 
 const authed = await isAuthenticated(new Request("https://app.ygdcbtmc4u.uk/"), {});
 check("isAuthenticated is fail-closed without bindings", authed === false);

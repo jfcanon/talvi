@@ -107,7 +107,7 @@ export function bladeNav(active) {
     // Login control at the bottom. Points at the app ROOT sign-in (the hub
     // worker owns /sign-in); the relay itself only verifies the __session
     // cookie. A plain link so it works with no JS.
-    '<a class="blade__login" href="/sign-in" aria-label="sign in">' +
+    '<a class="blade__login" href="/sign-in?redirect=/relay" aria-label="sign in">' +
     "⏻" +
     "</a>" +
     "</nav>"
