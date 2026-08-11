@@ -50,6 +50,15 @@ try {
   await ws.fs.writeFile("/workspace/project/notes/plan.md", "nested");
   const nested = await ws.fs.readFile("/workspace/project/notes/plan.md", "utf8");
   check("write creates parent dirs", nested === "nested", JSON.stringify(nested));
+
+  // rm (fix): delete a file and a directory tree from the workspace.
+  await ws.fs.writeFile("/workspace/project/tmp.txt", "delete me");
+  await ws.fs.rm("/workspace/project/tmp.txt", { force: true });
+  const afterRm = await ws.fs.readdir("/workspace/project");
+  check("rm removes a file", !afterRm.some((e) => e.name === "tmp.txt"), JSON.stringify(afterRm.map((e) => e.name)));
+  await ws.fs.rm("/workspace/project/notes", { recursive: true, force: true });
+  const afterTree = await ws.fs.readdir("/workspace/project");
+  check("rm removes a directory tree", !afterTree.some((e) => e.name === "notes"), JSON.stringify(afterTree.map((e) => e.name)));
 } catch (e) {
   check("write/read round-trip", false, "threw: " + e.message);
 }

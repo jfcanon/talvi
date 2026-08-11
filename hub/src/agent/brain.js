@@ -41,10 +41,12 @@ export function systemPrompt() {
     "customcinto is a compliance app whose UI uses these CSS classes only: " +
     "stack, hud, hud__row, hud__cell, hud__label, hud__value, tagline, " +
     "tagline__box, muted, tiny, link. Do not use Tailwind or external styles. " +
-    "To DO something, reply with a JSON object: {\"reply\":\"...\"} to just " +
-    "talk, or {\"actions\":[{\"op\":\"write\",\"path\":\"customcinto/<feature>/<file>\",\"content\":\"...\"}]} " +
+    "To DO something, reply with exactly ONE JSON object containing a single " +
+    "actions array (never multiple objects, never multiple arrays): " +
+    "{\"reply\":\"...\"} to just talk, or {\"actions\":[{\"op\":\"write\",\"path\":\"customcinto/<feature>/<file>\",\"content\":\"...\"}]} " +
     "to write a file, and/or {\"actions\":[{\"op\":\"pr\",\"branch\":\"<branch>\",\"title\":\"<title>\"}]} " +
     "to open a pull request shipping everything staged under customcinto/. " +
+    "Put ALL actions in that one array, in order. " +
     "You may use op or action as the field name. " +
     "All paths must start with customcinto/. You CANNOT run code, build, or " +
     "typecheck; do not claim you did. Keep replies short. " +
@@ -54,31 +56,70 @@ export function systemPrompt() {
 
 // Parse the model's reply into either plain text or a list of actions.
 // Returns { reply } or { actions }. Tolerant of the free models' habits:
-// JSON wrapped in markdown fences, trailing prose after the fence, and the
-// field named `op` or `action`. Falls back to treating the whole output as a
-// reply if no valid actions JSON is found.
+// JSON wrapped in markdown fences, trailing prose after the fence, the field
+// named `op` or `action`, and MULTIPLE separate JSON objects in one reply
+// (the model occasionally emits {"actions":[…]} twice instead of one array —
+// that exact output swallowed a live run). Falls back to treating the whole
+// output as a reply if no valid actions JSON is found.
 export function parseModelOutput(text) {
   const trimmed = String(text ?? "").trim();
   if (!trimmed) return { reply: "" };
 
-  // Find the first balanced {...} block anywhere in the reply.
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start !== -1 && end > start) {
-    const candidate = trimmed.slice(start, end + 1);
-    let parsed;
-    try {
-      parsed = JSON.parse(candidate);
-    } catch {
-      parsed = null;
-    }
+  let reply;
+  const actions = [];
+  for (const parsed of extractJsonObjects(trimmed)) {
     if (parsed && typeof parsed === "object") {
-      if (typeof parsed.reply === "string") return { reply: parsed.reply };
-      const actions = extractActions(parsed.actions);
-      if (actions.length) return { actions };
+      if (typeof parsed.reply === "string" && reply === undefined) {
+        reply = parsed.reply;
+      }
+      actions.push(...extractActions(parsed.actions));
     }
   }
+  if (actions.length) return { actions };
+  if (reply !== undefined) return { reply };
   return { reply: trimmed };
+}
+
+// Extract every balanced {...} object from a string, in order. Handles a
+// reply containing several separate JSON objects (and prose between them).
+export function extractJsonObjects(text) {
+  const out = [];
+  let i = 0;
+  while (i < text.length) {
+    const start = text.indexOf("{", i);
+    if (start === -1) break;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let end = -1;
+    for (let j = start; j < text.length; j++) {
+      const c = text[j];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') inString = true;
+      else if (c === "{") depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
+    }
+    if (end === -1) break; // unbalanced; give up on the rest
+    const candidate = text.slice(start, end + 1);
+    try {
+      out.push(JSON.parse(candidate));
+    } catch {
+      // not valid JSON — skip this block, keep scanning
+    }
+    i = end + 1;
+  }
+  return out;
 }
 
 function extractActions(raw) {

@@ -143,22 +143,34 @@ function bootAgentPanel() {
     }
 
     if (cmd === "pr") {
-      // pr <branch> <title> — ships the files currently staged in the
-      // workspace under customcinto/ (see `stage`-style usage in the log
-      // hint). Parses branch + title from the first two tokens.
+      // pr <branch> <title> — ships everything staged under customcinto/.
+      // pr <branch> "title with spaces" <path> [<path>…] — ships only the
+      // listed workspace-absolute paths (e.g. /workspace/customcinto/
+      // about/page.tsx), so leftovers never poison a PR.
       const bSpace = rest.indexOf(" ");
       const branch = bSpace === -1 ? rest : rest.slice(0, bSpace);
-      const title = bSpace === -1 ? "customcinto: agent change" : rest.slice(bSpace + 1).trim();
+      const tail = bSpace === -1 ? "" : rest.slice(bSpace + 1).trim();
       if (!branch) {
-        log("err pr needs a branch name: pr <branch> <title>");
+        log("err pr needs a branch name: pr <branch> <title> [paths]");
         return;
       }
-      // Stage: everything under /workspace/customcinto/ is the candidate set.
+      // Quoted title: everything up to the closing quote is the title, the
+      // remainder is the explicit file list.
+      if (tail.startsWith('"')) {
+        const close = tail.indexOf('"', 1);
+        const title = close === -1 ? tail.slice(1) : tail.slice(1, close);
+        const paths = close === -1
+          ? []
+          : tail.slice(close + 1).trim().split(/\s+/).filter(Boolean);
+        ws.send(JSON.stringify({ t: "cmd", cmd: "pr", branch, title, paths }));
+        return;
+      }
+      const title = tail || "customcinto: agent change";
       ws.send(JSON.stringify({ t: "cmd", cmd: "pr", branch, title }));
       return;
     }
 
-    // write/read/ls: "cmd path [data]"
+    // write/read/ls/rm: "cmd path [data]"
     const restSpace = rest.indexOf(" ");
     const path = restSpace === -1 ? rest : rest.slice(0, restSpace);
     const data = restSpace === -1 ? undefined : rest.slice(restSpace + 1);

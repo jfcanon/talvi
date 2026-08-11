@@ -12,18 +12,22 @@
 // proves the DO + workspace + panel wiring; the AI brain and exec come later.
 //
 // Wire protocol (JSON frames):
-//   Client→server:  {t:"cmd", cmd:"write"|"read"|"ls"|"chat"|"pr", path, data?}
+//   Client→server:  {t:"cmd", cmd:"write"|"read"|"ls"|"rm"|"chat"|"pr", path, data?}
 //   Server→client:  {t:"ready"}
 //                   {t:"ok", cmd, result}
 //                   {t:"err", code}        — "toolarge" | "badcmd" | "badpath"
-//                                            | "io" | "noai" | "empty"
+//                                            | "io" | "noai" | "empty" | "nofiles"
 //
-//   chat <message>   — natural language → Workers AI (free model). The model
-//                      is grounded in the workspace/customcinto context and
-//                      may PROPOSE code, but never runs anything (PR3b).
-//   pr <branch> <title> [files...] — open a PR on jfcanon/customcinto. Files
-//                      are read from the workspace subtree and shipped via
-//                      the GitHub API (PR4). See src/agent/brain.js.
+//   write <path> <data>      — create/overwrite a file (parent dirs made)
+//   read  <path>             — read a file back
+//   ls    <path>             — list a directory
+//   rm    <path>             — delete a file or directory (recursive)
+//   chat <message>           — natural language → Workers AI; the model may
+//                              reply with JSON actions (write/pr) the DO
+//                              executes (path-locked to customcinto/).
+//   pr <branch> <title> [paths] — open a PR on jfcanon/customcinto. Default
+//                              ships everything staged under customcinto/; an
+//                              explicit path list ships only those files.
 //
 // Bounds mirror chat's (D11): origin-gated upgrade, socket cap, wire-frame
 // cap. NOTHING HERE LOGS content — the workspace files are the record, not
@@ -156,7 +160,7 @@ export class AgentDO extends WrappedAgent {
       this.send(server, { t: "err", code: "badpath" });
       return;
     }
-    if ((cmd === "read" || cmd === "ls" || cmd === "write") && !isWorkspacePath(path)) {
+    if ((cmd === "read" || cmd === "ls" || cmd === "write" || cmd === "rm") && !isWorkspacePath(path)) {
       this.send(server, { t: "err", code: "badpath" });
       return;
     }
@@ -181,6 +185,12 @@ export class AgentDO extends WrappedAgent {
           .map((e) => (e.isDirectory ? e.name + "/" : e.name))
           .join("\n");
         this.send(server, { t: "ok", cmd, result: names });
+      } else if (cmd === "rm") {
+        // Delete a file or directory from the workspace (recursive, force —
+        // the fs surface refuses if the path is missing otherwise). Only the
+        // user's staged scratch space; validated above to stay inside it.
+        await ws.fs.rm(path, { recursive: true, force: true });
+        this.send(server, { t: "ok", cmd, result: "removed " + path });
       } else if (cmd === "chat") {
         const out = await chat(this.env, ws, frame.data || "", (action) => this.runAction(action));
         this.send(server, out);
@@ -195,10 +205,11 @@ export class AgentDO extends WrappedAgent {
     }
   }
 
-  // pr — open a PR on jfcanon/customcinto. Ships EVERY file staged under
-  // /workspace/customcinto/ (the route-group subtree) as the PR's diff. The
-  // agent authors in the sandbox; this command turns the staged bytes into a
-  // real, reviewable PR — the change-management boundary is never bypassed.
+  // pr — open a PR on jfcanon/customcinto. By default ships every file staged
+  // under /workspace/customcinto/ (the route-group subtree). If `frame.paths`
+  // is an explicit list (workspace-absolute, e.g. /workspace/customcinto/
+  // about/page.tsx), ships ONLY those — so the caller controls exactly what
+  // the PR contains instead of whatever happens to be staged.
   async handlePr(frame) {
     const branch = String(frame.branch ?? "").trim();
     const title = String(frame.title ?? "").trim();
@@ -206,9 +217,24 @@ export class AgentDO extends WrappedAgent {
     if (!this.env.GITHUB_TOKEN) return { t: "err", code: "notoken" };
 
     const files = {};
-    const root = WORKSPACE_ROOT + "/customcinto";
-    const entries = await this.walk(root);
-    for (const p of entries) {
+    let paths;
+    if (Array.isArray(frame.paths) && frame.paths.length > 0) {
+      // Explicit list: validate each against the workspace + subtree.
+      paths = [];
+      for (const raw of frame.paths) {
+        const p = String(raw ?? "").trim();
+        if (!isWorkspacePath(p)) return { t: "err", code: "badpath" };
+        const rel = p.slice(WORKSPACE_ROOT.length + 1);
+        if (!rel.startsWith("customcinto/")) return { t: "err", code: "badpath" };
+        paths.push(p);
+      }
+    } else {
+      // Default: everything staged under the subtree.
+      const root = WORKSPACE_ROOT + "/customcinto";
+      paths = await this.walk(root);
+    }
+
+    for (const p of paths) {
       const rel = p.slice(WORKSPACE_ROOT.length + 1);
       if (!rel.startsWith("customcinto/")) continue;
       try {
@@ -255,7 +281,11 @@ export class AgentDO extends WrappedAgent {
       const branch = String(action.branch ?? "").trim();
       const title = String(action.title ?? "").trim();
       if (!branch || !title) return { t: "err", code: "badcmd" };
-      return this.handlePr({ branch, title });
+      // The model may optionally pin the exact files it wants in the PR.
+      const paths = Array.isArray(action.paths) && action.paths.length
+        ? action.paths
+        : undefined;
+      return this.handlePr({ branch, title, paths });
     }
     return { t: "err", code: "badcmd" };
   }
