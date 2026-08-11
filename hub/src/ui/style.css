@@ -377,8 +377,9 @@ body {
   opacity: 1;
 }
 
-/* Icon controls at the blade's foot: the retract toggle and the login
-   placeholder. Icon-only — the aria-label carries the words. */
+/* Icon controls at the blade's foot: the retract toggle and the login (an
+   icon link). Icon-only — the aria-label carries the words; the collapsed
+   rail is pure glyphs. */
 .blade__toggle,
 .blade__login {
   margin: 0.25rem 0.4rem;
@@ -391,6 +392,7 @@ body {
   font-size: 0.95rem;
   line-height: 1;
   cursor: pointer;
+  text-decoration: none; /* the login is an <a> — never underline it */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -405,6 +407,21 @@ body {
 
 .blade__login {
   margin-bottom: 0.5rem;
+}
+
+.blade__login:visited {
+  color: var(--text-dim);
+}
+
+.blade__login:hover:visited,
+.blade__login:focus-visible:visited {
+  color: var(--phosphor);
+}
+
+/* Signed in: the power glyph is lit — the session is "on". */
+.blade__login.is-in {
+  color: var(--phosphor);
+  text-shadow: 0 0 8px rgba(125, 255, 196, 0.5);
 }
 
 /* ========================================================== wear and film */

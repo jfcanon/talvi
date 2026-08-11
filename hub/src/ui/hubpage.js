@@ -79,13 +79,13 @@ function bladeItems() {
 }
 
 export function hubPage({ authed } = {}) {
-  // The login control: a plain link, so it works with no JS. Signed out →
-  // SIGN IN at /sign-in; signed in → SIGN OUT at /api/signout (revoke + drop
-  // the __session cookie). The relay's gate verifies the same host-wide cookie.
-  const login =
-    authed
-      ? '<a class="blade__login" href="/api/signout" aria-label="sign out">SIGN OUT</a>'
-      : '<a class="blade__login" href="/sign-in?redirect=/" aria-label="sign in">SIGN IN</a>';
+  // The login control — an ICON link, keeping the blade's icon-only chrome
+  // (the collapsed rail is pure glyphs; text would overflow it). The glyph is
+  // ⏻ either way; signed in it is lit (is-in) and the aria-label + href flip
+  // to sign-out. A plain link so it works with no JS.
+  const login = authed
+    ? '<a class="blade__login is-in" href="/api/signout" aria-label="sign out">⏻</a>'
+    : '<a class="blade__login" href="/sign-in?redirect=/" aria-label="sign in">⏻</a>';
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
