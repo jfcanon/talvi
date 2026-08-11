@@ -22,4 +22,8 @@ await build({
 });
 
 const result = spawnSync(process.execPath, [out], { stdio: "inherit" });
-process.exit(result.status ?? 1);
+if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
+
+// Brain action-loop parser (no bundling needed — pure JS).
+const parse = spawnSync(process.execPath, [join(here, "parse-test.mjs")], { stdio: "inherit" });
+process.exit(parse.status ?? 1);
