@@ -35,9 +35,10 @@ const REST = 0.35;
 // connected pattern, spaced comfortably above 2*BODY_R so the stars rest
 // apart and only collide when a gust pushes them together.
 const TILE_CFG = [
-  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
-  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
-  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
+  { key: "relay", glyph: "��", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
+  { key: "chat", glyph: "��", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
+  { key: "cinto", glyph: "��", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
+  { key: "learn", glyph: "��", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
   { key: "future", glyph: "＋", href: null, x: 0, baseY: 7.2, z: 0.2 },
 ];
 
@@ -49,7 +50,8 @@ const LINES = [
   ["relay", "chat"],
   ["relay", "cinto"],
   ["chat", "cinto"],
-  ["cinto", "future"],
+  ["cinto", "learn"],
+  ["learn", "future"],
   ["future", "word"],
 ];
 
@@ -226,7 +228,16 @@ function makeTile(cfg) {
     baseY: cfg.baseY,
     phase: Math.random() * Math.PI * 2,
     nextGust: 1 + Math.random() * 2,
-    arriveDelay: cfg.key === "relay" ? 0 : cfg.key === "chat" ? 0.18 : cfg.key === "cinto" ? 0.36 : 0.54,
+    arriveDelay:
+      cfg.key === "relay"
+        ? 0
+        : cfg.key === "chat"
+        ? 0.18
+        : cfg.key === "cinto"
+        ? 0.36
+        : cfg.key === "learn"
+        ? 0.54
+        : 0.72,
   };
   if (hit) hit.userData.building = building;
   return building;
