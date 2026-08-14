@@ -6,8 +6,17 @@ name: Terraform 3d
 # 3d/main.tf against its own state key (talvi/3d/terraform.tfstate).
 
 on:
-  pull_request: { branches: [main, master] }
-  push:         { branches: [main, master] }
+  # Only run when the 3d/ stack or this workflow changes.
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '3d/**'
+      - '.github/workflows/terraform-3d.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - '3d/**'
+      - '.github/workflows/terraform-3d.yml'
 
 permissions:
   contents: read

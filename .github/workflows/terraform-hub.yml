@@ -6,8 +6,17 @@ name: Terraform Hub
 # hub/main.tf against its own state key (talvi/hub/terraform.tfstate).
 
 on:
-  pull_request: { branches: [main, master] }
-  push:         { branches: [main, master] }
+  # Only run when the hub/ stack or this workflow changes.
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'hub/**'
+      - '.github/workflows/terraform-hub.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'hub/**'
+      - '.github/workflows/terraform-hub.yml'
 
 permissions:
   contents: read

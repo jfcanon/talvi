@@ -8,6 +8,9 @@
     "test:data": "npm run build && node scripts/data-smoke-test.mjs",
     "test": "npm run test:data"
   },
+  "dependencies": {
+    "@clerk/backend": "^3.16.1"
+  },
   "devDependencies": {
     "esbuild": "0.28.1"
   },

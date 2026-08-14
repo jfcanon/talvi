@@ -1,8 +1,20 @@
 name: Terraform
 
 on:
-  pull_request: { branches: [main, master] }
-  push:         { branches: [main, master] }
+  # Root shared stack (main.tf: zone / DNS / idp). Only run when a root-level
+  # .tf changes or this workflow does — subdir stacks own their own workflows.
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '*.tf'
+      - '*.tfvars'
+      - '.github/workflows/terraform.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - '*.tf'
+      - '*.tfvars'
+      - '.github/workflows/terraform.yml'
 
 permissions:
   contents: read
