@@ -4,12 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js"
+    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js",
+    "test:data": "npm run build && node scripts/data-smoke-test.mjs",
+    "test": "npm run test:data"
   },
   "dependencies": {
     "@clerk/backend": "^3.16.1"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.16.1"
   }
 }

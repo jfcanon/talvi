@@ -1,23 +1,23 @@
-// Clerk auth for the learn worker — the in-worker gate. Ported verbatim
-// from the hub/relay pattern (which itself ported the blue release,
-// s7/talvi-blue-auth-handover.md). Learn verifies the host-wide __session
-// cookie; it never serves sign-in (the hub owns /sign-in, /sso-callback,
-// /api/signout — blueprint B.1/B.2). Networkless jwtKey verification — no
-// clerk-js on any page, no Clerk API call per request, no CSP change.
+// Clerk auth for talvi learn — verbatim port of the relay/hub in-worker gate
+// (which itself ports the blue release, s7/talvi-blue-auth-handover.md).
+//
+// PR3 (NID-98) is a serial dependency that had not merged when this PR was
+// opened; per the learn-6-ui precedent (#149) the gate is carried inside this
+// PR against the blueprint spec (B.2) and documented as an unmerged
+// dependency. Learn never serves sign-in: the Clerk sign-in surface lives at
+// the app ROOT served by the hub. Learn verifies the host-wide __session
+// cookie and redirects. Networkless jwtKey verification — no clerk-js on any
+// learn page, no Clerk API call per request, no CSP change.
 import { createClerkClient } from "@clerk/backend";
 
 // The host this worker answers for. authenticateRequest rejects a session
-// cookie minted for any other party — the cookie-replay guard (the blue
-// session's authorizedParties rule, fixed 2026-08-09: bare hosts never match
-// the JWT's `azp` claim, which carries the scheme).
-//
-// MUST be full origins (scheme + host). Learn mounts on app.ygdcbtmc4u.uk/learn;
-// the __session cookie is the host-wide one Clerk mints for the hub's sign-in.
+// cookie minted for any other party — the cookie-replay guard (the azp rule:
+// bare hosts never match the JWT's `azp` claim, which carries the scheme).
 const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
-// open any route. A misconfigured deploy should refuse access loudly, not
-// serve content unauthenticated.
+// open anything. A misconfigured deploy refuses access loudly, never silently
+// opens (blueprint B.2).
 export function getClerkClient(env) {
   return createClerkClient({
     secretKey: env.CLERK_SECRET_KEY,
@@ -41,5 +41,23 @@ export async function isAuthenticated(request, env) {
     return state.isAuthenticated;
   } catch {
     return false;
+  }
+}
+
+// The authenticated user's stable id, or null when unauthenticated. Learn's
+// D1 schema is per-user (decision 3 / PR4 converged schema: lesson_progress
+// and player_state are keyed by user_id), so the API needs the session
+// subject, not just a boolean. Single-owner app: the Clerk user id is the
+// player id.
+export async function getUserId(request, env) {
+  if (!env.CLERK_SECRET_KEY || !env.CLERK_PUBLISHABLE_KEY) return null;
+  try {
+    const state = await getClerkClient(env).authenticateRequest(request, {
+      authorizedParties: AUTHORIZED_PARTIES,
+    });
+    if (!state.isAuthenticated) return null;
+    return state.userId || state.sessionId || "owner";
+  } catch {
+    return null;
   }
 }
