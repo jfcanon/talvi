@@ -6,8 +6,17 @@ name: Terraform Blue
 # input), then plans/applies blue/main.tf against its own state key.
 
 on:
-  pull_request: { branches: [main, master] }
-  push:         { branches: [main, master] }
+  # Only run when the blue/ stack or this workflow changes.
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'blue/**'
+      - '.github/workflows/terraform-blue.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'blue/**'
+      - '.github/workflows/terraform-blue.yml'
 
 permissions:
   contents: read

@@ -6,8 +6,17 @@ name: Terraform Chat
 # chat/main.tf against its own state key (talvi/chat/terraform.tfstate).
 
 on:
-  pull_request: { branches: [main, master] }
-  push:         { branches: [main, master] }
+  # Only run when the chat/ stack or this workflow changes.
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'chat/**'
+      - '.github/workflows/terraform-chat.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'chat/**'
+      - '.github/workflows/terraform-chat.yml'
 
 permissions:
   contents: read
