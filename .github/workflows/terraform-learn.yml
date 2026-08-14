@@ -18,6 +18,12 @@ env:
   TF_VAR_talvi_zone_id:         ${{ vars.TALVI_ZONE_ID }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  # Clerk gate (PR3, decision 2). The three keys already exist as repo secrets
+  # (set 2026-08-09 for blue/hub). TF_VAR_* maps each to the terraform variable
+  # of the same snake-cased name in learn/main.tf.
+  TF_VAR_clerk_secret_key:       ${{ secrets.CLERK_SECRET_KEY }}
+  TF_VAR_clerk_publishable_key:  ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+  TF_VAR_clerk_jwt_key:          ${{ secrets.CLERK_JWT_KEY }}
 
 jobs:
   plan:

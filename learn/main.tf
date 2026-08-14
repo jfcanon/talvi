@@ -1,9 +1,10 @@
 # talvi learn — the Tribunal Learn course, mounted at app.ygdcbtmc4u.uk/learn.
 #
-# PR2 is the inert skeleton (NID-97): own state key, D1 talvi-learn-meta
+# PR2 was the inert skeleton (NID-97): own state key, D1 talvi-learn-meta
 # (created here but not bound — the binding lands in PR4 with the data layer),
 # the /learn route, and a worker that serves only /learn/healthz plus a
-# coming-soon placeholder. No auth (PR3), no data layer (PR4). Full
+# coming-soon placeholder. PR3 (NID-98) adds the Clerk owner-only gate (decision
+# 2): three Clerk bindings + nodejs_compat. No data layer (PR4). Full
 # architecture: plans/talvi-learn-blueprint.md.
 terraform {
   required_providers {
@@ -48,6 +49,23 @@ variable "talvi_zone_id" {
   type = string
 }
 
+# Clerk auth (PR3, decision 2). Secret key is a secret_text binding so it never
+# appears in state; the publishable key is public by design and ships as plain
+# text. The JWT key is Clerk's public verification key (PEM) — also public, but
+# stored in Bitwarden with its peers; passing it as jwtKey makes session
+# verification networkless (green's Step 8 pattern, same as blue/hub/relay).
+variable "clerk_secret_key" {
+  type = string
+}
+
+variable "clerk_publishable_key" {
+  type = string
+}
+
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # Learn's own D1 database (decision 3) — separate from talvi-meta and
 # talvi-blue-meta (release isolation). Created here in PR2 as the resource; the
 # worker binding lands in PR4 with the data layer. No schema exists yet — the
@@ -58,17 +76,47 @@ resource "cloudflare_d1_database" "talvi_learn_meta" {
   read_replication = { mode = "disabled" }
 }
 
-# The learn Worker — tiny in PR2 (healthz + placeholder), so `content =
-# file(...)` is fine (green/hub pattern; content_file + content_sha256 only
-# becomes necessary past ~5 MB). No bindings yet — Clerk (PR3) and D1 (PR4)
-# add them. NO `migrations` block — no Durable Objects, and a stale one would
-# be re-sent on every apply (hub/relay record, code 10074).
+# The learn Worker — PR3 adds the Clerk owner-only gate (three bindings) and
+# nodejs_compat (@clerk/backend's networkless JWT verifier needs it — same as
+# relay, relay/main.tf:83). `content = file(...)` is fine (green/hub pattern;
+# content_file + content_sha256 only becomes necessary past ~5 MB). D1 binds in
+# PR4. NO `migrations` block — no Durable Objects, and a stale one would be
+# re-sent on every apply (hub/relay record, code 10074).
 resource "cloudflare_workers_script" "talvi_learn" {
   account_id         = var.cloudflare_account_id
   script_name        = "talvi-learn"
   main_module        = "index.js"
   content            = file("${path.module}/dist/index.js") # built by esbuild in CI
   compatibility_date = "2026-08-14"
+
+  # nodejs_compat: @clerk/backend (the networkless JWT verifier) is built for
+  # the Node.js compat layer — same flag relay uses for the identical gate
+  # (relay/main.tf:83). Without it authenticateRequest throws at runtime.
+  compatibility_flags = ["nodejs_compat"]
+
+  bindings = [
+    # Clerk auth — the learn gate verifies the host-wide __session cookie with
+    # @clerk/backend + jwtKey. ALL THREE keys are required: authenticateRequest
+    # needs the secret key, publishableKey, and jwtKey (the blue/hub/relay
+    # shapes; missing one = fail-closed, per src/lib/auth.js). CLERK_SECRET_KEY
+    # is a secret_text binding (never in state); the publishable and JWT keys
+    # are public by design (plain_text).
+    {
+      type = "secret_text"
+      name = "CLERK_SECRET_KEY"
+      text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = var.clerk_jwt_key
+    },
+  ]
 }
 
 # Routes: app.ygdcbtmc4u.uk/learn (exact) and /learn/*. The hub owns the `/*`

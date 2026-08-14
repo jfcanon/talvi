@@ -6,6 +6,9 @@
   "scripts": {
     "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js"
   },
+  "dependencies": {
+    "@clerk/backend": "^3.16.1"
+  },
   "devDependencies": {
     "esbuild": "0.28.1"
   }
