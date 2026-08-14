@@ -1,0 +1,245 @@
+{
+  "unit": {
+    "id": "u4",
+    "title": "Loop engineering",
+    "moc": "eval harness \u2014 instrumented gates & the seam \u2014 skills compounding \u2014 Multica: evaluate AND integrate \u2014 re-platform triggers"
+  },
+  "checkpoint": {
+    "id": "c4",
+    "title": "Checkpoint 4 \u2014 gate",
+    "prompt": "Order the top layers (eval harness before skills compounding) and name the re-platform triggers.",
+    "cite": "sidequests/harness-baseline/verdict.md:Top-5"
+  },
+  "lessons": [
+    {
+      "id": "u4l1",
+      "title": "The eval harness",
+      "skill": "eval-harness",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The eval harness replays past sittings per lane, per class \u2014 a read-only replay gated on DELIVERABLE-PRESENCE, not exit code. oc-ds exited 0 with no deliverable twice when sandbox-blocked \u2014 exit 0 proves nothing.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 1"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "The eval harness gates on:",
+          "options": [
+            "exit code",
+            "deliverable-presence, not exit code",
+            "the fastest lane",
+            "cost"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The oc-ds incident proved:",
+          "options": [
+            "exit 0 guarantees a deliverable",
+            "a lane can exit 0 with no deliverable",
+            "sandboxes never block",
+            "oc-ds was the winner"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Why is the eval harness the #1 next layer?",
+          "options": [
+            "it is the cheapest",
+            "it mechanizes the most-skipped layer (verification) and would've caught both defects",
+            "it replaces the ledger",
+            "it speeds up fanout"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u4l2",
+      "title": "Instrumented gates + the seam",
+      "skill": "gates",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Instrumented verification gates \u2014 a sitting won't close until exit + presence + class probe are recorded. Seam rule: gate logic stays a small script; past ~200 lines, stop and buy.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 2"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "When does a sitting close under instrumented gates?",
+          "options": [
+            "when prose says it's done",
+            "only after exit + presence + class probe are recorded",
+            "when the owner clicks done",
+            "when the lane finishes typing"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The seam rule says:",
+          "options": [
+            "always use a big framework",
+            "past ~200 lines of gate logic, stop and buy",
+            "never write gates",
+            "gates must be 200 lines minimum"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The seam threshold in the blueprint is roughly:",
+          "options": ["20 lines", "200 lines", "2000 lines", "no threshold"],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u4l3",
+      "title": "Skills compounding",
+      "skill": "compounding",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Skills compounding distills playbooks from the winning lanes' deliverable structure \u2014 but ONLY from \u22653 validated sittings per class. Wrong lessons compound too, which is why the eval harness is sequenced BEFORE it. The tightened rule: \u22653 validated sittings per class before distilling that class (6 same-day sittings is overfitting territory).",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 8"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "A playbook may be distilled only after:",
+          "options": [
+            "one sitting",
+            "\u22653 validated sittings per class",
+            "10 sittings regardless of class",
+            "the owner asks"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Why is skills compounding sequenced AFTER the eval harness?",
+          "options": [
+            "it costs more",
+            "wrong lessons compound too",
+            "it needs a bigger model",
+            "it is less important"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Which claims can feed compounding?",
+          "options": [
+            "any claim a lane makes",
+            "only confidence=verified + review_state=accepted claims",
+            "only the cheapest claims",
+            "all claims equally"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u4l4",
+      "title": "Multica: evaluate AND integrate",
+      "skill": "multica",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Multica was REJECTED as an adoption on the license gate (1b forbids renaming/rebranding the UI without a written waiver \u2014 the owner's exact plan) and on the architecture gate (interactive board vs blind fanout; always-on = a re-platform trigger without a workload). The integration later landed in THIS workspace \u2014 label it owner-confirmed-current, not blueprint-derived.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a711 Proposal evaluations"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "The tribunal's Multica verdict was:",
+          "options": [
+            "adopt",
+            "reject as an adoption, on license AND architecture gates",
+            "adopt the tool, reject the ideas",
+            "no opinion"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "What survived from the Multica evaluation?",
+          "options": [
+            "the UI",
+            "ideas only: board-as-metaphor, agents-as-teammates framing",
+            "the license",
+            "the frontend"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The integration that later landed should be labeled:",
+          "options": [
+            "blueprint-derived",
+            "owner-confirmed-current",
+            "hypothetical",
+            "contested"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u4l5",
+      "title": "Re-platform triggers",
+      "skill": "replatform",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Re-platform triggers are workload-shaped, not maturity-shaped: concurrent mutation of the ledger, always-on / event-driven (a daemon, not cron), and trust-boundary crossing (multi-user, per-user auth). Nothing on the current roadmap approaches them \u2014 buy-verdict: nothing.",
+          "cite": "sidequests/harness-baseline/verdict.md:Ceiling"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Re-platform triggers are:",
+          "options": [
+            "maturity-shaped",
+            "workload-shaped",
+            "cost-shaped",
+            "brand-shaped"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Which is a real re-platform trigger?",
+          "options": [
+            "a new feature idea",
+            "concurrent mutation of the ledger",
+            "a color scheme change",
+            "more docs"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The buy-verdict from harness-baseline was:",
+          "options": [
+            "adopt an orchestration framework",
+            "nothing \u2014 adopting now is re-platforming without a forcing trigger",
+            "migrate to a database immediately",
+            "buy a bigger model"
+          ],
+          "answer": 1
+        }
+      ]
+    }
+  ]
+}

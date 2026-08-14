@@ -1,0 +1,343 @@
+{
+  "unit": {
+    "id": "u3",
+    "title": "The tribunal's own architecture",
+    "moc": "files are the only state \u2014 the hub CLI \u2014 lanes & the family rule \u2014 routing \u2014 grounding \u2014 convergence \u2014 state layout \u2014 claim ledger & MoC"
+  },
+  "checkpoint": {
+    "id": "c3",
+    "title": "Checkpoint 3 \u2014 gate (the core one)",
+    "prompt": "Describe the whole machinery \u2014 fanout \u2192 convergence \u2192 verify \u2192 record \u2014 and where the claim ledger and the MoC sit in it.",
+    "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+  },
+  "lessons": [
+    {
+      "id": "u3l1",
+      "title": "Files are the only state",
+      "skill": "state",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Files are the only state; the session is disposable. A fresh session becomes the hub by reading THIS document + `ledger.md` \u2014 that pair is the entire bootstrap, and it kills the single-session dependency.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "What is the tribunal's only state?",
+          "options": ["a database", "files", "in-memory objects", "an external service"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "What does a fresh session need to read to become the hub?",
+          "options": [
+            "the blueprint document + ledger.md",
+            "a snapshot of the model weights",
+            "an API key",
+            "the chat history"
+          ],
+          "answer": 0
+        },
+        {
+          "type": "listen",
+          "prompt": "Type the sentence you just heard.",
+          "text": "The session is disposable."
+        }
+      ]
+    },
+    {
+      "id": "u3l2",
+      "title": "The `hub` CLI",
+      "skill": "hub-cli",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The `hub` CLI does `new`/`run`/`verdict`/`eval`/`gate`/`status`/`log`/`winrate`/`playbook`/`cost`/`moc` \u2014 blind + parallel fanout, a self-rolled per-lane timeout watchdog, retry-once loop controller with keep-best, gate-enforced verdicts, and ledger-per-Quorum.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "What does `hub run` do?",
+          "options": [
+            "blind + parallel fanout of the brief to the lanes",
+            "writes a single answer",
+            "deletes the ledger",
+            "logs you out"
+          ],
+          "answer": 0
+        },
+        {
+          "type": "select",
+          "prompt": "The watchdog is:",
+          "options": [
+            "an external monitoring service",
+            "a self-rolled per-lane timeout watchdog (no GNU timeout needed)",
+            "a model that watches logs",
+            "a cloud function"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "What enforces a verdict in `hub`?",
+          "options": [
+            "a vote only",
+            "gate-enforced verdicts with `--force` as human override",
+            "random selection",
+            "the owner editing files"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u3l3",
+      "title": "Lanes & the family rule",
+      "skill": "lanes",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The lane inventory is live-tested: cc-fable (Claude, strongest), cc-ds/oc-ds (DeepSeek flash), cc-pro/oc-pro (DeepSeek reasoning), oc-qw (local), oc-or/oc-light (nemotron), oc-nim (gpt-oss), crush-glm. Family rule: count DeepSeek once \u2014 cc-ds, oc-ds, cc-pro, oc-pro share the DeepSeek family, pick ONE per sitting. Nemotron max 2.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Full lane inventory"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "How many DeepSeek-family lanes may a sitting use?",
+          "options": ["as many as available", "one", "two", "none"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The reason for the family rule is:",
+          "options": [
+            "cost",
+            "same-family models share correlated errors",
+            "licensing",
+            "speed"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "match",
+          "prompt": "Match each lane family to its rule.",
+          "pairs": [
+            { "left": "DeepSeek (cc-ds, oc-ds, cc-pro, oc-pro)", "right": "count once" },
+            { "left": "nemotron (oc-or, oc-light)", "right": "max 2" },
+            { "left": "oc-qw", "right": "local/private" },
+            { "left": "oc-nim", "right": "slow cold start" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u3l4",
+      "title": "Routing policy",
+      "skill": "routing",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Default panel = 2 lanes; 4 only for high stakes. Each problem class has a lane default: factcheck \u2192 cheap independent votes with cc-fable only to break ties; code debug \u2192 oc-ds + oc-qw; deep reasoning \u2192 oc-pro + oc-qw; secrets/client data \u2192 oc-qw ONLY (never leaves the machine).",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "The default panel is ___ lanes.",
+          "options": ["1", "2", "4", "5"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "4 lanes are used only for:",
+          "options": ["every sitting", "high stakes", "cheap work", "fast answers"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "For secrets/client data, the only lane is:",
+          "options": ["cc-fable", "oc-qw", "oc-nim", "crush-glm"],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u3l5",
+      "title": "Grounding",
+      "skill": "grounding",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "`sb` answers \u201ctrue in MY repos\u201d; fresh docs answer \u201ctrue TODAY\u201d; lanes answer \u201cgenerally true.\u201d Every verdict cites at least one of the first two. Refuse or downgrade to opinion when there is no `sb` hit and no fetchable doc, or the question needs data the owner didn't provide.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a76 Grounding"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Every verdict must cite at least one of:",
+          "options": [
+            "a lane's opinion",
+            "an `sb` chunk or a fresh doc",
+            "a blog post",
+            "the model card"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "When there is no `sb` hit and no fetchable doc, the tribunal should:",
+          "options": [
+            "guess",
+            "refuse or downgrade to opinion",
+            "ask more lanes",
+            "quote a random source"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "listen",
+          "prompt": "Type the grounding hierarchy you just heard.",
+          "text": "Repos answer true in my repos."
+        }
+      ]
+    },
+    {
+      "id": "u3l6",
+      "title": "Convergence method",
+      "skill": "convergence",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Facts decompose into atomic claims; accept ONLY if the claim survives a grounding source. Agreement without a source = \u201cprobable, unverified\u201d \u2014 label it. Majority alone is convergence theater: same-family models hallucinate the same \u201cfact\u201d together \u2014 3 of 4 lanes explicitly reject majority voting. Verifier: a FRESH lane armed with the evidence arbitrates; rotate it so Claude doesn't silently become ground truth.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Majority agreement WITHOUT a source is labeled:",
+          "options": [
+            "verified",
+            "probable, unverified",
+            "accepted",
+            "contradicted"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Why is majority alone \u201cconvergence theater\u201d?",
+          "options": [
+            "lanes are lazy",
+            "same-family models hallucinate the same \u201cfact\u201d together",
+            "majority is always right",
+            "the quorum is too small"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The verifier role should be:",
+          "options": [
+            "the strongest lane every time",
+            "a fresh lane armed with the evidence, rotated",
+            "the owner",
+            "the first lane to finish"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u3l7",
+      "title": "State & memory layout",
+      "skill": "state-layout",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Per problem in `sidequests/<slug>/`: `intake.md` (problem + success criteria), `lanes/` (raw outputs, one file per lane), `verdict.md` (converged answer + dissents + citations). Plus ONE line in a global `ledger.md` \u2014 date, class, lanes used, winner, cost.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "complete",
+          "prompt": "The per-sitting layout: sidequests/<slug>/ = intake.md, ___, and verdict.md; plus one line in the global ___.",
+          "bank": ["lanes/", "ledger.md", "answers/", "scores.md"],
+          "answer": ["lanes/", "ledger.md"]
+        },
+        {
+          "type": "select",
+          "prompt": "The ledger line records:",
+          "options": [
+            "date, class, lanes used, winner, cost",
+            "only the winner",
+            "the full lane outputs",
+            "the owner's notes"
+          ],
+          "answer": 0
+        },
+        {
+          "type": "select",
+          "prompt": "`verdict.md` contains:",
+          "options": [
+            "converged answer + dissents + citations",
+            "raw lane outputs",
+            "the intake form",
+            "cost estimates only"
+          ],
+          "answer": 0
+        }
+      ]
+    },
+    {
+      "id": "u3l8",
+      "title": "Claim ledger + MoC",
+      "skill": "claims-moc",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The claim-ledger schema (borrowed from claude-obsidian): claim_id, sitting, class, claim, source, support, contradiction, confidence (probable|verified|contested), review_state (open|accepted|rejected|stale), added, reviewed. The MoC is a Mermaid map of contents \u2014 nodes = sittings, edges = frontmatter links \u2014 regenerated by `hub moc`.",
+          "cite": "sidequests/_claims-schema.md:Record schema"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Which of these is a claim-ledger confidence value?",
+          "options": ["high", "probable", "strong", "medium"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "A claim is `accepted` only after:",
+          "options": [
+            "any lane agrees",
+            "a \u22651 real-data re-check",
+            "one week passes",
+            "the owner writes it"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The MoC is:",
+          "options": [
+            "a Mermaid map of contents, nodes = sittings",
+            "a monthly report",
+            "a meeting minutes file",
+            "a pricing table"
+          ],
+          "answer": 0
+        }
+      ]
+    }
+  ]
+}

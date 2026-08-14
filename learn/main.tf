@@ -1,9 +1,11 @@
 # talvi learn — the Tribunal Learn course, mounted at app.ygdcbtmc4u.uk/learn.
 #
-# PR2 is the inert skeleton (NID-97): own state key, D1 talvi-learn-meta
-# (created here but not bound — the binding lands in PR4 with the data layer),
-# the /learn route, and a worker that serves only /learn/healthz plus a
-# coming-soon placeholder. No auth (PR3), no data layer (PR4). Full
+# PR6 is the UI step (NID-109): full playable loop (path graph, lesson player,
+# gamification) on top of the Clerk gate (PR3), the D1 ledger (PR4), and the
+# bundled curriculum (PR5). PR3–PR5 were not yet merged when PR6 was opened, so
+# this PR implements against the blueprint spec and carries their pieces
+# (auth.js, store.js, curriculum.js, content-lint) so the loop is playable end
+# to end — the PR body says exactly which dependencies are unmerged. Full
 # architecture: plans/talvi-learn-blueprint.md.
 terraform {
   required_providers {
@@ -48,27 +50,67 @@ variable "talvi_zone_id" {
   type = string
 }
 
+# Clerk bindings (PR3) — the in-worker session gate verifies the host-wide
+# __session cookie with @clerk/backend + jwtKey (networkless). ALL THREE keys
+# are required; authenticateRequest throws without the publishable key.
+variable "clerk_secret_key" {
+  type = string
+}
+
+variable "clerk_publishable_key" {
+  type = string
+}
+
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # Learn's own D1 database (decision 3) — separate from talvi-meta and
-# talvi-blue-meta (release isolation). Created here in PR2 as the resource; the
-# worker binding lands in PR4 with the data layer. No schema exists yet — the
-# CREATE TABLE IF NOT EXISTS DDL ships in PR4 (learn/src/lib/store.js).
+# talvi-blue-meta (release isolation). Created in PR2 as the resource; the
+# worker binding lands with the data layer (this PR). The CREATE TABLE IF NOT
+# EXISTS DDL ships in learn/src/lib/store.js (blueprint B.4).
 resource "cloudflare_d1_database" "talvi_learn_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-learn-meta"
   read_replication = { mode = "disabled" }
 }
 
-# The learn Worker — tiny in PR2 (healthz + placeholder), so `content =
-# file(...)` is fine (green/hub pattern; content_file + content_sha256 only
-# becomes necessary past ~5 MB). No bindings yet — Clerk (PR3) and D1 (PR4)
-# add them. NO `migrations` block — no Durable Objects, and a stale one would
-# be re-sent on every apply (hub/relay record, code 10074).
+# The learn Worker — the full PR6 worker. nodejs_compat is required by
+# @clerk/backend (the networkless JWT verifier), same as green/blue/relay/hub.
+# NO `migrations` block — no Durable Objects, and a stale one would be re-sent
+# on every apply (hub/relay record, code 10074).
 resource "cloudflare_workers_script" "talvi_learn" {
-  account_id         = var.cloudflare_account_id
-  script_name        = "talvi-learn"
-  main_module        = "index.js"
-  content            = file("${path.module}/dist/index.js") # built by esbuild in CI
-  compatibility_date = "2026-08-14"
+  account_id          = var.cloudflare_account_id
+  script_name         = "talvi-learn"
+  main_module         = "index.js"
+  content             = file("${path.module}/dist/index.js") # built by esbuild in CI
+  compatibility_date  = "2026-08-14"
+  compatibility_flags = ["nodejs_compat"]
+
+  bindings = [
+    # The ledger — xp_events append-only + derived lesson_progress/player_state
+    # + checkpoint_verdicts (decision 3, blueprint B.4).
+    { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_learn_meta.id },
+
+    # Clerk auth — learn verifies the host-wide __session cookie in-worker
+    # (decision 2 / B.2). CLERK_SECRET_KEY is a secret_text binding (never in
+    # state); the publishable and JWT keys are public by design.
+    {
+      type = "secret_text"
+      name = "CLERK_SECRET_KEY"
+      text = var.clerk_secret_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_PUBLISHABLE_KEY"
+      text = var.clerk_publishable_key
+    },
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = var.clerk_jwt_key
+    },
+  ]
 }
 
 # Routes: app.ygdcbtmc4u.uk/learn (exact) and /learn/*. The hub owns the `/*`

@@ -1,0 +1,214 @@
+{
+  "unit": {
+    "id": "u1",
+    "title": "Inception & \u201cformalize thinly\u201d",
+    "moc": "the tribunal's vocabulary \u2014 the thesis \u2014 what it is/is not \u2014 the core loop \u2014 the name"
+  },
+  "checkpoint": {
+    "id": "c1",
+    "title": "Checkpoint 1 \u2014 gate",
+    "prompt": "Reproduce the vocabulary and the thesis, and name the thing the tribunal is NOT. Write a short verdict.",
+    "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
+  },
+  "lessons": [
+    {
+      "id": "u1l1",
+      "title": "The tribunal's vocabulary",
+      "skill": "vocabulary",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The tribunal's vocabulary runs: *the Living Tribunal* (the system) \u2192 *sitting* (one problem) \u2192 *quorum* (the multi-model vote) \u2192 *convergence* (the verdict). The `hub` CLI is the machinery; the name is the model.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "One problem run through the tribunal is called a:",
+          "options": ["quorum", "sitting", "convergence", "ledger"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The multi-model vote over that problem is the:",
+          "options": ["sitting", "verdict", "quorum", "intake"],
+          "answer": 2
+        },
+        {
+          "type": "complete",
+          "prompt": "The chain is: ___ \u2192 sitting \u2192 quorum \u2192 ___.",
+          "bank": ["the Living Tribunal", "convergence", "the ledger", "fanout"],
+          "answer": ["the Living Tribunal", "convergence"]
+        }
+      ]
+    },
+    {
+      "id": "u1l2",
+      "title": "The thesis: formalize thinly",
+      "skill": "thesis",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Formalize THINLY: the value is discipline (independence, grounding, recorded dissent), not machinery. The blueprint document + the intake template + the ledger + the `hub` CLI = the whole system.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
+        },
+        {
+          "text": "The verdict: \u201cformalize \u2014 thinly.\u201d The habit already caught a wrong model claim, audited a session report, and shipped a migration blueprint \u2014 more validation than most tools get.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a710 Verdict"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Formalize thinly means the value is the ___ , not the machinery.",
+          "options": ["models", "discipline", "interface", "language"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Which of these is NOT part of \u201cthe whole system\u201d?",
+          "options": [
+            "the blueprint document",
+            "the intake template",
+            "the ledger",
+            "the hosting provider"
+          ],
+          "answer": 3
+        },
+        {
+          "type": "listen",
+          "prompt": "Type the thesis sentence you just heard.",
+          "text": "The value is discipline, not machinery."
+        }
+      ]
+    },
+    {
+      "id": "u1l3",
+      "title": "What it is / is NOT",
+      "skill": "scope",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The tribunal takes a problem, routes the SAME brief through independent model lanes, forces them to challenge each other, grounds the result, and returns ONE converged, evidence-cited answer.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+        },
+        {
+          "text": "It is NOT: a build environment, a chat playground, an agent orchestrator for long-running work, a replacement for reading primary docs, or a destination for lab data or secrets.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Which is a true statement about what the tribunal returns?",
+          "options": [
+            "unconverged raw lane dumps",
+            "ONE converged, evidence-cited answer",
+            "a chat log",
+            "a git commit"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The tribunal IS NOT:",
+          "options": [
+            "a way to route the same brief to independent lanes",
+            "grounded in the second brain",
+            "a build environment that returns commits",
+            "a way to force lanes to challenge each other"
+          ],
+          "answer": 2
+        },
+        {
+          "type": "match",
+          "prompt": "Match each scope fact to its side.",
+          "pairs": [
+            { "left": "routes the same brief", "right": "is" },
+            { "left": "returns commits", "right": "is NOT" },
+            { "left": "a chat playground", "right": "is NOT" },
+            { "left": "evidence-cited answer", "right": "is" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u1l4",
+      "title": "The core loop",
+      "skill": "core-loop",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The core loop: Intake \u2192 Triage \u2192 Ground \u2192 Route (blind) \u2192 Converge \u2192 Verify \u2192 Record. Independence is the product: each lane sees the SAME brief and no lane sees another's output until convergence.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+        },
+        {
+          "text": "Verify means against the artifact the user runs \u2014 run it, grep the repo, read the vendor doc. Never model agreement alone.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "order",
+          "prompt": "Put the core loop steps in order.",
+          "options": ["Converge", "Ground", "Intake", "Verify", "Route", "Triage", "Record"],
+          "answer": ["Intake", "Triage", "Ground", "Route", "Converge", "Verify", "Record"]
+        },
+        {
+          "type": "select",
+          "prompt": "Why are lanes routed blind?",
+          "options": [
+            "to save tokens",
+            "independence is the product",
+            "lanes are not trusted",
+            "to speed up convergence"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "What does \u201cverify\u201d mean in the loop?",
+          "options": [
+            "model agreement",
+            "a second blind vote",
+            "checking against the artifact the user runs",
+            "reading the verdict twice"
+          ],
+          "answer": 2
+        }
+      ]
+    },
+    {
+      "id": "u1l5",
+      "title": "Naming & the Quorum recommendation",
+      "skill": "naming",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "\u201cQuorum\u201d was real Claude's proposal and it names the property that makes the hub work \u2014 you need a quorum of independent voices, not one. \u201cCrossbench\u201d is the runner-up.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Which name was recommended, and why?",
+          "options": [
+            "PolyModel Hub \u2014 because it is generic",
+            "Crossbench \u2014 because it is short",
+            "Quorum \u2014 because it names the independence property",
+            "Sounding Board \u2014 because it is evocative"
+          ],
+          "answer": 2
+        },
+        {
+          "type": "select",
+          "prompt": "The runner-up name was:",
+          "options": ["Quorum", "Crossbench", "Sounding Board", "PolyModel Hub"],
+          "answer": 1
+        }
+      ]
+    }
+  ]
+}

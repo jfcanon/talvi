@@ -4,9 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js"
+    "build": "node scripts/content-lint.mjs && node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js",
+    "test:grade": "node scripts/grade-test.mjs",
+    "test:curriculum": "node scripts/content-lint.mjs && node scripts/curriculum-test.mjs",
+    "test:server": "npm run build && node scripts/worker-smoke-test.mjs",
+    "test": "npm run test:grade && npm run test:curriculum && npm run test:server"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.16.1"
   }
 }

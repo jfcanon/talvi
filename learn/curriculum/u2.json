@@ -1,0 +1,260 @@
+{
+  "unit": {
+    "id": "u2",
+    "title": "Harness engineering fundamentals",
+    "moc": "agent = model + harness \u2014 eight components \u2014 harness beats model \u2014 failure statistics \u2014 the tribunal's map \u2014 sensors proven"
+  },
+  "checkpoint": {
+    "id": "c2",
+    "title": "Checkpoint 2 \u2014 gate",
+    "prompt": "Classify a fictional system against the eight harness components and say which layer the tribunal itself was weakest in.",
+    "cite": "sidequests/harness-baseline/verdict.md:Component map"
+  },
+  "lessons": [
+    {
+      "id": "u2l1",
+      "title": "Agent = Model + Harness",
+      "skill": "harness",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Agent = Model + Harness. The model reasons; the harness is everything around it: what it sees, what it can do, how it recovers. Distinct from prompt engineering and model selection.",
+          "cite": "sidequests/harness-baseline/intake.md:Grounding"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "What is the harness?",
+          "options": [
+            "the reasoning model",
+            "everything around the model \u2014 what it sees, what it can do, how it recovers",
+            "the training data",
+            "the user interface only"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "Harness engineering is distinct from:",
+          "options": [
+            "model selection and prompt engineering",
+            "deployment",
+            "caching",
+            "logging"
+          ],
+          "answer": 0
+        },
+        {
+          "type": "listen",
+          "prompt": "Type the formula you just heard.",
+          "text": "Agent equals model plus harness."
+        }
+      ]
+    },
+    {
+      "id": "u2l2",
+      "title": "The eight harness components",
+      "skill": "components",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The standard harness inventory: guides (feedforward: AGENTS.md, conventions) \u00b7 sensors (feedback: linters, LLM-as-judge) \u00b7 memory/state \u00b7 tool-execution layer \u00b7 guardrails (policy) \u00b7 loop controller \u00b7 verification layer \u00b7 failure handler / escalation.",
+          "cite": "sidequests/harness-baseline/verdict.md:Component map"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "match",
+          "prompt": "Match each component to its role.",
+          "pairs": [
+            { "left": "guides", "right": "feedforward" },
+            { "left": "sensors", "right": "feedback" },
+            { "left": "guardrails", "right": "policy" },
+            { "left": "verification", "right": "checking the output" }
+          ]
+        },
+        {
+          "type": "select",
+          "prompt": "Which component is the FEEDFORWARD layer?",
+          "options": ["sensors", "guides", "failure handler", "loop controller"],
+          "answer": 1
+        },
+        {
+          "type": "complete",
+          "prompt": "The eight components: guides, sensors, ___, tool-execution, guardrails, loop controller, ___, failure handler.",
+          "bank": ["memory/state", "verification", "caching", "routing"],
+          "answer": ["memory/state", "verification"]
+        }
+      ]
+    },
+    {
+      "id": "u2l3",
+      "title": "Harness changes beat model changes",
+      "skill": "harness-gains",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Evidence cited in the literature: harness changes outperform model changes (5\u201314 benchmark points, \u221220% tokens, same model); Manus rewrote its harness 5x in 6 months with the same model.",
+          "cite": "sidequests/harness-baseline/intake.md:Grounding"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Harness changes reportedly delivered:",
+          "options": [
+            "5\u201314 benchmark points and \u221220% tokens on the same model",
+            "1\u20132 points at double the cost",
+            "no measurable change",
+            "a larger model requirement"
+          ],
+          "answer": 0
+        },
+        {
+          "type": "select",
+          "prompt": "Manus rewrote its harness ___ in 6 months with the same model.",
+          "options": ["once", "twice", "5x", "never"],
+          "answer": 2
+        },
+        {
+          "type": "select",
+          "prompt": "The moral of this lesson is:",
+          "options": [
+            "buy a bigger model",
+            "improve the harness around the model",
+            "change models monthly",
+            "remove the harness"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u2l4",
+      "title": "The failure statistics",
+      "skill": "statistics",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "~88% of agent projects never reach production; ~27% of failures trace to data quality; weak verification is the most-skipped layer (\u201cmodels say done when they're not done\u201d; non-empty output is a trivial check).",
+          "cite": "sidequests/harness-baseline/intake.md:Grounding"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "About what share of agent projects never reach production?",
+          "options": ["~27%", "~50%", "~88%", "~12%"],
+          "answer": 2
+        },
+        {
+          "type": "select",
+          "prompt": "~27% of failures trace to:",
+          "options": ["hardware", "data quality", "cost", "UI"],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The most-skipped layer is:",
+          "options": ["verification", "guards", "routing", "logging"],
+          "answer": 0
+        }
+      ]
+    },
+    {
+      "id": "u2l5",
+      "title": "The tribunal's component map",
+      "skill": "tribunal-map",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "The tribunal's map: Memory/state is Strong (files-only, proven clean-session bootstrap); Guardrails are Strong (structural: DeepSeek-once, secret\u2192oc-qw, MAX_LANES=4); Sensors are Weak (byte counts = the \u201ctrivial check\u201d the literature warns about); Verification is \u201cdoctrine, not machinery\u201d \u2014 the most-skipped layer.",
+          "cite": "sidequests/harness-baseline/verdict.md:Component map"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Which layers of the tribunal are STRONGEST?",
+          "options": [
+            "sensors and verification",
+            "memory/state and guardrails",
+            "loop controller and failure handler",
+            "tool layer and guides"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The tribunal's sensors are weak because:",
+          "options": [
+            "they are too expensive",
+            "byte count is the \u201ctrivial check\u201d the literature warns about",
+            "there are too many of them",
+            "they run on the wrong lane"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The tribunal's verification was described as:",
+          "options": [
+            "mechanized gates",
+            "doctrine, not machinery",
+            "a live test suite",
+            "an eval harness"
+          ],
+          "answer": 1
+        }
+      ]
+    },
+    {
+      "id": "u2l6",
+      "title": "Sensors, proven",
+      "skill": "sensors",
+      "xp": 10,
+      "facts": [
+        {
+          "text": "Two live defects proved the sensor gap: (1) `class: lane-benchmark` auto-picked 5 lanes, failing MAX_LANES=4 AND violating the DeepSeek-once guard; (2) `hub verdict` used substring match, so a slug that is a substring of another rewrote the wrong ledger row.",
+          "cite": "sidequests/harness-baseline/verdict.md:Live defects found"
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "The lane-benchmark defect was:",
+          "options": [
+            "too few lanes were picked",
+            "5 lanes were auto-picked, failing MAX_LANES=4 and DeepSeek-once",
+            "the verdict never recorded",
+            "the gate never ran"
+          ],
+          "answer": 1
+        },
+        {
+          "type": "select",
+          "prompt": "The `hub verdict` defect was:",
+          "options": [
+            "substring match could rewrite the wrong ledger row",
+            "it refused to run",
+            "it only worked on Windows",
+            "it duplicated rows"
+          ],
+          "answer": 0
+        },
+        {
+          "type": "select",
+          "prompt": "Why do these matter as a lesson?",
+          "options": [
+            "they are cosmetic bugs",
+            "both are exactly the sensor gap they prove",
+            "they only affect one lane",
+            "they were unreproducible"
+          ],
+          "answer": 1
+        }
+      ]
+    }
+  ]
+}

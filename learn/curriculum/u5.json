@@ -1,0 +1,61 @@
+{
+  "unit": {
+    "id": "u5",
+    "title": "Operational reality (GATED)",
+    "moc": "GATED \u2014 nothing in this unit ships until a factcheck sitting against the real cinto repo verifies the underlying claims"
+  },
+  "checkpoint": {
+    "id": "c5",
+    "title": "Checkpoint 5 \u2014 gate (GATED)",
+    "prompt": "GATED alongside the unit. Nothing in Unit 5 ships until the underlying claims are verified against the real cinto repo.",
+    "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+  },
+  "gated": true,
+  "gated_reason": "The '7-FTE org' figure and all Cinto operational details are UNVERIFIED in the grounding corpus and must not be asserted as fact. This unit is GATED behind a factcheck sitting against the real cinto repo.",
+  "lessons": [
+    {
+      "id": "u5l1",
+      "title": "Cost counter & win-rate-per-dollar (GATED)",
+      "skill": "gated",
+      "xp": 0,
+      "gated": true,
+      "gated_reason": "blocked by verified cost figures",
+      "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11",
+      "facts": [],
+      "exercises": []
+    },
+    {
+      "id": "u5l2",
+      "title": "VPS offload (GATED)",
+      "skill": "gated",
+      "xp": 0,
+      "gated": true,
+      "gated_reason": "blocked by unverified infra claim",
+      "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11",
+      "facts": [],
+      "exercises": []
+    },
+    {
+      "id": "u5l3",
+      "title": "Board kill criterion (GATED)",
+      "skill": "gated",
+      "xp": 0,
+      "gated": true,
+      "gated_reason": "blocked by board not yet built",
+      "cite": "sidequests/plan-convergence/verdict.md:Phase 1",
+      "facts": [],
+      "exercises": []
+    },
+    {
+      "id": "u5l4",
+      "title": "Cinto / '7-FTE org' operational reality (GATED)",
+      "skill": "gated",
+      "xp": 0,
+      "gated": true,
+      "gated_reason": "UNVERIFIED \u2014 factcheck sitting required",
+      "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11",
+      "facts": [],
+      "exercises": []
+    }
+  ]
+}
