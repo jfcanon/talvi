@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js",
+    "build": "node scripts/content-lint.mjs && node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --legal-comments=none --outfile=dist/index.js",
     "test:data": "npm run build && node scripts/data-smoke-test.mjs",
-    "test": "npm run test:data"
+    "test:curriculum": "node scripts/content-lint.mjs && node scripts/curriculum-test.mjs",
+    "test": "npm run build && node scripts/data-smoke-test.mjs && node scripts/curriculum-test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
