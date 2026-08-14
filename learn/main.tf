@@ -1,11 +1,11 @@
 # talvi learn — the Tribunal Learn course, mounted at app.ygdcbtmc4u.uk/learn.
 #
-# PR2 was the inert skeleton (NID-97): own state key, D1 talvi-learn-meta
-# (created here but not bound — the binding lands in PR4 with the data layer),
-# the /learn route, and a worker that serves only /learn/healthz plus a
-# coming-soon placeholder. PR3 (NID-98) adds the Clerk owner-only gate (decision
-# 2): three Clerk bindings + nodejs_compat. No data layer (PR4). Full
-# architecture: plans/talvi-learn-blueprint.md.
+# PR4 is the D1 data layer + gamification API step (NID-99): the D1 binding
+# lands here, and — because PR3 (Clerk gate, NID-98) had not merged when this
+# PR opened — the Clerk bindings are carried inside, documented as an unmerged
+# dependency (the learn-6-ui precedent, #149). The worker serves /learn/healthz
+# plus the gated gamification APIs (/learn/api/state, /learn/api/complete,
+# /learn/api/curriculum). Full architecture: plans/talvi-learn-blueprint.md.
 terraform {
   required_providers {
     cloudflare = {
@@ -49,11 +49,10 @@ variable "talvi_zone_id" {
   type = string
 }
 
-# Clerk auth (PR3, decision 2). Secret key is a secret_text binding so it never
-# appears in state; the publishable key is public by design and ships as plain
-# text. The JWT key is Clerk's public verification key (PEM) — also public, but
-# stored in Bitwarden with its peers; passing it as jwtKey makes session
-# verification networkless (green's Step 8 pattern, same as blue/hub/relay).
+# Clerk bindings (carried PR3) — the in-worker session gate verifies the
+# host-wide __session cookie with @clerk/backend + jwtKey (networkless). ALL
+# THREE keys are required; authenticateRequest throws without the publishable
+# key.
 variable "clerk_secret_key" {
   type = string
 }
@@ -67,40 +66,35 @@ variable "clerk_jwt_key" {
 }
 
 # Learn's own D1 database (decision 3) — separate from talvi-meta and
-# talvi-blue-meta (release isolation). Created here in PR2 as the resource; the
-# worker binding lands in PR4 with the data layer. No schema exists yet — the
-# CREATE TABLE IF NOT EXISTS DDL ships in PR4 (learn/src/lib/store.js).
+# talvi-blue-meta (release isolation). Created in PR2 as the resource; the
+# worker binding lands here with the data layer. The CREATE TABLE IF NOT
+# EXISTS DDL ships in learn/src/lib/store.js (converged PR4 schema).
 resource "cloudflare_d1_database" "talvi_learn_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-learn-meta"
   read_replication = { mode = "disabled" }
 }
 
-# The learn Worker — PR3 adds the Clerk owner-only gate (three bindings) and
-# nodejs_compat (@clerk/backend's networkless JWT verifier needs it — same as
-# relay, relay/main.tf:83). `content = file(...)` is fine (green/hub pattern;
-# content_file + content_sha256 only becomes necessary past ~5 MB). D1 binds in
-# PR4. NO `migrations` block — no Durable Objects, and a stale one would be
+# The learn Worker — the PR4 worker. nodejs_compat is required by
+# @clerk/backend (the networkless JWT verifier), same as green/blue/relay/hub.
+# NO `migrations` block — no Durable Objects, and a stale one would be
 # re-sent on every apply (hub/relay record, code 10074).
 resource "cloudflare_workers_script" "talvi_learn" {
-  account_id         = var.cloudflare_account_id
-  script_name        = "talvi-learn"
-  main_module        = "index.js"
-  content            = file("${path.module}/dist/index.js") # built by esbuild in CI
-  compatibility_date = "2026-08-14"
-
-  # nodejs_compat: @clerk/backend (the networkless JWT verifier) is built for
-  # the Node.js compat layer — same flag relay uses for the identical gate
-  # (relay/main.tf:83). Without it authenticateRequest throws at runtime.
+  account_id          = var.cloudflare_account_id
+  script_name         = "talvi-learn"
+  main_module         = "index.js"
+  content             = file("${path.module}/dist/index.js") # built by esbuild in CI
+  compatibility_date  = "2026-08-14"
   compatibility_flags = ["nodejs_compat"]
 
   bindings = [
-    # Clerk auth — the learn gate verifies the host-wide __session cookie with
-    # @clerk/backend + jwtKey. ALL THREE keys are required: authenticateRequest
-    # needs the secret key, publishableKey, and jwtKey (the blue/hub/relay
-    # shapes; missing one = fail-closed, per src/lib/auth.js). CLERK_SECRET_KEY
-    # is a secret_text binding (never in state); the publishable and JWT keys
-    # are public by design (plain_text).
+    # The D1 data layer — xp_events append-only ledger + derived
+    # lesson_progress/player_state (decision 3, converged PR4 schema).
+    { type = "d1", name = "DB", id = cloudflare_d1_database.talvi_learn_meta.id },
+
+    # Clerk auth (carried PR3) — learn verifies the host-wide __session cookie
+    # in-worker (decision 2 / B.2). CLERK_SECRET_KEY is a secret_text binding
+    # (never in state); the publishable and JWT keys are public by design.
     {
       type = "secret_text"
       name = "CLERK_SECRET_KEY"

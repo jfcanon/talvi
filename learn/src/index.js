@@ -1,19 +1,28 @@
 // talvi learn Worker — the Tribunal Learn course, mounted at
 // app.ygdcbtmc4u.uk/learn (blueprint B.1).
 //
-// PR2 was the inert skeleton: it proved the whole pipeline before any logic
-// existed. PR3 adds the Clerk owner-only gate (blueprint decision 2): every
-// /learn/* route is deny-by-default. ONLY /learn/healthz and the versioned
-// asset paths /learn/s.css, /learn/s.js stay public. Everything else requires
-// a valid __session cookie — unauthenticated → 401 (API) / redirect to the
-// hub's /sign-in (page). No lesson markup ever served unauthenticated.
+// PR4 is the D1 data layer + gamification API step (NID-99). It sits on the
+// PR2 skeleton and carries the PR3 Clerk gate (NID-98, unmerged when this PR
+// opened — see learn/src/lib/auth.js) so every route below is deny-by-default.
 //
-// CSP default-src 'none' from day one: css/js live at /learn/s.css and
-// /learn/s.js, never inlined (A security decision driving a build decision,
-// decision 2 / B.5). The Clerk gate does NOT weaken the CSP — learn serves no
-// sign-in page (the hub owns /sign-in), so no clerk-js, no inline, no eval.
+// Routes (all deny-by-default except healthz):
+//   GET  /learn/healthz            public — the PR2 live-verify target
+//   GET  /learn/                   Clerk-gated — coming-soon placeholder
+//   GET  /learn/api/state          Clerk-gated — aggregated player state
+//   POST /learn/api/complete       Clerk-gated — complete a lesson, append one
+//                                  xp_event, refresh derived tables (idempotent
+//                                  per lesson: double-POST does not double-XP)
+//   GET  /learn/api/curriculum     Clerk-gated — curriculum JSON (placeholder
+//                                  shape until PR5 fills the content)
+//   everything else                uniform 404
+//
+// Sign-in lives at the app ROOT (served by the hub); learn verifies the
+// host-wide __session cookie and redirects — it never serves sign-in itself
+// (blueprint B.1/B.2). CSP default-src 'none' from day one.
 import { PREFIX } from "./prefix.js";
-import { isAuthenticated } from "./lib/auth.js";
+import { getUserId } from "./lib/auth.js";
+import * as store from "./lib/store.js";
+import { getCurriculum } from "./lib/curriculum.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
 
@@ -31,14 +40,8 @@ const HTML_HEADERS = {
   "x-robots-tag": ROBOTS_TAG,
 };
 
-// JSON headers for API 401s — same CSP/headers, different content-type so a
-// fetch client knows it is JSON, not HTML.
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
-  "content-security-policy":
-    "default-src 'none'; style-src 'self'; script-src 'self'; " +
-    "img-src 'self' data:; connect-src 'self'; form-action 'none'; " +
-    "frame-ancestors 'none'; base-uri 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
   "cache-control": "no-store",
@@ -51,8 +54,13 @@ function notFound() {
   return new Response("not found", { status: 404, headers: HTML_HEADERS });
 }
 
-// The coming-soon placeholder. Deliberately bare: it carries the strict CSP
-// and robots tag, and nothing else — the PR6 UI replaces it.
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+}
+
+// The coming-soon placeholder (PR2, still gated). Deliberately bare: it
+// carries the strict CSP and robots tag, and nothing else — the PR6 UI
+// replaces it.
 function comingSoonPage() {
   return new Response(
     "<!doctype html><html lang=\"en\"><head>" +
@@ -63,65 +71,21 @@ function comingSoonPage() {
   );
 }
 
-// Redirect to the hub's sign-in page (blueprint B.1/B.2). Learn never serves
-// sign-in itself — /sign-in is a hub-owned route. The redirect is 302 to the
-// app root so the hub's sign-in surface takes over.
-function redirectToSignIn(request) {
-  const url = new URL(request.url);
-  const signIn = new URL("/sign-in", url.origin);
-  // Clerk's hosted/custom sign-in can honour a redirect-back param, but learn
-  // does not configure one — after sign-in the user lands on the hub root and
-  // navigates to /learn. Adding an unchecked redirect param would be an open
-  // redirect; the hub owns that surface, not learn.
-  return new Response(null, {
-    status: 302,
-    headers: { location: signIn.toString(), "x-robots-tag": ROBOTS_TAG },
-  });
-}
-
-// 401 JSON for API paths — a fetch client gets a structured refusal, not a
-// redirect it would follow into an HTML page.
-function unauthorizedApi() {
-  return new Response(JSON.stringify({ error: "unauthorized" }), {
-    status: 401,
-    headers: JSON_HEADERS,
-  });
-}
-
-// The public routes that the gate never touches (blueprint B.1 route table):
-//   /healthz — the one anonymous content route (liveness check)
-//   /s.css   — versioned path-prefixed asset (A11: CSP forbids inlining)
-//   /s.js    — same
-// Everything else under /learn/* is Clerk-gated.
-const PUBLIC_PATHS = new Set(["/healthz", "/s.css", "/s.js"]);
-
-function isPublic(path) {
-  return PUBLIC_PATHS.has(path);
-}
-
-// API paths return 401 JSON; page paths redirect to /sign-in. An API path is
-// anything under /api/ — the blueprint maps /learn/api/* as the gamification
-// surface (PR4). HEAD is treated as the page shape (302), matching how
-// Cloudflare routes HEAD as GET.
-function isApiPath(path) {
-  return path === "/api" || path.startsWith("/api/");
-}
-
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
 
-    // GET and HEAD only. HEAD is routed as GET by Cloudflare; anything else is
-    // a miss.
-    if (request.method !== "GET" && request.method !== "HEAD") return notFound();
+    // GET, HEAD and POST only. HEAD is routed as GET by Cloudflare; anything
+    // else is a miss.
+    if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "POST") {
+      return notFound();
+    }
 
-    // Strip the /learn prefix (src/prefix.js).
-    if (!pathname.startsWith(PREFIX)) return notFound();
+    if (!pathname.startsWith(PREFIX + "/") && pathname !== PREFIX) return notFound();
     const path = pathname.slice(PREFIX.length) || "/";
 
-    // /learn/healthz is the one public content route — never gated, never
-    // rate limited: an uptime check that trips a limiter reports an outage
-    // that is not happening.
+    // Public: healthz (never rate limited — an uptime check that trips a
+    // limiter reports an outage that is not happening).
     if (path === "/healthz") {
       return new Response("ok", {
         status: 200,
@@ -129,39 +93,61 @@ export default {
       });
     }
 
-    // Versioned asset paths are public (A11: the strict CSP forbids inlining,
-    // so css/js MUST be servable as files). The build pipeline (PR6) appends
-    // ?v=<hash> for immutable caching; the path itself is stable.
-    if (path === "/s.css" || path === "/s.js") {
-      // PR2/PR3 skeleton: the asset files are placeholder stubs (1 byte).
-      // The real content ships in PR6. Return an empty 200 with the correct
-      // content-type so the CSP does not break and a 404 does not leak.
-      const contentType =
-        path === "/s.css" ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8";
-      return new Response("", {
-        status: 200,
-        headers: {
-          "content-type": contentType,
-          "cache-control": "public, max-age=31536000, immutable",
-          "x-content-type-options": "nosniff",
-          "x-robots-tag": ROBOTS_TAG,
-        },
-      });
+    // ---- Clerk-gated below ---- (deny-by-default, decision 2 / carried PR3)
+    // A single authenticated check supplies the user id for the per-user
+    // schema; a null id is the same as no cookie for the gate.
+    const userId = await getUserId(request, env);
+    if (!userId) {
+      // API paths answer 401 regardless of method; pages redirect to the hub's
+      // sign-in (app root, blueprint B.1).
+      if (request.method === "POST" || path.startsWith("/api/")) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      const signIn = new URL("/sign-in", request.url);
+      signIn.searchParams.set("redirect", pathname);
+      return Response.redirect(signIn.toString(), 302);
     }
 
-    // --- Clerk gate (PR3, decision 2) ---
-    // Deny-by-default: every /learn/* route that is not healthz or an asset
-    // requires a valid __session. No valid cookie → 401 (API) / 302 to
-    // /sign-in (page). No lesson markup ever served unauthenticated.
-    const authed = await isAuthenticated(request, env);
-    if (!authed) {
-      return isApiPath(path) ? unauthorizedApi() : redirectToSignIn(request);
+    // ---- API ----
+    if (request.method === "GET" && path === "/api/state") {
+      const state = await store.readState(env.DB, userId);
+      return json(state);
     }
 
-    // --- Authenticated routes below this line ---
+    if (request.method === "POST" && path === "/api/complete") {
+      return handleComplete(request, env, userId);
+    }
 
-    if (path === "/" || path === "") return comingSoonPage();
+    if (request.method === "GET" && path === "/api/curriculum") {
+      return json({ curriculum: getCurriculum() });
+    }
+
+    // ---- Pages ----
+    if (request.method === "GET" && (path === "/" || path === "")) {
+      return comingSoonPage();
+    }
 
     return notFound();
   },
 };
+
+// Complete a lesson: evaluate server-side, append one xp_event, refresh the
+// derived tables. Body: { lesson_id, skill } (snake_case per the PR4 brief;
+// camelCase lessonId is accepted for robustness). Idempotent per lesson.
+async function handleComplete(request, env, userId) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const lessonId = typeof payload.lesson_id === "string" ? payload.lesson_id : payload.lessonId;
+  const skill = typeof payload.skill === "string" ? payload.skill : "lesson";
+  if (typeof lessonId !== "string" || !lessonId) {
+    return json({ error: "missing lesson_id" }, 400);
+  }
+
+  const ts = new Date().toISOString();
+  const result = await store.recordCompletion(env.DB, userId, { lessonId, skill, ts });
+  return json({ ok: true, ...result });
+}
