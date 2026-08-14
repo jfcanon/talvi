@@ -910,3 +910,153 @@ motion under `prefers-reduced-motion` (camera-from-scroll still runs — that is
 the user's action). Captions and the page shell are `src/ui/page.js`;
 `src/ui/style.css` carries the tokens and the film overlays verbatim from
 talvi's page.
+
+---
+
+## 11. Learn — app.ygdcbtmc4u.uk/learn (the Tribunal Learn course)
+
+The Tribunal Learn course (PR7, NID-102) is a standalone Worker mounted at
+`/learn` on the hub host. It has its own D1 database, its own CI workflow, and
+its own Terraform state — complete release isolation per the blueprint.
+
+### Live URLs
+
+- **Custom host:** `https://app.ygdcbtmc4u.uk/learn` (Clerk-gated, owner-only)
+- **Workers.dev:** `https://talvi-learn.ygdcbtmc4u.workers.dev/learn` (same auth)
+- **Health check:** `/learn/healthz` (public, no auth)
+- **Assets:** `/learn/s.css?v=<hash>`, `/learn/s.js?v=<hash>` (public, immutable)
+
+### Architecture (recap from plans/talvi-learn-blueprint.md)
+
+| Layer | Decision |
+|-------|----------|
+| Worker | `talvi-learn` (nodejs_compat for @clerk/backend) |
+| Auth | Clerk — in-worker `@clerk/backend` with `jwtKey` (networkless), host-wide `__session` cookie verified, deny-by-default, only `/learn/healthz` public |
+| Database | D1 `talvi-learn-meta` (separate from `talvi-meta`/`talvi-blue-meta`) |
+| Curriculum | Static JSON bundled by esbuild (never DB), versioned with code, every fact cited |
+| Routes | `/learn` (path), `/learn/lesson/:id` (lesson), `/learn/api/xp`, `/learn/api/checkpoint`, `/learn/healthz`, `/learn/s.css`, `/learn/s.js` — everything else uniform 404 |
+| CSP | `default-src 'none'`; versioned assets only; `form-action 'none'` |
+
+### How to take the app down
+
+```bash
+# 1. Empty the learn main.tf of resources, PR it, merge
+#    CI's apply destroys the Worker, D1 database, and routes.
+# 2. The Terraform state key is talvi/learn/terraform.tfstate in talvi-tfstate.
+# 3. Do NOT delete the state bucket (talvi-tfstate) — shared with other apps.
+```
+
+### Inspect / back up `talvi-learn-meta` (D1 export snapshot)
+
+```bash
+# Get a token into your shell (Bitwarden → BW_SESSION → CLOUDFLARE_API_TOKEN)
+set -a; source .secrets.env; set +a
+BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
+export CLOUDFLARE_API_TOKEN=$(bw get password talvicftoken --session "$BW_SESSION")
+
+# List tables
+npx wrangler d1 execute talvi-learn-meta --remote --command ".tables"
+
+# Full dump (JSONL, one row per line)
+npx wrangler d1 execute talvi-learn-meta --remote --command \
+  "SELECT * FROM xp_events" > xp_events.jsonl
+npx wrangler d1 execute talvi-learn-meta --remote --command \
+  "SELECT * FROM lesson_progress" > lesson_progress.jsonl
+npx wrangler d1 execute talvi-learn-meta --remote --command \
+  "SELECT * FROM player_state" > player_state.jsonl
+npx wrangler d1 execute talvi-learn-meta --remote --command \
+  "SELECT * FROM checkpoint_verdicts" > checkpoint_verdicts.jsonl
+
+# Or use the D1 export (if available in your plan)
+# npx wrangler d1 export talvi-learn-meta --remote --output learn-backup.sql
+```
+
+**Key tables:**
+- `xp_events` — append-only ledger (id, ts, lesson_id, skill, xp) — source of truth
+- `lesson_progress` — derived (lesson_id, status, attempts, mastered_at, legendary_at)
+- `player_state` — derived (player_id, streak, hearts, last_seen, updated_at)
+- `checkpoint_verdicts` — gate verdicts (checkpoint_id, verdict, submitted_at)
+
+State is rebuildable from `xp_events` alone (the files-as-ledger doctrine).
+
+### Verify auth (the "check, do not assume" curl loop)
+
+```bash
+# Public endpoint (should be 200)
+curl -sS -o /dev/null -w "%{http_code}\n" https://app.ygdcbtmc4u.uk/learn/healthz
+# expect: 200
+
+# Gated endpoints (should be 302 → sign-in, or 401 for POST)
+for p in /learn/ /learn/lesson/u1l1 /learn/api/xp /learn/api/checkpoint; do
+  printf "%-24s %s\n" "$p" "$(curl -sS -o /dev/null -w '%{http_code}' https://app.ygdcbtmc4u.uk$p)"
+done
+# expect: 302 (redirect to /sign-in?redirect=...) for GET
+# expect: 401 for POST /learn/api/xp and /learn/api/checkpoint
+
+# Assets (public, immutable cache)
+for p in /learn/s.css /learn/s.js; do
+  printf "%-16s %s\n" "$p" "$(curl -sS -o /dev/null -w '%{http_code}' https://app.ygdcbtmc4u.uk$p)"
+done
+# expect: 200
+
+# Uniform 404 (byte-identical)
+for p in /learn/does-not-exist /learn/api/unknown /learn/lesson/none; do
+  printf "%-24s %s\n" "$p" "$(curl -sS -o /dev/null -w '%{http_code}' https://app.ygdcbtmc4u.uk$p)"
+done
+# expect: 404 (all identical body: "not found")
+```
+
+**Workers.dev host must behave identically:**
+
+```bash
+for p in /learn/healthz /learn/ /learn/lesson/u1l1 /learn/s.css /learn/does-not-exist; do
+  printf "%-24s %s\n" "$p" "$(curl -sS -o /dev/null -w '%{http_code}' https://talvi-learn.ygdcbtmc4u.workers.dev$p)"
+done
+```
+
+### Deploy procedure (CI-only)
+
+1. **Edit** `learn/src/` and/or `learn/main.tf` (infrastructure).
+2. **PR** → `terraform-learn.yml` runs `plan` on the PR.
+3. **Merge** → CI runs `apply` on `main`.
+4. **NEVER** run `terraform apply` locally.
+5. **Live-verify** after apply (see curl loop above) — "CI went green" is not verification.
+6. Filter the apply by your own HEAD sha:
+   ```bash
+   gh run list --workflow terraform-learn.yml
+   # find the run whose headSha == $(git rev-parse HEAD)
+   gh run view <run-id>
+   ```
+
+### Security hygiene checklist (verify on every change)
+
+- [ ] **No secrets in code/history** — `git log --all --full-history -- learn/` + `gitleaks` in CI
+- [ ] **Guards on** — deny-by-default auth gate in `src/index.js:128-137`, only `/healthz` + assets public
+- [ ] **persist-credentials: false** — in all GitHub Actions workflows (`terraform-learn.yml`, `build-learn.yml`)
+- [ ] **Strict CSP intact** — `default-src 'none'`; grep `dist/index.js` for `unsafe-|eval\(|new Function|on(click|load|error)=` → must return 0
+- [ ] **`.workers.dev` host gated same as custom host** — deny-by-default applies to both
+- [ ] **Uniform 404s** — byte-identical "not found" for all unknown routes
+- [ ] **Clerk bindings** — `CLERK_SECRET_KEY` as `secret_text`, `CLERK_PUBLISHABLE_KEY` and `CLERK_JWT_KEY` as `plain_text` (never in state)
+- [ ] **Asset versioning** — `?v=<hash>` query on all asset requests, year-long immutable cache
+- [ ] **ISO timestamps in JS** — never SQL `datetime()`; `new Date().toISOString()` everywhere (store.js)
+
+### Live verification (the real playthrough)
+
+After deploy, run a full playthrough of Units 1–4:
+- Every lesson completable, XP/streak/mastery correct
+- Hearts optional-off path works (hearts render only when `player.heartsEnabled`)
+- Celebration + reduced-motion paths both fine
+- Mobile + desktop
+- Zero CSP violations (browser console)
+
+The browser test script (`learn/scripts/learn-browser-test.mjs`, if added) should assert:
+- Path page renders rail with all units/lessons
+- Lesson player renders exercises, grades correctly
+- XP write + path re-render works
+- Checkpoint gate opens next unit
+- Reduced-motion: no transitions, instant XP count
+- Zero own-page CSP violations
+
+---
+
+*End of RUNBOOK.md*

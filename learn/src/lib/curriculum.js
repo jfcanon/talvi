@@ -9,6 +9,9 @@
 // The path graph the UI draws is derived from this structure (the _moc.md
 // shape): units hold lessons in order; the last unit's lessons chain on, and
 // each unit's checkpoint gates the NEXT unit. MVP = Units 1–4.
+//
+// Curriculum version: 2026-08-14 — accuracy-audited against HUB-BLUEPRINT.md
+// and sidequests citations (PR7 verify pass).
 import u1 from "../../curriculum/u1.json";
 import u2 from "../../curriculum/u2.json";
 import u3 from "../../curriculum/u3.json";
@@ -16,6 +19,8 @@ import u4 from "../../curriculum/u4.json";
 import u5 from "../../curriculum/u5.json";
 
 const UNITS = [u1, u2, u3, u4, u5];
+
+export const CURRICULUM_VERSION = "2026-08-14";
 
 // Flatten once. Lessons carry an absolute id ("u2l1") so progress keys never
 // collide across units. The path graph is the unit order itself (a serpentine

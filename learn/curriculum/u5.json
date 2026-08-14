@@ -2,7 +2,8 @@
   "unit": {
     "id": "u5",
     "title": "Operational reality (GATED)",
-    "moc": "GATED \u2014 nothing in this unit ships until a factcheck sitting against the real cinto repo verifies the underlying claims"
+    "moc": "GATED \u2014 nothing in this unit ships until a factcheck sitting against the real cinto repo verifies the underlying claims",
+    "version": "2026-08-14"
   },
   "checkpoint": {
     "id": "c5",

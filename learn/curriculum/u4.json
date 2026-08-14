@@ -2,7 +2,8 @@
   "unit": {
     "id": "u4",
     "title": "Loop engineering",
-    "moc": "eval harness \u2014 instrumented gates & the seam \u2014 skills compounding \u2014 Multica: evaluate AND integrate \u2014 re-platform triggers"
+    "moc": "eval harness \u2014 instrumented gates & the seam \u2014 skills compounding \u2014 Multica: evaluate AND integrate \u2014 re-platform triggers",
+    "version": "2026-08-14"
   },
   "checkpoint": {
     "id": "c4",

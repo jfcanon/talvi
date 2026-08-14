@@ -2,7 +2,8 @@
   "unit": {
     "id": "u2",
     "title": "Harness engineering fundamentals",
-    "moc": "agent = model + harness \u2014 eight components \u2014 harness beats model \u2014 failure statistics \u2014 the tribunal's map \u2014 sensors proven"
+    "moc": "agent = model + harness \u2014 eight components \u2014 harness beats model \u2014 failure statistics \u2014 the tribunal's map \u2014 sensors proven",
+    "version": "2026-08-14"
   },
   "checkpoint": {
     "id": "c2",

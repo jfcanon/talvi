@@ -2,7 +2,8 @@
   "unit": {
     "id": "u3",
     "title": "The tribunal's own architecture",
-    "moc": "files are the only state \u2014 the hub CLI \u2014 lanes & the family rule \u2014 routing \u2014 grounding \u2014 convergence \u2014 state layout \u2014 claim ledger & MoC"
+    "moc": "files are the only state \u2014 the hub CLI \u2014 lanes & the family rule \u2014 routing \u2014 grounding \u2014 convergence \u2014 state layout \u2014 claim ledger & MoC",
+    "version": "2026-08-14"
   },
   "checkpoint": {
     "id": "c3",
