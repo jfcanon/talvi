@@ -22,22 +22,28 @@ const v = encodeURIComponent(ASSET_VERSION);
 // renders a disabled future-slot.
 const APPS = [
   {
-    glyph: "▣",
+    glyph: "��",
     label: "RELAY",
     href: "https://app.ygdcbtmc4u.uk/relay",
     title: "Talvi — file share (relay)",
   },
   {
-    glyph: "▤",
+    glyph: "��",
     label: "CHAT",
     href: "https://app.ygdcbtmc4u.uk/chat",
     title: "Chat",
   },
   {
-    glyph: "◈",
+    glyph: "��",
     label: "CINTO",
     href: "/cinto",
     title: "Cinto — compliance",
+  },
+  {
+    glyph: "��",
+    label: "LEARN",
+    href: "/learn",
+    title: "Tribunal Learn — the machinery",
   },
   {
     glyph: "＋",

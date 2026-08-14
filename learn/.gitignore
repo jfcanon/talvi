@@ -3,3 +3,7 @@
 /src/generated/
 node_modules/
 .DS_Store
+
+# local terraform state/lock (CI runs its own init)
+.terraform/
+.terraform.lock.hcl
