@@ -1,0 +1,5 @@
+# learn build output (built in CI; a Terraform input) — same rule as hub/relay
+/dist/
+/src/generated/
+node_modules/
+.DS_Store
