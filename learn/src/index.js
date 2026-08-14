@@ -1,33 +1,42 @@
 // talvi learn Worker — the Tribunal Learn course, mounted at
 // app.ygdcbtmc4u.uk/learn (blueprint B.1).
 //
-// PR4 is the D1 data layer + gamification API step (NID-99). It sits on the
-// PR2 skeleton and carries the PR3 Clerk gate (NID-98, unmerged when this PR
-// opened — see learn/src/lib/auth.js) so every route below is deny-by-default.
+// PR6 is the UI step (NID-101): the path-graph page, the lesson player, and
+// the gamification surface, on top of the PR4 data layer (D1 ledger + APIs)
+// and the PR5 curriculum content. It sits on the serial chain — this branch
+// carries the PR2 skeleton, the PR3 Clerk gate (carried inside PR4), the PR4
+// store/API, and the PR5 curriculum/content-lint.
 //
-// Routes (all deny-by-default except healthz):
-//   GET  /learn/healthz            public — the PR2 live-verify target
-//   GET  /learn/                   Clerk-gated — coming-soon placeholder
+// Routes (all deny-by-default except healthz + the two assets):
+//   GET  /learn/healthz            public — the PR2/PR6 live-verify target
+//   GET  /learn/s.css, /learn/s.js public, versioned ?v=<hash>, immutable
+//   GET  /learn/                   Clerk-gated — the path-graph page
+//   GET  /learn/lesson/<id>        Clerk-gated — the lesson player
+//   GET  /learn/gate/<id>          Clerk-gated — the checkpoint gate
 //   GET  /learn/api/state          Clerk-gated — aggregated player state
-//   POST /learn/api/complete       Clerk-gated — complete a lesson, append one
-//                                  xp_event, refresh derived tables (idempotent
-//                                  per lesson: double-POST does not double-XP)
-//   GET  /learn/api/curriculum     Clerk-gated — curriculum JSON (placeholder
-//                                  shape until PR5 fills the content)
+//   POST /learn/api/complete       Clerk-gated — complete a lesson (idempotent)
+//   GET  /learn/api/curriculum     Clerk-gated — curriculum JSON
 //   everything else                uniform 404
 //
 // Sign-in lives at the app ROOT (served by the hub); learn verifies the
 // host-wide __session cookie and redirects — it never serves sign-in itself
 // (blueprint B.1/B.2). CSP default-src 'none' from day one.
+import { STYLE_CSS, CLIENT_JS, ASSET_VERSION } from "./generated/assets.js";
 import { PREFIX } from "./prefix.js";
 import { getUserId } from "./lib/auth.js";
 import * as store from "./lib/store.js";
-import { getCurriculum } from "./lib/curriculum.js";
+import { getCurriculum, getLesson, getCheckpoint, isReachable, lessonPosition } from "./lib/curriculum.js";
+import { pathPage } from "./ui/path.js";
+import { lessonPage } from "./ui/lesson.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
 
+// Hearts are optional-off (locked decision 6). This flag mirrors the client
+// (src/ui/client.js) — it decides whether the server renders the hearts pill.
+const HEARTS_ENABLED = true;
+
 // Same header set the hub uses. The CSP has no inline allowances — which is
-// WHY css/js will be files at /learn/s.css and /learn/s.js, never inlined.
+// WHY css/js are files at /learn/s.css and /learn/s.js, never inlined.
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "content-security-policy":
@@ -48,6 +57,23 @@ const JSON_HEADERS = {
   "x-robots-tag": ROBOTS_TAG,
 };
 
+// Assets are versioned at build time (ASSET_VERSION = hash of css+js+curriculum
+// bytes) and served with a year-long immutable cache. Safe ONLY because every
+// page requests them as /learn/s.css?v=<hash> — the URL changes when the bytes
+// do, so a cached old version is never served to a new page.
+const ASSET_CACHE = "public, max-age=31536000, immutable";
+
+function assetResponse(body, contentType) {
+  return new Response(body, {
+    headers: {
+      "content-type": contentType,
+      "cache-control": ASSET_CACHE,
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": ROBOTS_TAG,
+    },
+  });
+}
+
 // One 404 for everything, byte-identical, so an observer cannot tell "never
 // existed" from "not yet built".
 function notFound() {
@@ -58,17 +84,10 @@ function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-// The coming-soon placeholder (PR2, still gated). Deliberately bare: it
-// carries the strict CSP and robots tag, and nothing else — the PR6 UI
-// replaces it.
-function comingSoonPage() {
-  return new Response(
-    "<!doctype html><html lang=\"en\"><head>" +
-      "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
-      "<title>talvi learn — coming soon</title>" +
-      "</head><body><p>talvi learn — coming soon.</p></body></html>",
-    { status: 200, headers: HTML_HEADERS },
-  );
+// Read the reduced player state once per page request (rebuilds derived tables
+// from the ledger, keeps the server truth current).
+async function readPlayerState(env, userId) {
+  return store.readState(env.DB, userId);
 }
 
 export default {
@@ -93,13 +112,14 @@ export default {
       });
     }
 
+    // Public: versioned assets. The strict CSP forbids inlining, so css/js are
+    // files (a security decision driving a build decision, decision 2).
+    if (path === "/s.css") return assetResponse(STYLE_CSS, "text/css; charset=utf-8");
+    if (path === "/s.js") return assetResponse(CLIENT_JS, "text/javascript; charset=utf-8");
+
     // ---- Clerk-gated below ---- (deny-by-default, decision 2 / carried PR3)
-    // A single authenticated check supplies the user id for the per-user
-    // schema; a null id is the same as no cookie for the gate.
     const userId = await getUserId(request, env);
     if (!userId) {
-      // API paths answer 401 regardless of method; pages redirect to the hub's
-      // sign-in (app root, blueprint B.1).
       if (request.method === "POST" || path.startsWith("/api/")) {
         return json({ error: "unauthorized" }, 401);
       }
@@ -110,7 +130,7 @@ export default {
 
     // ---- API ----
     if (request.method === "GET" && path === "/api/state") {
-      const state = await store.readState(env.DB, userId);
+      const state = await readPlayerState(env, userId);
       return json(state);
     }
 
@@ -123,17 +143,66 @@ export default {
     }
 
     // ---- Pages ----
-    if (request.method === "GET" && (path === "/" || path === "")) {
-      return comingSoonPage();
+    if (request.method === "GET") {
+      if (path === "/" || path === "") {
+        return handlePath(request, env, userId);
+      }
+      const lessonMatch = path.match(/^\/lesson\/([a-z0-9]+)$/);
+      if (lessonMatch) {
+        return handleLesson(request, env, userId, lessonMatch[1]);
+      }
+      const gateMatch = path.match(/^\/gate\/([a-z0-9]+)$/);
+      if (gateMatch) {
+        return handleGate(request, env, userId, gateMatch[1]);
+      }
     }
 
     return notFound();
   },
 };
 
+async function handlePath(request, env, userId) {
+  const state = await readPlayerState(env, userId);
+  const body = pathPage({ player: state.player, lessons: state.lessons, heartsEnabled: HEARTS_ENABLED });
+  return new Response(body, { status: 200, headers: HTML_HEADERS });
+}
+
+// The lesson player. Server-side reachability enforcement: a lesson is only
+// served when it is the active frontier node or already mastered/legendary
+// (replay). Anything else redirects to the path — the client never decides.
+async function handleLesson(request, env, userId, lessonId) {
+  const lesson = getLesson(lessonId);
+  if (!lesson || lesson.unitGated) return notFound();
+
+  const state = await readPlayerState(env, userId);
+  if (!isReachable(state.lessons, lessonId)) {
+    return Response.redirect(new URL(PREFIX + "/", request.url).toString(), 302);
+  }
+
+  const position = lessonPosition(lessonId);
+  const body = lessonPage({ lesson, player: state.player, heartsEnabled: HEARTS_ENABLED, position });
+  return new Response(body, { status: 200, headers: HTML_HEADERS });
+}
+
+// The checkpoint gate page — a verdict prompt served as a lesson-like node.
+async function handleGate(request, env, userId, gateId) {
+  const gate = getCheckpoint(gateId);
+  if (!gate || gate.unitGated) return notFound();
+
+  const state = await readPlayerState(env, userId);
+  if (!isReachable(state.lessons, gateId)) {
+    return Response.redirect(new URL(PREFIX + "/", request.url).toString(), 302);
+  }
+
+  const position = { unitIndex: 0, lessonIndex: 0, lessonTotal: 0, unitTitle: gate.unitTitle };
+  const body = lessonPage({ lesson: gate, player: state.player, heartsEnabled: HEARTS_ENABLED, position });
+  return new Response(body, { status: 200, headers: HTML_HEADERS });
+}
+
 // Complete a lesson: evaluate server-side, append one xp_event, refresh the
-// derived tables. Body: { lesson_id, skill } (snake_case per the PR4 brief;
-// camelCase lessonId is accepted for robustness). Idempotent per lesson.
+// derived tables. Body: { lesson_id, skill }. Idempotent per lesson (double
+// POST does not double XP — the store's unique index backs this). Gates use
+// the same endpoint with the gate id as lesson_id (single completion record).
 async function handleComplete(request, env, userId) {
   let payload;
   try {
