@@ -220,11 +220,12 @@ check("u1l1 bestScore 10", stJson.lessons.u1l1 && stJson.lessons.u1l1.bestScore 
 check("streak consistent", stJson.player.streakDays === c3Json.player.streakDays, JSON.stringify(stJson));
 check("level derived from xp", stJson.player.level === 1, String(stJson.player.level));
 
-// ---- curriculum placeholder ----
+// ---- curriculum (PR5 content live) ----
 const curr = await worker.fetch(req(BASE + "/learn/api/curriculum", { auth: true }), env);
 const currJson = await curr.json();
 check("curriculum 200", curr.status === 200, String(curr.status));
-check("curriculum stable placeholder", Array.isArray(currJson.curriculum.units) && currJson.curriculum.units.length === 0, JSON.stringify(currJson));
+check("curriculum has 5 units", Array.isArray(currJson.curriculum.units) && currJson.curriculum.units.length === 5, JSON.stringify(currJson));
+check("unit 1 has 5 lessons", currJson.curriculum.units[0]?.lessons?.length === 5, JSON.stringify(currJson));
 
 // ---- uniform 404 ----
 const nf = await worker.fetch(req(BASE + "/learn/api/nope", { auth: true }), env);
