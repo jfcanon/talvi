@@ -1,1 +1,898 @@
-/* talvi learn — instrument style (PR2 stub). PR6 fills this in. */
+/* talvi learn — the Tribunal Learn UI (PR6, NID-101).
+ *
+ * A real .css file, not a JS template literal: scripts/build-assets.mjs reads
+ * it and JSON.stringify()s it into src/generated/assets.js, so backticks and
+ * ${ in here are structurally safe. Served at /learn/s.css?  =<hash>. NOT
+ * inlined: the CSP is `style-src 'self'` with no 'unsafe-inline', so an inline
+ * <style> or style="" attribute is blocked by the browser — every dimension
+ * change must be a class toggle or a <progress>/data-* element, never an
+ * inline style.
+ *
+ * Visual system (locked, NID-101): Duolingo's bright accents mapped ONTO the
+ * talvi dark instrument tokens —
+ *   phosphor green #7dffc4  = correct / XP (the primary voice)
+ *   magenta     #ff2e88    = hearts
+ *   amber       #ffb648    = streak / energy
+ *   cyan        #22e8ff    = focus (the one colour no resting state uses)
+ * Dark-only. Single-hue hierarchy: the solid phosphor element is the primary
+ * action among wireframes. Everything sits in a box or on a line.
+ *
+ * Motion discipline: celebrations are CSS keyframes/class-toggles; under
+ * prefers-reduced-motion ALL effects are REMOVED, never shortened. :hover is
+ * paired with :active; touch-action: manipulation kills the double-tap delay;
+ * -webkit-tap-highlight-color is explicitly transparent.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* talvi tokens — the instrument ground (from src/ui/style.css). */
+  --void: #05060b;
+  --deep: #0b0d1c;
+  --raise: #12142a;
+  --text-hi: #eaf2ff;
+  --text-lo: #8e9bbe;
+  --text-dim: #5d6689;
+
+  /* The single green voice. */
+  --phosphor: #7dffc4;
+  --phosphor-dim: #35d998;
+  --hud-line: rgba(61, 224, 160, 0.58);
+  --hud-line-soft: rgba(61, 224, 160, 0.24);
+  --hud-fill: rgba(18, 43, 40, 0.55);
+  --hud-fill-lit: rgba(28, 66, 60, 0.7);
+
+  /* Duolingo accents mapped onto the instrument (locked mapping). */
+  --accent-xp: #7dffc4;
+  --accent-heart: #ff2e88;
+  --accent-streak: #ffb648;
+  --accent-focus: #22e8ff;
+
+  /* Correct / wrong fills — desaturated dark tints, box interiors never black. */
+  --fill-correct: rgba(18, 90, 66, 0.45);
+  --fill-wrong: rgba(120, 26, 64, 0.42);
+  --fill-locked: rgba(90, 96, 120, 0.12);
+
+  --rule: #1e2340;
+  --rule-lit: #2d3660;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-console: ui-monospace, "SF Mono", "Menlo", "Cascadia Mono",
+    "Roboto Mono", "Consolas", monospace;
+
+  --soft: 0.35px;
+  --speed: 240ms;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--void);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: clamp(1rem, 4vw, 2.5rem) clamp(0.75rem, 4vw, 2rem) 3rem;
+  background: transparent;
+  color: var(--text-hi);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* One shared instrument frame — bracket cutouts on the edges. */
+.shell {
+  position: relative;
+  max-width: 46rem;
+  margin: 0 auto;
+  border: 1px solid var(--hud-line);
+  background:
+    linear-gradient(180deg, rgba(18, 43, 40, 0.25), rgba(5, 6, 11, 0.4) 60%),
+    var(--void);
+  filter: blur(0.1px);
+}
+
+/* Frame notches — the detail that reads as machine housing, not a table. */
+.shell::before,
+.shell::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 8px;
+  border-left: 1px solid var(--hud-line);
+  border-right: 1px solid var(--hud-line);
+  pointer-events: none;
+}
+.shell::before {
+  top: -1px;
+  border-top: 1px solid var(--hud-line);
+}
+.shell::after {
+  bottom: -1px;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+/* ---- Header / HUD ---- */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--hud-line-soft);
+  flex-wrap: wrap;
+}
+
+.sign {
+  font-family: var(--font-console);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--phosphor);
+  text-decoration: none;
+  font-size: 1.05rem;
+}
+.sign__dot {
+  color: var(--phosphor-dim);
+}
+
+.head__nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: auto;
+}
+.head__link {
+  font-family: var(--font-console);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid transparent;
+}
+.head__link--on {
+  color: var(--phosphor);
+  border-color: var(--hud-line-soft);
+  background: var(--hud-fill);
+}
+
+.head__meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pill {
+  font-family: var(--font-console);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  color: var(--text-lo);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.pill strong {
+  font-weight: 700;
+}
+.pill--xp {
+  border-color: var(--hud-line);
+  color: var(--accent-xp);
+}
+.pill--streak {
+  color: var(--accent-streak);
+}
+.pill--hearts {
+  color: var(--accent-heart);
+}
+
+/* ---- Path page ---- */
+.path {
+  padding: 1.25rem 1rem 2rem;
+}
+
+.path__intro {
+  padding: 0.5rem 0 1rem;
+}
+.path__title {
+  font-family: var(--font-console);
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  margin: 0 0 0.3rem;
+  color: var(--phosphor);
+  letter-spacing: 0.02em;
+}
+.path__sub {
+  color: var(--text-lo);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.progress {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0 1.1rem;
+  border-bottom: 1px solid var(--hud-line-soft);
+  margin-bottom: 1.1rem;
+}
+.progress__label {
+  font-family: var(--font-console);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.66rem;
+  color: var(--text-dim);
+}
+.progress__track {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 8px;
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  overflow: hidden;
+}
+.progress__track::-webkit-progress-bar {
+  background: var(--hud-fill);
+}
+.progress__track::-webkit-progress-value {
+  background: var(--accent-xp);
+}
+.progress__track::-moz-progress-bar {
+  background: var(--accent-xp);
+}
+.progress__value {
+  font-family: var(--font-console);
+  color: var(--accent-xp);
+  font-size: 0.8rem;
+  min-width: 2.8rem;
+  text-align: right;
+}
+
+/* The rail — a serpentine path (the _moc.md shape). Mobile-first: vertical
+   stack with a spine; desktop: alternate offset for the snake. */
+.rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.banner {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.9rem 0.4rem 0.35rem;
+  margin-top: 0.6rem;
+}
+.banner:first-child {
+  margin-top: 0;
+}
+.banner__tag {
+  font-family: var(--font-console);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.64rem;
+  color: var(--text-dim);
+}
+.banner__title {
+  font-family: var(--font-console);
+  font-size: 0.95rem;
+  color: var(--text-lo);
+  letter-spacing: 0.04em;
+}
+.banner__gated {
+  color: var(--accent-streak);
+  border: 1px solid rgba(255, 182, 72, 0.4);
+  padding: 0.05rem 0.35rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+}
+
+.node-wrap {
+  display: flex;
+}
+/* Serpentine: odd nodes nudge right on wider screens. */
+@media (min-width: 40rem) {
+  .rail {
+    gap: 0.8rem;
+  }
+  .node-wrap:nth-child(even) {
+    transform: translateX(1.6rem);
+  }
+}
+
+.node {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.4rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  color: var(--text-lo);
+  text-decoration: none;
+  font-family: var(--font-console);
+  position: relative;
+  transition: border-color var(--speed), background var(--speed), color var(--speed);
+}
+
+.node__num {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.node__label {
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  color: var(--text-hi);
+}
+.node__meta {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* Node states — fill is hierarchy. The active node is the solid phosphor
+   element among wireframes; mastered gets a phosphor line; legendary glows. */
+.node--locked {
+  opacity: 0.55;
+  cursor: default;
+  filter: grayscale(1);
+}
+.node--locked:hover,
+.node--locked:active {
+  border-color: var(--hud-line-soft);
+  background: var(--hud-fill);
+  opacity: 0.55;
+}
+
+.node--active {
+  border-color: var(--phosphor);
+  background: var(--phosphor);
+  color: #04120c;
+}
+.node--active .node__num,
+.node--active .node__meta {
+  color: rgba(4, 18, 12, 0.72);
+}
+.node--active .node__label {
+  color: #04120c;
+}
+
+.node--mastered {
+  border-color: var(--hud-line);
+}
+.node--mastered .node__meta {
+  color: var(--accent-xp);
+}
+
+.node--legendary {
+  border-color: var(--accent-xp);
+  box-shadow: 0 0 10px rgba(125, 255, 196, 0.18);
+}
+.node--legendary .node__meta {
+  color: var(--accent-xp);
+}
+
+.node:hover,
+.node:active {
+  border-color: var(--hud-line);
+  background: var(--hud-fill-lit);
+}
+
+.path__next {
+  margin-top: 1.2rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--hud-line-soft);
+  font-family: var(--font-console);
+  font-size: 0.82rem;
+  color: var(--text-lo);
+  letter-spacing: 0.04em;
+}
+.path__next strong {
+  color: var(--phosphor);
+  font-weight: 600;
+}
+
+/* ---- Lesson page ---- */
+.lesson {
+  padding: 1.25rem 1rem 2rem;
+}
+
+.lesson__heading {
+  padding-bottom: 1rem;
+}
+.lesson__unit {
+  font-family: var(--font-console);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.66rem;
+  color: var(--text-dim);
+}
+.lesson__title {
+  font-family: var(--font-console);
+  font-size: clamp(1.25rem, 4vw, 1.6rem);
+  margin: 0.3rem 0 0.4rem;
+  color: var(--phosphor);
+}
+.lesson__pos {
+  font-family: var(--font-console);
+  font-size: 0.76rem;
+  color: var(--text-lo);
+}
+
+.lesson__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.2rem 0 1rem;
+}
+
+.fact {
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  padding: 0.75rem 0.9rem;
+  margin: 0;
+}
+.fact p {
+  margin: 0 0 0.4rem;
+  color: var(--text-hi);
+}
+.fact cite {
+  font-family: var(--font-console);
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
+/* ---- Exercises ---- */
+.exercises {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.exercise {
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  padding: 1rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.exercise[data-state="correct"] {
+  border-color: var(--accent-xp);
+  background: var(--fill-correct);
+}
+.exercise[data-state="wrong"] {
+  border-color: var(--accent-heart);
+  background: var(--fill-wrong);
+}
+
+.exercise__prompt {
+  font-size: 1.02rem;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--text-hi);
+  font-weight: 600;
+}
+
+.scenario {
+  margin: 0;
+  font-family: var(--font-console);
+  font-size: 0.82rem;
+  color: var(--text-lo);
+  border-left: 2px solid var(--hud-line);
+  padding-left: 0.6rem;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.choices--tf {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.choices--tf .choice {
+  flex: 1 1 8rem;
+}
+
+.choice {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  text-align: left;
+  color: var(--text-hi);
+  background: var(--deep);
+  border: 1px solid var(--hud-line-soft);
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color var(--speed), background var(--speed), color var(--speed);
+}
+.choice:hover,
+.choice:active {
+  border-color: var(--hud-line);
+  background: var(--hud-fill-lit);
+}
+.choice[aria-pressed="true"] {
+  border-color: var(--phosphor);
+  background: var(--phosphor);
+  color: #04120c;
+}
+.choice--wrong {
+  border-color: var(--accent-heart) !important;
+  background: var(--fill-wrong) !important;
+  color: var(--text-hi) !important;
+}
+.choice--correct {
+  border-color: var(--accent-xp) !important;
+  background: var(--fill-correct) !important;
+}
+
+/* Order / complete: the tap-bank. */
+.bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  font-family: var(--font-console);
+  font-size: 0.84rem;
+  color: var(--text-hi);
+  background: var(--deep);
+  border: 1px solid var(--hud-line-soft);
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color var(--speed), background var(--speed), color var(--speed);
+}
+.chip:hover,
+.chip:active {
+  border-color: var(--hud-line);
+  background: var(--hud-fill-lit);
+}
+.chip--used {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.sequence {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  min-height: 2rem;
+  border: 1px dashed var(--hud-line-soft);
+  background: rgba(5, 6, 11, 0.5);
+}
+.sequence__item {
+  font-family: var(--font-console);
+  font-size: 0.84rem;
+  color: var(--accent-xp);
+  border-bottom: 1px solid var(--hud-line-soft);
+  padding: 0.45rem 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sequence__item::before {
+  content: counter(seq);
+  counter-increment: seq;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+.sequence {
+  counter-reset: seq;
+}
+
+/* Match. */
+.match {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+.match__left,
+.match__right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.match__item {
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  text-align: left;
+  color: var(--text-hi);
+  background: var(--deep);
+  border: 1px solid var(--hud-line-soft);
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.match__item:hover,
+.match__item:active {
+  border-color: var(--hud-line);
+  background: var(--hud-fill-lit);
+}
+.match__item--left[data-paired] {
+  border-color: var(--accent-xp);
+  color: var(--accent-xp);
+  pointer-events: none;
+}
+.match__item--right[data-paired] {
+  border-color: var(--hud-line);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.match__item--right[data-paired="true"] {
+  border-color: var(--accent-xp);
+  color: var(--accent-xp);
+}
+
+/* Complete-the-blank. */
+.complete-ex__prompt {
+  font-size: 1rem;
+  line-height: 1.9;
+  margin: 0 0 0.8rem;
+}
+.blank {
+  display: inline-block;
+  min-width: 5.5rem;
+  border-bottom: 2px solid var(--accent-xp);
+  color: var(--accent-xp);
+  font-family: var(--font-console);
+  font-size: 0.9rem;
+  padding: 0 0.3rem;
+  text-align: center;
+}
+.complete-ex__hint {
+  font-family: var(--font-console);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin: 0.6rem 0 0;
+}
+
+.btn {
+  font-family: var(--font-console);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #04120c;
+  background: var(--phosphor);
+  border: 1px solid var(--phosphor);
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  align-self: flex-start;
+  transition: background var(--speed), color var(--speed);
+}
+.btn:hover,
+.btn:active {
+  background: var(--phosphor-dim);
+  border-color: var(--phosphor-dim);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--phosphor);
+}
+
+.exercise__status {
+  font-family: var(--font-console);
+  font-size: 0.78rem;
+  margin: 0;
+  min-height: 1.2rem;
+  color: var(--text-lo);
+}
+.exercise__status[data-state="correct"] {
+  color: var(--accent-xp);
+}
+.exercise__status[data-state="wrong"] {
+  color: var(--accent-heart);
+}
+.exercise__cite {
+  font-family: var(--font-console);
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.feedback {
+  font-family: var(--font-console);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--hud-line);
+  color: var(--text-hi);
+}
+
+/* ---- Lesson complete + celebration ---- */
+.complete {
+  text-align: center;
+  padding: 2rem 1rem;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-fill);
+}
+.complete h2 {
+  font-family: var(--font-console);
+  color: var(--phosphor);
+  margin: 0 0 0.5rem;
+  letter-spacing: 0.04em;
+}
+.complete__xp {
+  font-size: 1.4rem;
+  color: var(--accent-xp);
+  font-family: var(--font-console);
+  margin: 0.4rem 0;
+}
+.complete__streak {
+  color: var(--accent-streak);
+  font-family: var(--font-console);
+  margin: 0 0 1.2rem;
+}
+.complete__actions .btn {
+  align-self: center;
+}
+
+/* Celebration: a phosphor burst triggered by a class toggle (never inline).
+   prefers-reduced-motion removes it entirely. */
+.celebrate .lesson__title::after {
+  content: "";
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: 0.6rem;
+  background: radial-gradient(circle, var(--accent-xp) 30%, transparent 32%);
+  animation: burst 900ms ease-out 1;
+}
+@keyframes burst {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+
+/* ---- Checkpoint gate ---- */
+.gate {
+  border: 1px solid var(--hud-line);
+  background: var(--hud-fill);
+  padding: 1.2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.gate__title {
+  font-family: var(--font-console);
+  color: var(--phosphor);
+  margin: 0;
+  font-size: 1.1rem;
+}
+.gate__prompt {
+  margin: 0;
+  color: var(--text-lo);
+}
+.gate__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+.gate__label {
+  font-family: var(--font-console);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+.gate__form textarea {
+  width: 100%;
+  min-height: 5rem;
+  background: var(--deep);
+  color: var(--text-hi);
+  border: 1px solid var(--hud-line-soft);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  padding: 0.6rem 0.7rem;
+  resize: vertical;
+}
+
+/* ---- Focus: the one colour no resting state uses (cyan, locked mapping). ---- */
+:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-xp);
+  color: #04120c;
+}
+
+/* ---- Motion & touch discipline ---- */
+a,
+button,
+textarea,
+progress {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* prefers-reduced-motion REMOVES effects (never shortens them). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .celebrate .lesson__title::after {
+    display: none;
+  }
+  @media (min-width: 40rem) {
+    .node-wrap:nth-child(even) {
+      transform: none;
+    }
+  }
+}
+
+/* ---- Desktop polish ---- */
+@media (min-width: 40rem) {
+  body {
+    padding: 2.5rem 2rem 3.5rem;
+  }
+  .shell {
+    max-width: 52rem;
+  }
+  .exercise {
+    padding: 1.2rem 1.3rem;
+  }
+  .choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .choices--tf {
+    display: flex;
+  }
+  .match {
+    grid-template-columns: 1fr 1fr;
+  }
+}
