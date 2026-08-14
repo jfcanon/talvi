@@ -6,8 +6,17 @@ name: Terraform Relay
 # relay/main.tf against its own state key (talvi/relay/terraform.tfstate).
 
 on:
-  pull_request: { branches: [main, master] }
-  push:         { branches: [main, master] }
+  # Only run when the relay/ stack or this workflow changes.
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'relay/**'
+      - '.github/workflows/terraform-relay.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'relay/**'
+      - '.github/workflows/terraform-relay.yml'
 
 permissions:
   contents: read
