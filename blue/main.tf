@@ -10,6 +10,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5"
     }
+    sentry = {
+      source  = "jianyuan/sentry"
+      version = "~> 0.15"
+    }
   }
 
   # Separate state key from green, same R2 state bucket and credentials
@@ -30,6 +34,10 @@ terraform {
 }
 
 provider "cloudflare" {}
+
+# Sentry provider — SENTRY_AUTH_TOKEN from env (GH Actions secret),
+# SENTRY_ORG_ID from env (GH Actions variable). Neither appears in this file.
+provider "sentry" {}
 
 variable "cloudflare_account_id" {
   type = string
@@ -54,6 +62,19 @@ variable "clerk_publishable_key" {
 
 variable "clerk_jwt_key" {
   type = string
+}
+
+# Sentry organization ID — supplied as a GitHub Actions VARIABLE (not a secret):
+# an org ID is an identifier, not a credential. The auth token is a secret.
+variable "sentry_org_id" {
+  type = string
+}
+
+# Sentry project slug for talvi-blue (javascript-nextjs platform).
+# Chat worker inherits this project.
+variable "sentry_project_slug_talvi_blue" {
+  type    = string
+  default = "talvi-blue"
 }
 
 # ---------------------------------------------------------------------------
@@ -114,6 +135,75 @@ resource "cloudflare_r2_bucket_lifecycle" "talvi_blue_drop_expiry" {
     },
   ]
 }
+
+# Sentry organization data source — resolves the org by ID from the variable.
+data "sentry_organization" "this" {
+  id = var.sentry_org_id
+}
+
+# Sentry project for talvi-blue (javascript-nextjs platform).
+# Chat worker inherits this project.
+resource "sentry_project" "talvi_blue" {
+  organization = data.sentry_organization.this.id
+  name         = "talvi Blue"
+  slug         = var.sentry_project_slug_talvi_blue
+  platform     = "javascript-nextjs"
+
+  # Data hygiene: scrub sensitive data at ingest.
+  data_collection = {
+    security = {
+      default_pii = false
+    }
+    pii = {
+      enabled = false
+    }
+  }
+
+  # Inbound data filter to drop events with sensitive headers/cookies.
+  inbound_data_filter = [
+    "password",
+    "secret",
+    "authorization",
+    "cookie",
+    "x-api-key",
+    "x-csrf-token",
+  ]
+}
+
+# Sentry alert rules for the talvi-blue project.
+resource "sentry_alert" "talvi_blue_high_errors" {
+  organization = data.sentry_organization.this.id
+  project      = sentry_project.talvi_blue.slug
+  name         = "High error rate — talvi-blue"
+  status       = "active"
+  threshold_type = 1 # event count
+  query        = "project:" + sentry_project.talvi_blue.slug
+  time_window  = 60
+  threshold_period = 1
+  alert_threshold = 10
+  resolve_threshold = 5
+  owner = {
+    type = "everyone"
+  }
+}
+
+resource "sentry_alert" "talvi_blue_cron_monitor" {
+  organization = data.sentry_organization.this.id
+  project      = sentry_project.talvi_blue.slug
+  name         = "Cron monitor — 03:00 UTC purge"
+  status       = "active"
+  threshold_type = 2 # cron monitor
+  cron_monitor_config = {
+    schedule = "0 3 * * *"
+    timezone = "UTC"
+    checkin_margin = 10
+    max_runtime = 300
+  }
+  owner = {
+    type = "everyone"
+  }
+}
+
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

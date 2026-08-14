@@ -4,6 +4,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5"
     }
+    sentry = {
+      source  = "jianyuan/sentry"
+      version = "~> 0.15"
+    }
   }
 
   # Remote state on R2 (S3-compatible). Credentials come from
@@ -28,6 +32,10 @@ terraform {
 # Token read from CLOUDFLARE_API_TOKEN automatically — never set here.
 provider "cloudflare" {}
 
+# Sentry provider — SENTRY_AUTH_TOKEN from env (GH Actions secret),
+# SENTRY_ORG_ID from env (GH Actions variable). Neither appears in this file.
+provider "sentry" {}
+
 variable "cloudflare_account_id" {
   type = string
 }
@@ -38,6 +46,27 @@ variable "cloudflare_account_id" {
 # a plan diff where it is genuinely useful.
 variable "talvi_zone_id" {
   type = string
+}
+
+# Sentry organization ID — supplied as a GitHub Actions VARIABLE (not a secret):
+# an org ID is an identifier, not a credential. The auth token is a secret.
+variable "sentry_org_id" {
+  type = string
+}
+
+# Sentry project slug for talvi-web (javascript-nextjs platform).
+# Kept as a variable so the same pattern can be reused across stacks.
+variable "sentry_project_slug_talvi_web" {
+  type    = string
+  default = "talvi-web"
+}
+
+# DEBUG_SENTRY — when set to "true", enables the /debug-sentry endpoint
+# for synthetic error testing. Supplied as a GitHub Actions secret.
+variable "debug_sentry" {
+  type      = string
+  default   = "false"
+  sensitive = true
 }
 
 # Green release (2026-08-08): Clerk removed from the public Worker. Upload
@@ -104,6 +133,40 @@ resource "cloudflare_r2_bucket_lifecycle" "talvi_drop_expiry" {
         condition = { max_age = 90 * 24 * 60 * 60, type = "Age" } # 7776000 — hard cap
       }
     },
+  ]
+}
+
+# Sentry organization data source — resolves the org by ID from the variable.
+data "sentry_organization" "this" {
+  id = var.sentry_org_id
+}
+
+# Sentry project for talvi-web (javascript-nextjs platform).
+# DSN is computed and bound into the Worker as a secret_text binding.
+resource "sentry_project" "talvi_web" {
+  organization = data.sentry_organization.this.id
+  name         = "talvi Web"
+  slug         = var.sentry_project_slug_talvi_web
+  platform     = "javascript-nextjs"
+
+  # Data hygiene: scrub sensitive data at ingest.
+  data_collection = {
+    security = {
+      default_pii = false
+    }
+    pii = {
+      enabled = false
+    }
+  }
+
+  # Inbound data filter to drop events with sensitive headers/cookies.
+  inbound_data_filter = [
+    "password",
+    "secret",
+    "authorization",
+    "cookie",
+    "x-api-key",
+    "x-csrf-token",
   ]
 }
 
@@ -204,6 +267,22 @@ resource "cloudflare_workers_script" "talvi_web" {
       type = "ai"
       name = "AI"
     },
+    {
+      # Sentry DSN — computed by the sentry_project resource, bound as a secret
+      # so it never appears in git or Terraform state. The Worker reads this via
+      # env.SENTRY_DSN and initializes @sentry/cloudflare server-side only.
+      type = "secret_text"
+      name = "SENTRY_DSN"
+      text = sentry_project.talvi_web.dsn
+    },
+    {
+      # DEBUG_SENTRY — enables the /debug-sentry endpoint for synthetic error
+      # testing. Only set to "true" in staging for verification; always "false"
+      # in production. Supplied as a GitHub Actions secret.
+      type = "secret_text"
+      name = "DEBUG_SENTRY"
+      text = var.debug_sentry
+    },
   ]
 }
 
@@ -291,4 +370,38 @@ resource "cloudflare_zero_trust_access_policy" "talvi_owner_email" {
       email = "jangofett86@gmail.com"
     }
   }]
+}
+
+# Sentry alert rules for the talvi-web project.
+resource "sentry_alert" "talvi_web_high_errors" {
+  organization = data.sentry_organization.this.id
+  project      = sentry_project.talvi_web.slug
+  name         = "High error rate — talvi-web"
+  status       = "active"
+  threshold_type = 1 # event count
+  query        = "project:" + sentry_project.talvi_web.slug
+  time_window  = 60
+  threshold_period = 1
+  alert_threshold = 10
+  resolve_threshold = 5
+  owner = {
+    type = "everyone"
+  }
+}
+
+resource "sentry_alert" "talvi_web_cron_monitor" {
+  organization = data.sentry_organization.this.id
+  project      = sentry_project.talvi_web.slug
+  name         = "Cron monitor — 03:00 UTC purge"
+  status       = "active"
+  threshold_type = 2 # cron monitor
+  cron_monitor_config = {
+    schedule = "0 3 * * *"
+    timezone = "UTC"
+    checkin_margin = 10
+    max_runtime = 300
+  }
+  owner = {
+    type = "everyone"
+  }
 }
