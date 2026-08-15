@@ -8,6 +8,7 @@
 // release. Upload protection now lives at the edge via Cloudflare Access on
 // /api/upload; /:slug/* stay public. The Clerk code lives in git history
 // (branch clerk-custom-signin-clean) for the blue release on a separate host.
+import { withSentry } from "@sentry/cloudflare";
 import { STYLE_CSS, CLIENT_JS, SPRITE_PNG_B64, ASSET_VERSION } from "./generated/assets.js";
 import { closedPage, limitedPage } from "./ui/errorpage.js";
 import { notFoundPage } from "./ui/notfound.js";
@@ -728,7 +729,7 @@ async function routeStatic(request, env, ctx, pathname) {
   return notFound();
 }
 
-export default {
+const handler = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(purge(env));
   },
@@ -753,6 +754,20 @@ export default {
     return new Response(null, { status: response.status, headers: response.headers });
   },
 };
+
+// Wrap the handler with Sentry using the v8 API.
+// withSentry takes an options callback (receives env) and the handler object.
+export default withSentry(
+  (env) => ({
+    dsn: env.SENTRY_DSN,
+    environment: "production",
+    tracesSampleRate: 0.1,
+    // No client-side bundling — CSP default-src 'none' forbids it.
+    // All Sentry instrumentation runs server-side only.
+    enableTracing: false,
+  }),
+  handler
+);
 
 // The ChatChannel Durable Object must be a NAMED export of the deployed module
 // for the runtime to instantiate it (the CHAT_CHANNELS binding in main.tf

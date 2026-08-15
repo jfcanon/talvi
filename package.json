@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --outfile=dist/index.js",
+    "build": "node scripts/build-assets.mjs && esbuild src/index.js --bundle --format=esm --outfile=dist/index.js --external:@sentry/cloudflare --define:process.env.NODE_DEBUG=\"\\\"\\\"\" --define:process.env.SENTRY_DSN=\"\\\"\\\"\"",
     "test:chat": "node scripts/chat-gate-test.mjs && node scripts/chat-channel-test.mjs",
     "verify:chat": "node scripts/chat-verify.mjs"
   },
@@ -11,6 +11,7 @@
     "esbuild": "0.28.1"
   },
   "dependencies": {
-    "@clerk/backend": "^3.16.1"
+    "@clerk/backend": "^3.16.1",
+    "@sentry/cloudflare": "^8.0.0"
   }
 }
