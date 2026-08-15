@@ -374,15 +374,15 @@ resource "cloudflare_zero_trust_access_policy" "talvi_owner_email" {
 
 # Sentry alert rules for the talvi-web project.
 resource "sentry_alert" "talvi_web_high_errors" {
-  organization = data.sentry_organization.this.id
-  project      = sentry_project.talvi_web.slug
-  name         = "High error rate — talvi-web"
-  status       = "active"
-  threshold_type = 1 # event count
-  query        = "project:" + sentry_project.talvi_web.slug
-  time_window  = 60
-  threshold_period = 1
-  alert_threshold = 10
+  organization      = data.sentry_organization.this.id
+  project           = sentry_project.talvi_web.slug
+  name              = "High error rate — talvi-web"
+  status            = "active"
+  threshold_type    = 1 # event count
+  query             = "project:" + sentry_project.talvi_web.slug
+  time_window       = 60
+  threshold_period  = 1
+  alert_threshold   = 10
   resolve_threshold = 5
   owner = {
     type = "everyone"
@@ -390,16 +390,16 @@ resource "sentry_alert" "talvi_web_high_errors" {
 }
 
 resource "sentry_alert" "talvi_web_cron_monitor" {
-  organization = data.sentry_organization.this.id
-  project      = sentry_project.talvi_web.slug
-  name         = "Cron monitor — 03:00 UTC purge"
-  status       = "active"
+  organization   = data.sentry_organization.this.id
+  project        = sentry_project.talvi_web.slug
+  name           = "Cron monitor — 03:00 UTC purge"
+  status         = "active"
   threshold_type = 2 # cron monitor
   cron_monitor_config = {
-    schedule = "0 3 * * *"
-    timezone = "UTC"
+    schedule       = "0 3 * * *"
+    timezone       = "UTC"
     checkin_margin = 10
-    max_runtime = 300
+    max_runtime    = 300
   }
   owner = {
     type = "everyone"
