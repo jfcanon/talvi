@@ -10,6 +10,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5"
     }
+    sentry = {
+      source  = "jianyuan/sentry"
+      version = "~> 0.15"
+    }
   }
 
   # Remote state on R2 (S3-compatible). Own key under the same talvi-tfstate
@@ -34,8 +38,24 @@ terraform {
 # Token read from CLOUDFLARE_API_TOKEN automatically — never set here.
 provider "cloudflare" {}
 
+# Sentry provider — SENTRY_AUTH_TOKEN from env (GH Actions secret),
+# SENTRY_ORG_ID from env (GH Actions variable). Neither appears in this file.
+provider "sentry" {}
+
 variable "cloudflare_account_id" {
   type = string
+}
+
+# Sentry organization ID — supplied as a GitHub Actions VARIABLE (not a secret):
+# an org ID is an identifier, not a credential. The auth token is a secret.
+variable "sentry_org_id" {
+  type = string
+}
+
+# Sentry project slug for talvi-hub (javascript-nextjs platform).
+variable "sentry_project_slug_talvi_hub" {
+  type    = string
+  default = "talvi-hub"
 }
 
 # Zone ID for ygdcbtmc4u.uk — a GitHub Actions VARIABLE, not a secret.
@@ -79,6 +99,74 @@ resource "cloudflare_dns_record" "app" {
   type    = "A"
   proxied = true
   ttl     = 1 # 1 = automatic; required by the provider and only valid when proxied
+}
+
+# Sentry organization data source — resolves the org by ID from the variable.
+data "sentry_organization" "this" {
+  id = var.sentry_org_id
+}
+
+# Sentry project for talvi-hub (javascript-nextjs platform).
+resource "sentry_project" "talvi_hub" {
+  organization = data.sentry_organization.this.id
+  name         = "talvi Hub"
+  slug         = var.sentry_project_slug_talvi_hub
+  platform     = "javascript-nextjs"
+
+  # Data hygiene: scrub sensitive data at ingest.
+  data_collection = {
+    security = {
+      default_pii = false
+    }
+    pii = {
+      enabled = false
+    }
+  }
+
+  # Inbound data filter to drop events with sensitive headers/cookies.
+  inbound_data_filter = [
+    "password",
+    "secret",
+    "authorization",
+    "cookie",
+    "x-api-key",
+    "x-csrf-token",
+  ]
+}
+
+# Sentry alert rules for the talvi-hub project.
+resource "sentry_alert" "talvi_hub_high_errors" {
+  organization      = data.sentry_organization.this.id
+  project           = sentry_project.talvi_hub.slug
+  name              = "High error rate — talvi-hub"
+  status            = "active"
+  threshold_type    = 1 # event count
+  query             = "project:" + sentry_project.talvi_hub.slug
+  time_window       = 60
+  threshold_period  = 1
+  alert_threshold   = 10
+  resolve_threshold = 5
+  owner = {
+    type = "everyone"
+  }
+}
+
+# Sentry cron monitor for the hub's nightly purge (if any).
+resource "sentry_alert" "talvi_hub_cron_monitor" {
+  organization   = data.sentry_organization.this.id
+  project        = sentry_project.talvi_hub.slug
+  name           = "Cron monitor — hub scheduled tasks"
+  status         = "active"
+  threshold_type = 2 # cron monitor
+  cron_monitor_config = {
+    schedule       = "0 3 * * *"
+    timezone       = "UTC"
+    checkin_margin = 10
+    max_runtime    = 300
+  }
+  owner = {
+    type = "everyone"
+  }
 }
 
 # The hub Worker — still small enough for `content = file(...)` (the
@@ -152,6 +240,14 @@ resource "cloudflare_workers_script" "talvi_hub" {
       type = "plain_text"
       name = "AGENT_MODEL"
       text = var.agent_model
+    },
+    {
+      # Sentry DSN — computed by the sentry_project resource, bound as a secret
+      # so it never appears in git or Terraform state. The Worker reads this via
+      # env.SENTRY_DSN and initializes @sentry/cloudflare server-side only.
+      type = "secret_text"
+      name = "SENTRY_DSN"
+      text = sentry_project.talvi_hub.dsn
     },
   ]
 

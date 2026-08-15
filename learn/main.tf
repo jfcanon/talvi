@@ -12,6 +12,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5"
     }
+    sentry = {
+      source  = "jianyuan/sentry"
+      version = "~> 0.15"
+    }
   }
 
   # Remote state on R2 (S3-compatible). Own key under the same talvi-tfstate
@@ -40,8 +44,24 @@ terraform {
 # Token read from CLOUDFLARE_API_TOKEN automatically — never set here.
 provider "cloudflare" {}
 
+# Sentry provider — SENTRY_AUTH_TOKEN from env (GH Actions secret),
+# SENTRY_ORG_ID from env (GH Actions variable). Neither appears in this file.
+provider "sentry" {}
+
 variable "cloudflare_account_id" {
   type = string
+}
+
+# Sentry organization ID — supplied as a GitHub Actions VARIABLE (not a secret):
+# an org ID is an identifier, not a credential. The auth token is a secret.
+variable "sentry_org_id" {
+  type = string
+}
+
+# Sentry project slug for talvi-learn (javascript-nextjs platform).
+variable "sentry_project_slug_talvi_learn" {
+  type    = string
+  default = "talvi-learn"
 }
 
 # Zone ID for ygdcbtmc4u.uk — a GitHub Actions VARIABLE, not a secret.
@@ -73,6 +93,74 @@ resource "cloudflare_d1_database" "talvi_learn_meta" {
   account_id       = var.cloudflare_account_id
   name             = "talvi-learn-meta"
   read_replication = { mode = "disabled" }
+}
+
+# Sentry organization data source — resolves the org by ID from the variable.
+data "sentry_organization" "this" {
+  id = var.sentry_org_id
+}
+
+# Sentry project for talvi-learn (javascript-nextjs platform).
+resource "sentry_project" "talvi_learn" {
+  organization = data.sentry_organization.this.id
+  name         = "talvi Learn"
+  slug         = var.sentry_project_slug_talvi_learn
+  platform     = "javascript-nextjs"
+
+  # Data hygiene: scrub sensitive data at ingest.
+  data_collection = {
+    security = {
+      default_pii = false
+    }
+    pii = {
+      enabled = false
+    }
+  }
+
+  # Inbound data filter to drop events with sensitive headers/cookies.
+  inbound_data_filter = [
+    "password",
+    "secret",
+    "authorization",
+    "cookie",
+    "x-api-key",
+    "x-csrf-token",
+  ]
+}
+
+# Sentry alert rules for the talvi-learn project.
+resource "sentry_alert" "talvi_learn_high_errors" {
+  organization      = data.sentry_organization.this.id
+  project           = sentry_project.talvi_learn.slug
+  name              = "High error rate — talvi-learn"
+  status            = "active"
+  threshold_type    = 1 # event count
+  query             = "project:" + sentry_project.talvi_learn.slug
+  time_window       = 60
+  threshold_period  = 1
+  alert_threshold   = 10
+  resolve_threshold = 5
+  owner = {
+    type = "everyone"
+  }
+}
+
+# Sentry cron monitor for learn's scheduled tasks.
+resource "sentry_alert" "talvi_learn_cron_monitor" {
+  organization   = data.sentry_organization.this.id
+  project        = sentry_project.talvi_learn.slug
+  name           = "Cron monitor — learn scheduled tasks"
+  status         = "active"
+  threshold_type = 2 # cron monitor
+  cron_monitor_config = {
+    schedule       = "0 3 * * *"
+    timezone       = "UTC"
+    checkin_margin = 10
+    max_runtime    = 300
+  }
+  owner = {
+    type = "everyone"
+  }
 }
 
 # The learn Worker — the PR4 worker. nodejs_compat is required by
@@ -109,6 +197,14 @@ resource "cloudflare_workers_script" "talvi_learn" {
       type = "plain_text"
       name = "CLERK_JWT_KEY"
       text = var.clerk_jwt_key
+    },
+    {
+      # Sentry DSN — computed by the sentry_project resource, bound as a secret
+      # so it never appears in git or Terraform state. The Worker reads this via
+      # env.SENTRY_DSN and initializes @sentry/cloudflare server-side only.
+      type = "secret_text"
+      name = "SENTRY_DSN"
+      text = sentry_project.talvi_learn.dsn
     },
   ]
 }
