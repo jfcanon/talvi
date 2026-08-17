@@ -16,6 +16,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { buildWorld } from "./world.js";
 import { OrbitController } from "./input.js";
+import { makeStardust } from "./sky.js";
 
 export function bootScene() {
   const canvas = document.getElementById("scene");
@@ -32,7 +33,9 @@ export function bootScene() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = 0.95;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0a0c);
@@ -42,6 +45,8 @@ export function bootScene() {
 
   const world = buildWorld(scene);
   const orbit = new OrbitController(camera, world.focal, world.radius);
+  const dust = makeStardust(isMobile ? 280 : 700);
+  scene.add(dust.points);
 
   // --- pointer / raycast ---------------------------------------------------
   const raycaster = new THREE.Raycaster();
@@ -204,7 +209,7 @@ export function bootScene() {
   if (!reduceMotion && !isMobile) {
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.4, 0.2));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.22, 0.28, 0.84));
   }
 
   function resize() {
@@ -245,7 +250,10 @@ export function bootScene() {
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
-    if (!reduceMotion) world.update(dt);
+    if (!reduceMotion) {
+      world.update(dt);
+      dust.update(dt, camera);
+    }
     if (composer) composer.render();
     else renderer.render(scene, camera);
     requestAnimationFrame(frame);
