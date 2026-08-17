@@ -1,4 +1,4 @@
-// talvi hub — the explorable world (v4, ideas #1 + #2).
+// talvi hub — the explorable world (v6.0, constellation + orbit/dolly).
 //
 // The scroll narrative is gone. This is a small world you move through like
 // Google Earth:
@@ -82,20 +82,21 @@ export function bootScene() {
   canvas.addEventListener("pointermove", (e) => {
     const prev = pointers.get(e.pointerId);
     if (prev) {
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      prev.x = e.clientX;
+      prev.y = e.clientY;
 
       // Pinch: two pointers → dolly by their distance ratio.
       if (pointers.size === 2) {
-        const [a, b] = [...pointers.values()];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const pts = [...pointers.values()];
+        const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
         if (prev._d && d > 0 && prev._d > 0) orbit.dolly(d / prev._d);
-        prev._d = d;
+        for (const p of pts) p._d = d;
         return;
       }
 
       if (e.pointerId === activePointer) {
-        const dx = e.clientX - prev.x;
-        const dy = e.clientY - prev.y;
         if (!dragging) {
           const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
           if (moved > 5) dragging = true;

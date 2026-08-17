@@ -1,5 +1,5 @@
-// talvi hub — browser test (v4, the explorable world). Run against the live
-// production hub:
+// talvi hub — browser test (v6.0, constellation + four app stars). Run against
+// the live production hub:
 //
 //   npm i --no-save playwright-core   # already present in green's node_modules
 //   node scripts/hub-browser-test.mjs [base-url]
@@ -8,7 +8,7 @@
 // never reads as a failing test.
 //
 // Covers, live in a real browser: the page 200s, the 3D world boots (WebGL),
-// the three app cubes exist (window.talviProbe — the names live in the world
+// the four app cubes exist (window.talviProbe — the names live in the world
 // now, not the DOM), the blade renders and retracts, the HUD prompt + hint are
 // present, dragging orbits the camera (cube screen positions move), the wheel
 // dollies (they move again), hovering a cube echoes "open <app>" in the
@@ -23,6 +23,7 @@ const EXPECTED_NODES = {
   relay: "https://app.ygdcbtmc4u.uk/relay",
   chat: "https://app.ygdcbtmc4u.uk/chat",
   cinto: "/cinto",
+  learn: "/learn",
 };
 
 // Cloudflare injects its Browser Insights beacon into HTML at the edge on the
@@ -87,14 +88,24 @@ try {
 
   // --- the app cubes (in the world, probed) --------------------------------
   const cubes = await page.evaluate(() => (window.talviProbe ? window.talviProbe() : []));
-  check("three app cubes (talviProbe)", cubes.length === 3, `found ${cubes.length}`);
+  check("four app cubes (talviProbe)", cubes.length === 4, `found ${cubes.length}`);
   for (const c of cubes) {
     check(`cube ${c.key} → ${c.href}`, c.href === EXPECTED_NODES[c.key] && c.visible, `${c.href} visible=${c.visible}`);
   }
+  const learn = cubes.find((c) => c.key === "learn");
+  check("LEARN cube href is /learn", !!learn && learn.href === "/learn", learn ? learn.href : "missing");
+  check("LEARN cube visible", !!learn && learn.visible, learn ? `visible=${learn.visible}` : "missing");
   check("no DOM app labels (names are in the world)", (await page.locator(".node").count()) === 0);
 
   // --- the blade -----------------------------------------------------------
   check("blade nav present", (await page.locator(".blade").count()) === 1);
+  const learnBlade = page.locator('.blade__item[href="/learn"]');
+  check("blade LEARN → /learn", (await learnBlade.count()) === 1);
+  check("blade LEARN is visible", await learnBlade.isVisible());
+  check(
+    "blade LEARN is reachable",
+    (await learnBlade.evaluate((el) => el.tagName)) === "A" && (await learnBlade.getAttribute("href")) === "/learn",
+  );
   check("blade has login control", (await page.locator(".blade__login").count()) === 1);
   // UX review: the login is an ICON in the collapsed rail (⏻), never text —
   // the rail is pure glyphs and a label would overflow it.
