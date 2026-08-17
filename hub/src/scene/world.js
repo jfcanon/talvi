@@ -1,9 +1,8 @@
 // talvi hub — the constellation front door (v8.0).
 //
-// Green phosphor world. Cubes use the local launcher layout. Sky is a HYG
-// celestial dome (mag ≤ 6.5) with Stellarium Aquarius lines.
+// Green phosphor world. Cubes at the local launcher layout. No floor — open
+// deep space. Sky is the HYG dome + Stellarium Aquarius.
 import * as THREE from "three";
-import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
 import { makeSky } from "./sky.js";
 
@@ -37,15 +36,15 @@ const LINES = [
 
 // Where the camera orbits around, and how far out it starts.
 export const FOCAL = new THREE.Vector3(0, 5.98, 0);
-export const DEFAULT_RADIUS = 16;
+export const DEFAULT_RADIUS = 12;
 
 const DISPLAY_STACK =
   '"Bahnschrift", "DIN Alternate", "Oswald", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
 
 export function buildWorld(scene) {
 
-  scene.background = new THREE.Color(0x070a14);
-  scene.fog = new THREE.FogExp2(0x0a0e1f, 0.024);
+  scene.background = new THREE.Color(0x0a0a0c);
+  scene.fog = new THREE.FogExp2(0x0a0a0c, 0.008);
 
   // --- lights --------------------------------------------------------------
   scene.add(new THREE.AmbientLight(0x8a6, 0.5));
@@ -59,12 +58,7 @@ export function buildWorld(scene) {
   fill.position.set(0, 2, -9);
   scene.add(fill);
 
-  scene.add(makeGround());
-  scene.add(makeLightPool());
   scene.add(makeSky());
-
-  const rain = createRain(900);
-  scene.add(rain.lines);
 
   // --- the constellation ---------------------------------------------------
   const tiles = TILE_CFG.map((cfg) => makeTile(cfg));
@@ -91,7 +85,6 @@ export function buildWorld(scene) {
     update(dt) {
       // Only called when motion is allowed (main.js) — under reduced motion
       // the world is static: tiles at anchors, lines drawn, everything visible.
-      rain.update(dt);
       stepPhysics(tiles, dt);
       lines.update(tiles, pole);
       const t = performance.now() / 1000;
@@ -104,44 +97,6 @@ export function buildWorld(scene) {
       b.glow.material.opacity = on ? 0.55 : 0.3;
     },
   };
-}
-
-function makeGround() {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(70, 70),
-    new THREE.MeshStandardMaterial({ color: 0x070a12, roughness: 0.9 }),
-  );
-  mesh.rotation.x = -Math.PI / 2;
-  return mesh;
-}
-
-// A soft green light pool on the ground beneath the constellation — replaces
-// the old floor grid (a digital default) with quiet light on the night.
-function makeLightPool() {
-  const c = document.createElement("canvas");
-  c.width = 256;
-  c.height = 256;
-  const ctx = c.getContext("2d");
-  const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 124);
-  g.addColorStop(0, "rgba(125,255,196,0.5)");
-  g.addColorStop(0.5, "rgba(125,255,196,0.16)");
-  g.addColorStop(1, "rgba(125,255,196,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(18, 18),
-    new THREE.MeshBasicMaterial({
-      map: new THREE.CanvasTexture(c),
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    }),
-  );
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 0.02;
-  return mesh;
 }
 
 // A tile = a star: a solid lit cube with the app's 2D glyph icon, a soft

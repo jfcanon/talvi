@@ -11,6 +11,9 @@
 // motion except the autonomous world (rain, scan, sign glitch). The labels
 // track their buildings every frame so the anchors stay on target.
 import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { buildWorld } from "./world.js";
 import { OrbitController } from "./input.js";
 
@@ -23,16 +26,19 @@ export function bootScene() {
 
   canvas.style.touchAction = "none";
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setClearColor(0x05060b, 1);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
+  renderer.setClearColor(0x0a0a0c, 1);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05060b);
-  scene.fog = new THREE.FogExp2(0x05060b, 0.012);
+  scene.background = new THREE.Color(0x0a0a0c);
+  scene.fog = new THREE.FogExp2(0x0a0a0c, 0.008);
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 520);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 520);
 
   const world = buildWorld(scene);
   const orbit = new OrbitController(camera, world.focal, world.radius);
@@ -194,12 +200,20 @@ export function bootScene() {
   });
 
   // --- resize / loop -------------------------------------------------------
+  let composer = null;
+  if (!reduceMotion && !isMobile) {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.4, 0.2));
+  }
+
   function resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    if (composer) composer.setSize(w, h);
   }
   window.addEventListener("resize", resize);
 
@@ -232,7 +246,8 @@ export function bootScene() {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     if (!reduceMotion) world.update(dt);
-    renderer.render(scene, camera);
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
