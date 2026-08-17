@@ -1,27 +1,11 @@
-// talvi hub — the constellation front door (v6.0).
+// talvi hub — the constellation front door (v7.0).
 //
-// Design direction (frontend-design + talvi-design): the launcher is a
-// CONSTELLATION. The four tiles — relay ▣, chat ▤, cinto ◈, a dim future ＋ —
-// are stars connected by faint phosphor lines that LIVE with the physics
-// (they stretch as the tiles drift and bounce), and the "talvi" wordmark is a
-// bright pole star above. One front door = the apps are connected. The lines
-// are the signature; everything else stays quiet.
-//
-// What changed from v4.3.2:
-//   - the rigid 2×2 grid became a constellation arrangement;
-//   - faint constellation lines connect the tiles (updated each frame to the
-//     live physics positions) and reach up to the wordmark pole star;
-//   - the floor grid and the sonar pulse rings are gone — a soft light pool
-//     glows on the ground beneath the constellation instead;
-//   - a quiet arrival: the tiles scale in staggered, the lines fade in
-//     (instant under prefers-reduced-motion);
-//   - the fog leans cool blue-violet so the night isn't flat black.
-//
-// Kept: the physics (drift + bounce, never phase), orbit/dolly camera,
-// raycast click, hover highlight, the `>_` prompt echo, the blade.
+// Green phosphor world. Cubes sit in ENU metres from the Buenos Aires Obelisk
+// (-34.6037014, -58.3816048). Sky is Aquarius plus a dense field (visibility +2%).
 import * as THREE from "three";
 import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
+import { makeSky, SKY_RADIUS } from "./sky.js";
 
 const SIDE = 2.3; // tile edge.
 
@@ -31,18 +15,28 @@ const SPRING = 1.3;
 const DAMP = 0.985;
 const REST = 0.35;
 
-// The constellation: four apps + a dim future star. Positions form a
-// connected pattern, spaced comfortably above 2*BODY_R so the stars rest
-// apart and only collide when a gust pushes them together.
+const OBELISK = { lat: -34.6037014, lng: -58.3816048 };
+const M_PER_UNIT = 80;
+const EARTH_R = 6378137;
+
+function enu(lat, lng) {
+  const lat0 = (OBELISK.lat * Math.PI) / 180;
+  const dLat = ((lat - OBELISK.lat) * Math.PI) / 180;
+  const dLng = ((lng - OBELISK.lng) * Math.PI) / 180;
+  return {
+    x: (dLng * Math.cos(lat0) * EARTH_R) / M_PER_UNIT,
+    z: (dLat * EARTH_R) / M_PER_UNIT,
+  };
+}
+
 const TILE_CFG = [
-  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
-  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
-  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
-  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
-  { key: "future", glyph: "＋", href: null, x: 0, baseY: 7.2, z: 0.2 },
+  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", baseY: 5.2, ...enu(-34.601056, -58.383239) },
+  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", baseY: 5.2, ...enu(-34.608055, -58.370278) },
+  { key: "cinto", glyph: "◈", href: "/cinto", baseY: 3.4, ...enu(-34.609722, -58.3925) },
+  { key: "learn", glyph: "◆", href: "/learn", baseY: 2.2, ...enu(-34.594722, -58.375) },
+  { key: "future", glyph: "＋", href: null, baseY: 7.2, ...enu(-34.6095, -58.3859) },
 ];
 
-// The pole star — the wordmark, floating above the constellation.
 const WORD_POS = new THREE.Vector3(0, 9.6, 0);
 
 // Which stars the constellation lines connect. "word" is the pole star.
@@ -57,7 +51,7 @@ const LINES = [
 
 // Where the camera orbits around, and how far out it starts.
 export const FOCAL = new THREE.Vector3(0, 5.2, 0);
-export const DEFAULT_RADIUS = 16;
+export const DEFAULT_RADIUS = 24;
 
 const DISPLAY_STACK =
   '"Bahnschrift", "DIN Alternate", "Oswald", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
@@ -81,6 +75,7 @@ export function buildWorld(scene) {
 
   scene.add(makeGround());
   scene.add(makeLightPool());
+  scene.add(makeSky());
 
   const rain = createRain(900);
   scene.add(rain.lines);
@@ -127,7 +122,7 @@ export function buildWorld(scene) {
 
 function makeGround() {
   const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(70, 70),
+    new THREE.PlaneGeometry(SKY_RADIUS * 1.6, SKY_RADIUS * 1.6),
     new THREE.MeshStandardMaterial({ color: 0x070a12, roughness: 0.9 }),
   );
   mesh.rotation.x = -Math.PI / 2;

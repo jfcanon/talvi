@@ -1,4 +1,4 @@
-// talvi hub — the explorable world (v6.0, constellation + orbit/dolly).
+// talvi hub — the explorable world (v7.0).
 //
 // The scroll narrative is gone. This is a small world you move through like
 // Google Earth:
@@ -21,6 +21,8 @@ export function bootScene() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = window.matchMedia("(pointer: fine)").matches;
 
+  canvas.style.touchAction = "none";
+
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setClearColor(0x05060b, 1);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -28,9 +30,9 @@ export function bootScene() {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05060b);
-  scene.fog = new THREE.FogExp2(0x05060b, 0.018);
+  scene.fog = new THREE.FogExp2(0x05060b, 0.012);
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 240);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
 
   const world = buildWorld(scene);
   const orbit = new OrbitController(camera, world.focal, world.radius);
@@ -63,8 +65,27 @@ export function bootScene() {
     }
   }
 
+  function eat(e) {
+    e.preventDefault();
+  }
+  canvas.addEventListener("touchstart", eat, { passive: false });
+  canvas.addEventListener("touchmove", eat, { passive: false });
+  canvas.addEventListener("touchend", eat, { passive: false });
+  for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+    canvas.addEventListener(type, eat, { passive: false });
+    document.addEventListener(type, eat, { passive: false });
+  }
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length > 1) e.preventDefault();
+    },
+    { passive: false },
+  );
+
   // --- drag = orbit, tap = open, hover = highlight -------------------------
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch") e.preventDefault();
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {
@@ -80,6 +101,7 @@ export function bootScene() {
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") e.preventDefault();
     const prev = pointers.get(e.pointerId);
     if (prev) {
       const dx = e.clientX - prev.x;

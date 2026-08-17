@@ -1,4 +1,4 @@
-// talvi hub — the constellation front door (v6.0).
+// talvi hub — the constellation front door (v7.0).
 //
 // Server-rendered markup; the world boots from /h.js (scene modules bundled by
 // build-assets.mjs) and /h.css is linked, never inlined — CSP default-src
@@ -94,7 +94,7 @@ export function hubPage({ authed } = {}) {
     : '<a class="blade__login" href="/sign-in?redirect=/" aria-label="sign in">⏻</a>';
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">' +
     '<meta name="color-scheme" content="dark">' +
     '<meta name="robots" content="noindex, nofollow">' +
     "<title>talvi</title>" +
