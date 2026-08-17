@@ -1,4 +1,5 @@
-// talvi hub — browser test (v7.0). Run against the live production hub:
+// talvi hub — browser test (v6.0, constellation + four app stars). Run against
+// the live production hub:
 //
 //   npm i --no-save playwright-core   # already present in green's node_modules
 //   node scripts/hub-browser-test.mjs [base-url]

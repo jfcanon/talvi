@@ -1,4 +1,4 @@
-// talvi hub — the constellation front door (v7.0).
+// talvi hub — the constellation front door (v6.0).
 //
 // Server-rendered markup; the world boots from /h.js (scene modules bundled by
 // build-assets.mjs) and /h.css is linked, never inlined — CSP default-src
@@ -10,7 +10,7 @@
 //     instant switcher, and the navigation fallback if WebGL is absent.
 //   - four CUBES (relay, chat, cinto, learn). Click a cube (raycast) to open
 //     its app. The blade is the keyboard
-//     path; there are no DOM app labels (the names live in the world).
+//     path; there are no DOM app labels (v4.1 — the names live in the world).
 //   - the HUD: the `>_` prompt (which echoes a hovered cube as
 //     "> open relay") and a one-line hint of the controls.
 //   - the .leak/.grain/.wear film overlays, above the canvas (A5c).
@@ -55,7 +55,8 @@ const APPS = [
 
 // The world cubes — the apps you can open — live in scene/world.js (their
 // keys, nameplates and hrefs). The blade below covers keyboard navigation;
-// the raycast covers clicking a cube. No DOM app labels.
+// the raycast covers clicking a cube. No DOM app labels (v4.1 — the names
+// are fixed 3D nameplates in the world).
 //
 // The MORE slot is a REAL <button> — it toggles the agent panel (PR2), not a
 // link. No inline handler (CSP: script-src 'self' — which is WHY the toggle
