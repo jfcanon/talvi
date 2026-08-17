@@ -1,4 +1,4 @@
-// talvi hub — the explorable world (v8.0).
+// talvi hub — the explorable world (v9.0).
 //
 // The scroll narrative is gone. This is a small world you move through like
 // Google Earth:
@@ -11,12 +11,8 @@
 // motion except the autonomous world (rain, scan, sign glitch). The labels
 // track their buildings every frame so the anchors stay on target.
 import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { buildWorld } from "./world.js";
 import { OrbitController } from "./input.js";
-import { makeStardust } from "./sky.js";
 
 export function bootScene() {
   const canvas = document.getElementById("scene");
@@ -28,9 +24,9 @@ export function bootScene() {
   canvas.style.touchAction = "none";
 
   const isMobile = window.matchMedia("(max-width: 768px)").matches;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setClearColor(0x0a0a0c, 1);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
@@ -43,10 +39,8 @@ export function bootScene() {
 
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 520);
 
-  const world = buildWorld(scene);
+  const world = buildWorld(scene, isMobile ? 80 : 160);
   const orbit = new OrbitController(camera, world.focal, world.radius);
-  const dust = makeStardust(isMobile ? 80 : 160);
-  scene.add(dust.points);
 
   // --- pointer / raycast ---------------------------------------------------
   const raycaster = new THREE.Raycaster();
@@ -124,7 +118,10 @@ export function bootScene() {
       if (pointers.size === 2) {
         const pts = [...pointers.values()];
         const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        if (prev._d && d > 0 && prev._d > 0) orbit.dolly(d / prev._d);
+        if (prev._d && d > 0 && prev._d > 0) {
+          orbit.dolly(d / prev._d);
+          poke();
+        }
         for (const p of pts) p._d = d;
         return;
       }
@@ -134,11 +131,15 @@ export function bootScene() {
           const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
           if (moved > 5) dragging = true;
         }
-        if (dragging) orbit.orbit(dx, dy);
+        if (dragging) {
+          orbit.orbit(dx, dy);
+          poke();
+        }
       }
     } else if (finePointer && pointers.size === 0 && !dragging) {
       // Hover: only for a fine pointer, when nothing is being dragged.
       setHover(pick(e.clientX, e.clientY));
+      poke();
     }
   });
 
@@ -170,6 +171,7 @@ export function bootScene() {
     (e) => {
       e.preventDefault();
       orbit.dolly(Math.exp(e.deltaY * 0.0012));
+      poke();
     },
     { passive: false },
   );
@@ -180,50 +182,52 @@ export function bootScene() {
       case "ArrowLeft":
         e.preventDefault();
         orbit.orbit(0.14, 0);
+        poke();
         break;
       case "ArrowRight":
         e.preventDefault();
         orbit.orbit(-0.14, 0);
+        poke();
         break;
       case "ArrowUp":
         e.preventDefault();
         orbit.orbit(0, 0.1);
+        poke();
         break;
       case "ArrowDown":
         e.preventDefault();
         orbit.orbit(0, -0.1);
+        poke();
         break;
       case "+":
       case "=":
         orbit.dolly(1 / 1.18);
+        poke();
         break;
       case "-":
       case "_":
         orbit.dolly(1.18);
+        poke();
         break;
     }
   });
-
-  // --- resize / loop -------------------------------------------------------
-  let composer = null;
-  if (!reduceMotion && !isMobile) {
-    composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.12, 0.18, 0.93));
-  }
 
   function resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
-    if (composer) composer.setSize(w, h);
+    poke();
   }
   window.addEventListener("resize", resize);
 
   const resetBtn = document.getElementById("view-reset");
-  if (resetBtn) resetBtn.addEventListener("click", () => orbit.reset());
+  if (resetBtn) resetBtn.addEventListener("click", () => {
+    orbit.reset();
+    poke();
+  });
 
   // Test probe: exposes each building's current screen position so the browser
   // test can click a cube and assert orbit/zoom without depending on the DOM
@@ -246,17 +250,41 @@ export function bootScene() {
     });
   };
 
+  let raf = 0;
   let last = performance.now();
-  function frame(now) {
+  let liveUntil = last + 2200;
+  let dustAcc = 0;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
+
+  function draw(now) {
+    raf = 0;
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
-    if (!reduceMotion) {
-      world.update(dt);
-      dust.update(dt, camera);
+    const live = now < liveUntil;
+    if (!reduceMotion && live) world.update(dt);
+    dustAcc += dt;
+    if (!reduceMotion && (live || dustAcc >= 0.125)) {
+      world.updateDust(dustAcc);
+      dustAcc = 0;
     }
-    if (composer) composer.render();
-    else renderer.render(scene, camera);
-    requestAnimationFrame(frame);
+    renderer.render(scene, camera);
+    renderer.shadowMap.needsUpdate = live;
+    if (live && !reduceMotion) schedule();
   }
-  requestAnimationFrame(frame);
+
+  function schedule() {
+    if (!raf) raf = requestAnimationFrame(draw);
+  }
+
+  function poke() {
+    liveUntil = performance.now() + 450;
+    schedule();
+  }
+
+  if (!reduceMotion) setInterval(() => {
+    if (performance.now() >= liveUntil) schedule();
+  }, 125);
+
+  schedule();
 }
