@@ -1,0 +1,52 @@
+name: Terraform Mail
+
+# ygdcbtmc4u.uk inbound mail (Cloudflare Email Routing). Same rules as every
+# other stack: PR → plan, merge → apply. Terraform never runs locally.
+# No worker build — this stack is DNS + Email Routing only.
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'mail/**'
+      - '.github/workflows/terraform-mail.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'mail/**'
+      - '.github/workflows/terraform-mail.yml'
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN:         ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  TF_VAR_talvi_zone_id:         ${{ vars.TALVI_ZONE_ID }}
+  AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      - run: terraform init -input=false
+        working-directory: mail
+      - run: terraform plan -no-color
+        working-directory: mail
+
+  apply:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      - run: terraform init -input=false
+        working-directory: mail
+      - run: terraform apply -auto-approve -no-color
+        working-directory: mail
