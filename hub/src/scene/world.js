@@ -1,4 +1,4 @@
-// talvi hub — the constellation front door (v8.0).
+// talvi hub — the constellation front door (v9.0).
 //
 // Green phosphor world. Cubes at the local launcher layout. No floor — open
 // deep space. Sky is the HYG dome + Stellarium Aquarius.
@@ -41,7 +41,7 @@ export const DEFAULT_RADIUS = 12;
 const DISPLAY_STACK =
   '"Bahnschrift", "DIN Alternate", "Oswald", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
 
-export function buildWorld(scene) {
+export function buildWorld(scene, dustCount = 160) {
 
   scene.background = new THREE.Color(0x0a0a0c);
   scene.fog = new THREE.FogExp2(0x0a0a0c, 0.008);
@@ -66,7 +66,8 @@ export function buildWorld(scene) {
   fill.position.set(-6, 8, 8);
   scene.add(fill);
 
-  scene.add(makeSky());
+  const sky = makeSky(dustCount);
+  scene.add(sky.group);
 
   // --- the constellation ---------------------------------------------------
   const tiles = TILE_CFG.map((cfg) => makeTile(cfg));
@@ -100,6 +101,7 @@ export function buildWorld(scene) {
       // The signature shimmers faintly — a slow breath on the lines.
       lines.mesh.material.opacity = (0.2 + 0.05 * Math.sin(t * 0.7)) * p;
     },
+    updateDust: sky.updateDust,
     setHighlight(b, on) {
       b.mat.emissiveIntensity = on ? 0.22 : 0.06;
       b.glow.material.opacity = on ? 0.16 : 0.06;

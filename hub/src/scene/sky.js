@@ -1,4 +1,4 @@
-// talvi hub — HYG celestial dome (v8.0).
+// talvi hub — HYG celestial dome (v9.0). One Points draw for stars + dust.
 // Stars: astronexus/HYG-Database hygdata_v41, mag <= 6.5.
 // Mapping: mathiasbno/three-starmap RA/Dec → sphere.
 // Aquarius lines: Stellarium western constellationship.fab
@@ -70,18 +70,17 @@ function starRgb(ra, dec, mag) {
   return [1, 0.72, 0.52];
 }
 
-function magSize(m) {
-  return Math.max(1.1, Math.min(7.5, 6.2 * Math.pow(10, -0.11 * (m + 1.44))));
-}
-
-export function makeSky() {
+export function makeSky(dustCount = 160) {
   const group = new THREE.Group();
   group.renderOrder = -1;
   const map = starTexture();
-
-  const n = catalog.stars.length;
+  const anchors = catalog.aqrAnchors || [];
+  const starN = catalog.stars.length + anchors.length;
+  const n = starN + dustCount;
   const pos = new Float32Array(n * 3);
   const col = new Float32Array(n * 3);
+  const vel = new Float32Array(dustCount * 3);
+
   catalog.stars.forEach((s, i) => {
     const p = raDecToPoint(s[0], s[1], SKY_RADIUS);
     pos[i * 3] = p.x;
@@ -92,6 +91,38 @@ export function makeSky() {
     col[i * 3 + 1] = rgb[1];
     col[i * 3 + 2] = rgb[2];
   });
+  anchors.forEach((a, k) => {
+    const i = catalog.stars.length + k;
+    const p = raDecToPoint(a.ra, a.dec, SKY_RADIUS);
+    pos[i * 3] = p.x;
+    pos[i * 3 + 1] = p.y;
+    pos[i * 3 + 2] = p.z;
+    col[i * 3] = 1;
+    col[i * 3 + 1] = 0.95;
+    col[i * 3 + 2] = 0.82;
+  });
+
+  function placeDust(d) {
+    let x, y, z, r;
+    do {
+      x = (Math.random() - 0.5) * 36;
+      y = 1 + Math.random() * 16;
+      z = (Math.random() - 0.5) * 36;
+      r = Math.hypot(x, y - 6, z);
+    } while (r < 9);
+    const i = starN + d;
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+    vel[d * 3] = (Math.random() - 0.5) * 0.08;
+    vel[d * 3 + 1] = (Math.random() - 0.5) * 0.05;
+    vel[d * 3 + 2] = (Math.random() - 0.5) * 0.08;
+    col[i * 3] = 0.78;
+    col[i * 3 + 1] = 0.83;
+    col[i * 3 + 2] = 0.88;
+  }
+  for (let d = 0; d < dustCount; d++) placeDust(d);
+
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
@@ -101,10 +132,10 @@ export function makeSky() {
       new THREE.PointsMaterial({
         map,
         vertexColors: true,
-        size: 2.4,
+        size: 2.2,
         sizeAttenuation: false,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.9,
         depthWrite: false,
         fog: false,
         blending: THREE.AdditiveBlending,
@@ -112,35 +143,6 @@ export function makeSky() {
       }),
     ),
   );
-
-  const anchors = catalog.aqrAnchors || [];
-  if (anchors.length) {
-    const ap = new Float32Array(anchors.length * 3);
-    anchors.forEach((a, i) => {
-      const p = raDecToPoint(a.ra, a.dec, SKY_RADIUS);
-      ap[i * 3] = p.x;
-      ap[i * 3 + 1] = p.y;
-      ap[i * 3 + 2] = p.z;
-    });
-    const ag = new THREE.BufferGeometry();
-    ag.setAttribute("position", new THREE.BufferAttribute(ap, 3));
-    group.add(
-      new THREE.Points(
-        ag,
-        new THREE.PointsMaterial({
-          map,
-          color: 0xfff2d0,
-          size: magSize(2.4),
-          sizeAttenuation: false,
-          transparent: true,
-          opacity: 1,
-          depthWrite: false,
-          fog: false,
-          blending: THREE.AdditiveBlending,
-        }),
-      ),
-    );
-  }
 
   const segs = catalog.aqrSegs || [];
   if (segs.length) {
@@ -173,10 +175,8 @@ export function makeSky() {
   }
 
   const clouds = [
-    { ra: 22.1, dec: -6, rgb: [80, 40, 90], s: 180 },
-    { ra: 21.4, dec: 8, rgb: [30, 50, 90], s: 220 },
-    { ra: 5.6, dec: -20, rgb: [90, 45, 40], s: 160 },
-    { ra: 12.8, dec: 40, rgb: [40, 55, 80], s: 200 },
+    { ra: 22.1, dec: -6, rgb: [80, 40, 90], s: 200 },
+    { ra: 5.6, dec: -20, rgb: [50, 55, 90], s: 180 },
   ];
   for (const c of clouds) {
     const spr = new THREE.Sprite(
@@ -198,62 +198,22 @@ export function makeSky() {
   group.rotation.z = THREE.MathUtils.degToRad(TILT);
   group.rotation.x = THREE.MathUtils.degToRad(BA_LAT);
   group.rotation.y = THREE.MathUtils.degToRad(BA_LNG + 360 * (EVENING_HOUR / 24 - 0.5));
-  return group;
-}
 
-export function makeStardust(count) {
-  const n = count;
-  const pos = new Float32Array(n * 3);
-  const vel = new Float32Array(n * 3);
-
-  function place(i) {
-    let x, y, z, r;
-    do {
-      x = (Math.random() - 0.5) * 36;
-      y = 1 + Math.random() * 16;
-      z = (Math.random() - 0.5) * 36;
-      r = Math.hypot(x, y - 6, z);
-    } while (r < 9);
-    pos[i * 3] = x;
-    pos[i * 3 + 1] = y;
-    pos[i * 3 + 2] = z;
-    vel[i * 3] = (Math.random() - 0.5) * 0.08;
-    vel[i * 3 + 1] = (Math.random() - 0.5) * 0.05;
-    vel[i * 3 + 2] = (Math.random() - 0.5) * 0.08;
-  }
-
-  for (let i = 0; i < n; i++) place(i);
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  const points = new THREE.Points(
-    geo,
-    new THREE.PointsMaterial({
-      map: starTexture(),
-      color: 0xc8d4e0,
-      size: 0.38,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.2,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  );
-
-  function update(dt) {
-    for (let i = 0; i < n; i++) {
-      vel[i * 3] += (Math.random() - 0.5) * 0.012 * dt;
-      vel[i * 3 + 1] += (Math.random() - 0.5) * 0.008 * dt;
-      vel[i * 3 + 2] += (Math.random() - 0.5) * 0.012 * dt;
-      vel[i * 3] *= 0.994;
-      vel[i * 3 + 1] *= 0.994;
-      vel[i * 3 + 2] *= 0.994;
-      pos[i * 3] += vel[i * 3] * dt;
-      pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
-      pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+  function updateDust(dt) {
+    for (let d = 0; d < dustCount; d++) {
+      vel[d * 3] += (Math.random() - 0.5) * 0.012 * dt;
+      vel[d * 3 + 1] += (Math.random() - 0.5) * 0.008 * dt;
+      vel[d * 3 + 2] += (Math.random() - 0.5) * 0.012 * dt;
+      vel[d * 3] *= 0.994;
+      vel[d * 3 + 1] *= 0.994;
+      vel[d * 3 + 2] *= 0.994;
+      const i = starN + d;
+      pos[i * 3] += vel[d * 3] * dt;
+      pos[i * 3 + 1] += vel[d * 3 + 1] * dt;
+      pos[i * 3 + 2] += vel[d * 3 + 2] * dt;
     }
     geo.attributes.position.needsUpdate = true;
   }
 
-  return { points, update };
+  return { group, updateDust };
 }
