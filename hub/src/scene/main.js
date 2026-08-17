@@ -1,4 +1,4 @@
-// talvi hub — the explorable world (v6.0, constellation + orbit/dolly).
+// talvi hub — the explorable world (v7.0).
 //
 // The scroll narrative is gone. This is a small world you move through like
 // Google Earth:
@@ -183,7 +183,7 @@ export function bootScene() {
 
   // Test probe: exposes each building's current screen position so the browser
   // test can click a cube and assert orbit/zoom without depending on the DOM
-  // (v4.1: the labels are in-world now, not DOM elements). No secrets — just
+  // (names live in the world, not the DOM). No secrets — just
   // public building keys, hrefs and projected coordinates.
   window.talviProbe = function () {
     const v = new THREE.Vector3();

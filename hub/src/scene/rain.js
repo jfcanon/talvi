@@ -1,6 +1,6 @@
 // talvi 3d — rain (blueprint A8, and the diagonal rain of talvi's style.css).
 //
-// A field of short phosphor line segments falling along a slightly diagonal
+// A field of short cyan line segments falling along a slightly diagonal
 // velocity vector, recycled to the top when they pass the floor. World-space
 // so the camera can fly through it; the count is scaled to the viewport so a
 // phone does not pay desktop's bill (A8).
@@ -31,7 +31,7 @@ export function createRain(baseCount) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.LineBasicMaterial({
-    color: 0x7dffc4,
+    color: 0x22e8ff,
     transparent: true,
     opacity: 0.5,
     blending: THREE.AdditiveBlending,

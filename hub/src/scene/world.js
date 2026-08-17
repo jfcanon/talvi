@@ -1,24 +1,8 @@
-// talvi hub — the constellation front door (v6.0).
+// talvi hub — the constellation front door (v7.0).
 //
-// Design direction (frontend-design + talvi-design): the launcher is a
-// CONSTELLATION. The four tiles — relay ▣, chat ▤, cinto ◈, a dim future ＋ —
-// are stars connected by faint phosphor lines that LIVE with the physics
-// (they stretch as the tiles drift and bounce), and the "talvi" wordmark is a
-// bright pole star above. One front door = the apps are connected. The lines
-// are the signature; everything else stays quiet.
-//
-// What changed from v4.3.2:
-//   - the rigid 2×2 grid became a constellation arrangement;
-//   - faint constellation lines connect the tiles (updated each frame to the
-//     live physics positions) and reach up to the wordmark pole star;
-//   - the floor grid and the sonar pulse rings are gone — a soft light pool
-//     glows on the ground beneath the constellation instead;
-//   - a quiet arrival: the tiles scale in staggered, the lines fade in
-//     (instant under prefers-reduced-motion);
-//   - the fog leans cool blue-violet so the night isn't flat black.
-//
-// Kept: the physics (drift + bounce, never phase), orbit/dolly camera,
-// raycast click, hover highlight, the `>_` prompt echo, the blade.
+// Frozen contract: 3D constellation + orbit/dolly (v6 geometry). World light
+// is magenta #ff2e88 / cyan #22e8ff (neo-noir). Blade/HUD stay phosphor.
+// v5 (2D) was discarded. Do not reintroduce a second version number here.
 import * as THREE from "three";
 import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
@@ -64,18 +48,18 @@ const DISPLAY_STACK =
 
 export function buildWorld(scene) {
 
-  scene.background = new THREE.Color(0x070a14);
-  scene.fog = new THREE.FogExp2(0x0a0e1f, 0.024);
+  scene.background = new THREE.Color(0x06040c);
+  scene.fog = new THREE.FogExp2(0x0c0614, 0.026);
 
   // --- lights --------------------------------------------------------------
-  scene.add(new THREE.AmbientLight(0x8a6, 0.5));
-  const key = new THREE.PointLight(0x7dffc4, 1.1, 42);
+  scene.add(new THREE.AmbientLight(0x446688, 0.42));
+  const key = new THREE.PointLight(0x22e8ff, 1.15, 42);
   key.position.set(9, 15, 14);
   scene.add(key);
-  const rim = new THREE.PointLight(0xff2e88, 0.7, 42);
+  const rim = new THREE.PointLight(0xff2e88, 1.05, 46);
   rim.position.set(-9, 7, -16);
   scene.add(rim);
-  const fill = new THREE.PointLight(0x22e8ff, 0.35, 30);
+  const fill = new THREE.PointLight(0x22e8ff, 0.45, 30);
   fill.position.set(0, 2, -9);
   scene.add(fill);
 
@@ -116,11 +100,12 @@ export function buildWorld(scene) {
       const t = performance.now() / 1000;
       const p = arrival(t, tiles, lines, pole);
       // The signature shimmers faintly — a slow breath on the lines.
-      lines.mesh.material.opacity = (0.2 + 0.05 * Math.sin(t * 0.7)) * p;
+      lines.mesh.material.opacity = (0.32 + 0.08 * Math.sin(t * 0.7)) * p;
     },
     setHighlight(b, on) {
-      b.mat.emissiveIntensity = on ? 1.15 : 0.55;
-      b.glow.material.opacity = on ? 0.55 : 0.3;
+      b.mat.emissiveIntensity = on ? 1.25 : 0.55;
+      b.glow.material.color.setHex(on ? 0xff2e88 : 0x22e8ff);
+      b.glow.material.opacity = on ? 0.62 : 0.32;
     },
   };
 }
@@ -128,23 +113,21 @@ export function buildWorld(scene) {
 function makeGround() {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(70, 70),
-    new THREE.MeshStandardMaterial({ color: 0x070a12, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: 0x07060e, roughness: 0.9 }),
   );
   mesh.rotation.x = -Math.PI / 2;
   return mesh;
 }
 
-// A soft green light pool on the ground beneath the constellation — replaces
-// the old floor grid (a digital default) with quiet light on the night.
 function makeLightPool() {
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 256;
   const ctx = c.getContext("2d");
   const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 124);
-  g.addColorStop(0, "rgba(125,255,196,0.5)");
-  g.addColorStop(0.5, "rgba(125,255,196,0.16)");
-  g.addColorStop(1, "rgba(125,255,196,0)");
+  g.addColorStop(0, "rgba(34,232,255,0.55)");
+  g.addColorStop(0.45, "rgba(255,46,136,0.22)");
+  g.addColorStop(1, "rgba(255,46,136,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 256, 256);
   const mesh = new THREE.Mesh(
@@ -175,7 +158,7 @@ function makeTile(cfg) {
     metalness: 0.18,
     transparent: true,
     opacity: 0.96,
-    emissive: 0x0a3a2c,
+    emissive: 0x1a0a22,
     emissiveIntensity: 0.55,
   });
   const body = new THREE.Mesh(new THREE.BoxGeometry(SIDE, SIDE, SIDE), mat);
@@ -185,7 +168,7 @@ function makeTile(cfg) {
     new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(SIDE, SIDE, SIDE)),
       new THREE.LineBasicMaterial({
-        color: 0x7dffc4,
+        color: 0x22e8ff,
         transparent: true,
         opacity: 0.14,
         blending: THREE.AdditiveBlending,
@@ -206,7 +189,7 @@ function makeTile(cfg) {
   iconY.rotation.x = -Math.PI / 2;
   group.add(iconY);
 
-  const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.3 : 0.16);
+  const glow = makeGlow(0x22e8ff, SIDE * 2.1, cfg.href ? 0.32 : 0.16);
   group.add(glow);
 
   let hit = null;
@@ -261,12 +244,12 @@ function makePoleStar() {
   ctx.font = "700 150px " + DISPLAY_STACK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.9)";
+  ctx.shadowColor = "rgba(255,46,136,0.95)";
   ctx.shadowBlur = 60;
-  ctx.fillStyle = "#7dffc4";
+  ctx.fillStyle = "#22e8ff";
   ctx.fillText("talvi", c.width / 2, c.height / 2 + 8);
   ctx.shadowBlur = 16;
-  ctx.fillStyle = "#eafff5";
+  ctx.fillStyle = "#eaf6ff";
   ctx.fillText("talvi", c.width / 2, c.height / 2 + 8);
 
   const word = new THREE.Sprite(
@@ -281,20 +264,20 @@ function makePoleStar() {
   word.scale.set(5.5, 1.4, 1);
   group.add(word);
 
-  const halo = makeGlow(0x9dffb0, 7, 0.4);
+  const halo = makeGlow(0xff2e88, 7, 0.42);
   group.add(halo);
 
   return { group, sprite: word };
 }
 
-// The constellation lines: faint phosphor segments connecting the stars.
+// The constellation lines: cyan segments connecting the stars.
 // Positions are rewritten every frame so the lines stretch with the physics.
 function makeLines(tiles, pole) {
   const positions = new Float32Array(LINES.length * 2 * 3);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.LineBasicMaterial({
-    color: 0x7dffc4,
+    color: 0x22e8ff,
     transparent: true,
     opacity: 0.2,
     blending: THREE.AdditiveBlending,
@@ -419,9 +402,9 @@ function makeIcon(glyph, size) {
   ctx.font = "700 150px " + DISPLAY_STACK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.9)";
+  ctx.shadowColor = "rgba(34,232,255,0.9)";
   ctx.shadowBlur = 40;
-  ctx.fillStyle = "#7dffc4";
+  ctx.fillStyle = "#22e8ff";
   ctx.fillText(glyph, c.width / 2, c.height / 2 + 4);
   const mat = new THREE.MeshBasicMaterial({
     map: new THREE.CanvasTexture(c),
