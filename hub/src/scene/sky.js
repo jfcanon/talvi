@@ -7,7 +7,7 @@ const FIELD = Math.round(2500 * 1.02);
 const VIEW_YAW = 0.5;
 const VIEW_PITCH = 0.42;
 const VIEW_RADIUS = 16;
-const FOCAL_Y = 5.2;
+const FOCAL_Y = 5.98;
 
 const AQR = {
   eps: [20.7945, -9.4958],

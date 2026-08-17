@@ -15,9 +15,9 @@ export class OrbitController {
     this.yaw = 0.5;
     this.pitch = 0.42;
     this.radius = radius;
+    this.homeRadius = radius;
     this.minRadius = 6;
     this.maxRadius = 56;
-    this.lift = 0;
     this.apply();
   }
 
@@ -35,18 +35,24 @@ export class OrbitController {
       this.target.y + this.radius * sp,
       this.target.z + this.radius * cp * Math.cos(this.yaw),
     );
-    this.camera.lookAt(this.target.x, this.target.y + this.lift, this.target.z);
+    this.camera.lookAt(this.target);
   }
 
   orbit(dx, dy) {
     this.yaw -= dx * 0.0052;
     this.pitch = clamp(this.pitch + dy * 0.0038, this.floorPitch(), Math.PI / 2 - 0.04);
-    this.lift = clamp(this.lift - dy * 0.14, 0, 80);
     this.apply();
   }
 
   dolly(factor) {
     this.radius = clamp(this.radius * factor, this.minRadius, this.maxRadius);
+    this.apply();
+  }
+
+  reset() {
+    this.yaw = 0.5;
+    this.pitch = 0.42;
+    this.radius = this.homeRadius;
     this.apply();
   }
 }

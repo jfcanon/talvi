@@ -16,14 +16,14 @@ const DAMP = 0.985;
 const REST = 0.35;
 
 const TILE_CFG = [
-  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
-  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
-  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
-  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
-  { key: "future", glyph: "＋", href: null, x: 0, baseY: 7.2, z: 0.2 },
+  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.98, z: 0.6 },
+  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.98, z: 0.6 },
+  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.91, z: -0.8 },
+  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.53, z: 1.2 },
+  { key: "future", glyph: "＋", href: null, x: 0, baseY: 8.28, z: 0.2 },
 ];
 
-const WORD_POS = new THREE.Vector3(0, 9.6, 0);
+const WORD_POS = new THREE.Vector3(0, 11.04, 0);
 
 // Which stars the constellation lines connect. "word" is the pole star.
 const LINES = [
@@ -36,7 +36,7 @@ const LINES = [
 ];
 
 // Where the camera orbits around, and how far out it starts.
-export const FOCAL = new THREE.Vector3(0, 5.2, 0);
+export const FOCAL = new THREE.Vector3(0, 5.98, 0);
 export const DEFAULT_RADIUS = 16;
 
 const DISPLAY_STACK =
