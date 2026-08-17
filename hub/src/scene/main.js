@@ -32,7 +32,7 @@ export function bootScene() {
   scene.background = new THREE.Color(0x05060b);
   scene.fog = new THREE.FogExp2(0x05060b, 0.012);
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 520);
 
   const world = buildWorld(scene);
   const orbit = new OrbitController(camera, world.focal, world.radius);

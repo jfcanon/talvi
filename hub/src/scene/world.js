@@ -1,7 +1,7 @@
 // talvi hub — the constellation front door (v8.0).
 //
-// Green phosphor world. Cubes use the local launcher layout. Sky is Aquarius
-// (above the horizon, facing the default camera) plus a dense field.
+// Green phosphor world. Cubes use the local launcher layout. Sky is a HYG
+// celestial dome (mag ≤ 6.5) with Stellarium Aquarius lines.
 import * as THREE from "three";
 import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
