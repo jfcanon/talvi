@@ -1,4 +1,4 @@
-// talvi hub — the explorable front door (v4, ideas #1 + #2).
+// talvi hub — the constellation front door (v6.0).
 //
 // Server-rendered markup; the world boots from /h.js (scene modules bundled by
 // build-assets.mjs) and /h.css is linked, never inlined — CSP default-src
@@ -8,8 +8,8 @@
 // Google Earth — plus:
 //   - the blade: flat chrome rail, always visible, keyboard-first — the
 //     instant switcher, and the navigation fallback if WebGL is absent.
-//   - three CUBES (relay, chat, cinto), each with a fixed 3D nameplate above
-//     it. Click a cube (raycast) to open its app. The blade is the keyboard
+//   - four CUBES (relay, chat, cinto, learn). Click a cube (raycast) to open
+//     its app. The blade is the keyboard
 //     path; there are no DOM app labels (v4.1 — the names live in the world).
 //   - the HUD: the `>_` prompt (which echoes a hovered cube as
 //     "> open relay") and a one-line hint of the controls.
@@ -22,25 +22,25 @@ const v = encodeURIComponent(ASSET_VERSION);
 // renders a disabled future-slot.
 const APPS = [
   {
-    glyph: "��",
+    glyph: "▣",
     label: "RELAY",
     href: "https://app.ygdcbtmc4u.uk/relay",
     title: "Talvi — file share (relay)",
   },
   {
-    glyph: "��",
+    glyph: "▤",
     label: "CHAT",
     href: "https://app.ygdcbtmc4u.uk/chat",
     title: "Chat",
   },
   {
-    glyph: "��",
+    glyph: "◈",
     label: "CINTO",
     href: "/cinto",
     title: "Cinto — compliance",
   },
   {
-    glyph: "��",
+    glyph: "◆",
     label: "LEARN",
     href: "/learn",
     title: "Tribunal Learn — the machinery",

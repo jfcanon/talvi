@@ -39,6 +39,29 @@ await build({
 const js = await readFile(join(outdir, "client-bundle.js"), "utf8");
 const css = await readFile(join(root, "src/ui/style.css"), "utf8");
 
+const GLYPHS = ["\u25A3", "\u25A4", "\u25C8", "\u25C6"];
+if (js.includes("\uFFFD") || js.includes("\\uFFFD")) {
+  throw new Error("build-assets: U+FFFD in bundled worker — glyph encoding lost");
+}
+for (const srcName of ["src/scene/world.js", "src/ui/hubpage.js"]) {
+  const src = await readFile(join(root, srcName), "utf8");
+  if (src.includes("\uFFFD")) {
+    throw new Error(`build-assets: U+FFFD in ${srcName} — restore cube glyphs`);
+  }
+  for (const g of GLYPHS) {
+    if (!src.includes(g)) {
+      const cp = g.codePointAt(0).toString(16).toUpperCase();
+      throw new Error(`build-assets: missing cube glyph U+${cp} in ${srcName}`);
+    }
+  }
+}
+for (const g of GLYPHS) {
+  const cp = g.codePointAt(0).toString(16).toUpperCase();
+  if (!js.includes(g) && !js.includes("\\u" + cp)) {
+    throw new Error(`build-assets: missing cube glyph U+${cp} in bundled worker`);
+  }
+}
+
 const version = createHash("sha256")
   .update(css)
   .update("\x00")

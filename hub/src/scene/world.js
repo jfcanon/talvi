@@ -31,14 +31,14 @@ const SPRING = 1.3;
 const DAMP = 0.985;
 const REST = 0.35;
 
-// The constellation: three apps + a dim future star. Positions form a
+// The constellation: four apps + a dim future star. Positions form a
 // connected pattern, spaced comfortably above 2*BODY_R so the stars rest
 // apart and only collide when a gust pushes them together.
 const TILE_CFG = [
-  { key: "relay", glyph: "��", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
-  { key: "chat", glyph: "��", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
-  { key: "cinto", glyph: "��", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
-  { key: "learn", glyph: "��", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
+  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
+  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
+  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
+  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
   { key: "future", glyph: "＋", href: null, x: 0, baseY: 7.2, z: 0.2 },
 ];
 
@@ -194,10 +194,17 @@ function makeTile(cfg) {
     ),
   );
 
-  // The 2D icon on the front face.
-  const icon = makeIcon(cfg.glyph, 1.55);
-  icon.position.z = half + 0.02;
-  group.add(icon);
+  const iconZ = makeIcon(cfg.glyph, 1.55);
+  iconZ.position.z = half + 0.02;
+  group.add(iconZ);
+  const iconX = iconZ.clone();
+  iconX.position.set(half + 0.02, 0, 0);
+  iconX.rotation.y = Math.PI / 2;
+  group.add(iconX);
+  const iconY = iconZ.clone();
+  iconY.position.set(0, half + 0.02, 0);
+  iconY.rotation.x = -Math.PI / 2;
+  group.add(iconY);
 
   const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.3 : 0.16);
   group.add(glow);
@@ -331,6 +338,7 @@ function arrival(t, tiles, lines, pole) {
   pole.group.children[0].material.opacity = 0.95 * p;
   pole.group.children[1].material.opacity = 0.4 * p;
   lines.mesh.material.opacity = 0.2 * p;
+  return p;
 }
 
 function easeOut(p) {
