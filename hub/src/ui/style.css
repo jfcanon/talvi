@@ -119,6 +119,29 @@ body {
   pointer-events: none;
 }
 
+.view-reset {
+  pointer-events: auto;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--hud-line-soft);
+  border-radius: 0.25rem;
+  background: var(--hud-fill);
+  color: var(--phosphor-dim);
+  font-family: var(--font-console);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.view-reset:hover,
+.view-reset:focus-visible {
+  color: var(--phosphor);
+  border-color: var(--hud-line);
+  outline: none;
+}
+
 /* The world's prompt — just the terminal mark, `>_`, with a glitching
    intermittent caret. main.js writes "open <app>" into .prompt__text while a
    building is hovered; idle, it is blank. */

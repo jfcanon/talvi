@@ -203,6 +203,9 @@ export function bootScene() {
   }
   window.addEventListener("resize", resize);
 
+  const resetBtn = document.getElementById("view-reset");
+  if (resetBtn) resetBtn.addEventListener("click", () => orbit.reset());
+
   // Test probe: exposes each building's current screen position so the browser
   // test can click a cube and assert orbit/zoom without depending on the DOM
   // (v4.1: the labels are in-world now, not DOM elements). No secrets — just
