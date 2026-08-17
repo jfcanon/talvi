@@ -1,4 +1,4 @@
-// talvi hub — orbit/dolly controller (v7.0).
+// talvi hub — orbit/dolly controller (v8.0).
 //
 // The camera orbits a focal point: drag = yaw/pitch (look around), wheel /
 // pinch / +/- = dolly (zoom toward the world), always clamped so the camera

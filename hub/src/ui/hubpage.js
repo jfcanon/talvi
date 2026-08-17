@@ -1,4 +1,4 @@
-// talvi hub — the constellation front door (v7.0).
+// talvi hub — the constellation front door (v8.0).
 //
 // Server-rendered markup; the world boots from /h.js (scene modules bundled by
 // build-assets.mjs) and /h.css is linked, never inlined — CSP default-src

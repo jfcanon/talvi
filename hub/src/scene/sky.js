@@ -1,9 +1,13 @@
-// talvi hub — night sky (v7.0). Field stars + Aquarius only.
+// talvi hub — night sky (v8.0). Field stars + Aquarius above the horizon.
 import * as THREE from "three";
 
 export const SKY_RADIUS = 90;
 
 const FIELD = Math.round(2500 * 1.02);
+const VIEW_YAW = 0.5;
+const VIEW_PITCH = 0.42;
+const VIEW_RADIUS = 16;
+const FOCAL_Y = 5.2;
 
 const AQR = {
   eps: [20.7945, -9.4958],
@@ -38,16 +42,6 @@ const AQR_LINES = [
   ["del", "s88"],
 ];
 
-function raDec(raHours, decDeg) {
-  const ra = (raHours / 24) * Math.PI * 2;
-  const dec = (decDeg * Math.PI) / 180;
-  return new THREE.Vector3(
-    Math.cos(dec) * Math.cos(ra),
-    Math.sin(dec),
-    Math.cos(dec) * Math.sin(ra),
-  ).multiplyScalar(SKY_RADIUS);
-}
-
 function rng(seed) {
   return function next() {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -55,6 +49,60 @@ function rng(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function defaultCamera() {
+  const cp = Math.cos(VIEW_PITCH);
+  const sp = Math.sin(VIEW_PITCH);
+  return new THREE.Vector3(
+    VIEW_RADIUS * cp * Math.sin(VIEW_YAW),
+    FOCAL_Y + VIEW_RADIUS * sp,
+    VIEW_RADIUS * cp * Math.cos(VIEW_YAW),
+  );
+}
+
+function aqrOnSky() {
+  const names = Object.keys(AQR);
+  let meanRa = 0;
+  let meanDec = 0;
+  for (const k of names) {
+    meanRa += AQR[k][0];
+    meanDec += AQR[k][1];
+  }
+  meanRa /= names.length;
+  meanDec /= names.length;
+
+  const local = {};
+  const scale = 2.4;
+  for (const k of names) {
+    const dRa = (AQR[k][0] - meanRa) * 15 * Math.cos((meanDec * Math.PI) / 180);
+    const dDec = AQR[k][1] - meanDec;
+    local[k] = new THREE.Vector2(dRa * scale, dDec * scale);
+  }
+
+  const cam = defaultCamera();
+  const away = new THREE.Vector3(-cam.x, 0, -cam.z).normalize();
+  const dir = away.add(new THREE.Vector3(0, 1.55, 0)).normalize();
+  const center = dir.multiplyScalar(SKY_RADIUS);
+  if (center.y < 28) center.y = 28;
+
+  const toCam = cam.clone().sub(center).normalize();
+  let right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), toCam);
+  if (right.lengthSq() < 1e-6) right = new THREE.Vector3(1, 0, 0);
+  right.normalize();
+  const up = new THREE.Vector3().crossVectors(toCam, right).normalize();
+  if (up.y < 0) {
+    up.negate();
+    right.negate();
+  }
+
+  const at = {};
+  for (const k of names) {
+    const p = center.clone().addScaledVector(right, local[k].x).addScaledVector(up, local[k].y);
+    if (p.y < 12) p.y = 12;
+    at[k] = p;
+  }
+  return at;
 }
 
 export function makeSky() {
@@ -87,15 +135,13 @@ export function makeSky() {
     ),
   );
 
+  const at = aqrOnSky();
   const names = Object.keys(AQR);
   const bright = new Float32Array(names.length * 3);
-  const at = {};
   names.forEach((k, i) => {
-    const p = raDec(AQR[k][0], AQR[k][1]);
-    at[k] = p;
-    bright[i * 3] = p.x;
-    bright[i * 3 + 1] = p.y;
-    bright[i * 3 + 2] = p.z;
+    bright[i * 3] = at[k].x;
+    bright[i * 3 + 1] = at[k].y;
+    bright[i * 3 + 2] = at[k].z;
   });
   const brightGeo = new THREE.BufferGeometry();
   brightGeo.setAttribute("position", new THREE.BufferAttribute(bright, 3));
@@ -103,11 +149,11 @@ export function makeSky() {
     new THREE.Points(
       brightGeo,
       new THREE.PointsMaterial({
-        color: 0x7dffc4,
-        size: 0.85,
+        color: 0xd4eee4,
+        size: 0.32,
         sizeAttenuation: true,
         transparent: true,
-        opacity: 0.95,
+        opacity: 0.88,
         depthWrite: false,
         fog: false,
       }),
@@ -132,9 +178,9 @@ export function makeSky() {
     new THREE.LineSegments(
       lineGeo,
       new THREE.LineBasicMaterial({
-        color: 0x7dffc4,
+        color: 0xb7d4c8,
         transparent: true,
-        opacity: 0.28,
+        opacity: 0.16,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         fog: false,

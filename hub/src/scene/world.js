@@ -1,11 +1,11 @@
-// talvi hub — the constellation front door (v7.0).
+// talvi hub — the constellation front door (v8.0).
 //
-// Green phosphor world. Cubes sit in ENU metres from the Buenos Aires Obelisk
-// (-34.6037014, -58.3816048). Sky is Aquarius plus a dense field (visibility +2%).
+// Green phosphor world. Cubes use the local launcher layout. Sky is Aquarius
+// (above the horizon, facing the default camera) plus a dense field.
 import * as THREE from "three";
 import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
-import { makeSky, SKY_RADIUS } from "./sky.js";
+import { makeSky } from "./sky.js";
 
 const SIDE = 2.3; // tile edge.
 
@@ -15,26 +15,12 @@ const SPRING = 1.3;
 const DAMP = 0.985;
 const REST = 0.35;
 
-const OBELISK = { lat: -34.6037014, lng: -58.3816048 };
-const M_PER_UNIT = 80;
-const EARTH_R = 6378137;
-
-function enu(lat, lng) {
-  const lat0 = (OBELISK.lat * Math.PI) / 180;
-  const dLat = ((lat - OBELISK.lat) * Math.PI) / 180;
-  const dLng = ((lng - OBELISK.lng) * Math.PI) / 180;
-  return {
-    x: (dLng * Math.cos(lat0) * EARTH_R) / M_PER_UNIT,
-    z: (dLat * EARTH_R) / M_PER_UNIT,
-  };
-}
-
 const TILE_CFG = [
-  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", baseY: 5.2, ...enu(-34.601056, -58.383239) },
-  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", baseY: 5.2, ...enu(-34.608055, -58.370278) },
-  { key: "cinto", glyph: "◈", href: "/cinto", baseY: 3.4, ...enu(-34.609722, -58.3925) },
-  { key: "learn", glyph: "◆", href: "/learn", baseY: 2.2, ...enu(-34.594722, -58.375) },
-  { key: "future", glyph: "＋", href: null, baseY: 7.2, ...enu(-34.6095, -58.3859) },
+  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
+  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
+  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
+  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
+  { key: "future", glyph: "＋", href: null, x: 0, baseY: 7.2, z: 0.2 },
 ];
 
 const WORD_POS = new THREE.Vector3(0, 9.6, 0);
@@ -51,7 +37,7 @@ const LINES = [
 
 // Where the camera orbits around, and how far out it starts.
 export const FOCAL = new THREE.Vector3(0, 5.2, 0);
-export const DEFAULT_RADIUS = 24;
+export const DEFAULT_RADIUS = 16;
 
 const DISPLAY_STACK =
   '"Bahnschrift", "DIN Alternate", "Oswald", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
@@ -122,7 +108,7 @@ export function buildWorld(scene) {
 
 function makeGround() {
   const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(SKY_RADIUS * 1.6, SKY_RADIUS * 1.6),
+    new THREE.PlaneGeometry(70, 70),
     new THREE.MeshStandardMaterial({ color: 0x070a12, roughness: 0.9 }),
   );
   mesh.rotation.x = -Math.PI / 2;

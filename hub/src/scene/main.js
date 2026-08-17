@@ -1,4 +1,4 @@
-// talvi hub — the explorable world (v7.0).
+// talvi hub — the explorable world (v8.0).
 //
 // The scroll narrative is gone. This is a small world you move through like
 // Google Earth:
