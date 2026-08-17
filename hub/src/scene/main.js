@@ -45,7 +45,7 @@ export function bootScene() {
 
   const world = buildWorld(scene);
   const orbit = new OrbitController(camera, world.focal, world.radius);
-  const dust = makeStardust(isMobile ? 280 : 700);
+  const dust = makeStardust(isMobile ? 80 : 160);
   scene.add(dust.points);
 
   // --- pointer / raycast ---------------------------------------------------
@@ -209,7 +209,7 @@ export function bootScene() {
   if (!reduceMotion && !isMobile) {
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.22, 0.28, 0.84));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.12, 0.18, 0.93));
   }
 
   function resize() {
