@@ -17,25 +17,31 @@ export class OrbitController {
     this.radius = radius;
     this.minRadius = 6;
     this.maxRadius = 56;
+    this.lift = 0;
     this.apply();
   }
 
+  floorPitch() {
+    const s = (0.4 - this.target.y) / this.radius;
+    return Math.asin(clamp(s, -0.999, 0.999));
+  }
+
   apply() {
+    this.pitch = clamp(this.pitch, this.floorPitch(), Math.PI / 2 - 0.04);
     const cp = Math.cos(this.pitch);
     const sp = Math.sin(this.pitch);
     this.camera.position.set(
       this.target.x + this.radius * cp * Math.sin(this.yaw),
-      // pitch is clamped so sin(pitch) never pushes the camera below the
-      // ground even at max zoom-out.
       this.target.y + this.radius * sp,
       this.target.z + this.radius * cp * Math.cos(this.yaw),
     );
-    this.camera.lookAt(this.target);
+    this.camera.lookAt(this.target.x, this.target.y + this.lift, this.target.z);
   }
 
   orbit(dx, dy) {
     this.yaw -= dx * 0.0052;
-    this.pitch = clamp(this.pitch + dy * 0.0038, -0.03, 1.15);
+    this.pitch = clamp(this.pitch + dy * 0.0038, this.floorPitch(), Math.PI / 2 - 0.04);
+    this.lift = clamp(this.lift - dy * 0.14, 0, 80);
     this.apply();
   }
 
