@@ -196,28 +196,20 @@ function makePoleStar() {
   ctx.font = "700 150px " + DISPLAY_STACK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.9)";
-  ctx.shadowBlur = 60;
-  ctx.fillStyle = "#7dffc4";
-  ctx.fillText("talvi", c.width / 2, c.height / 2 + 8);
-  ctx.shadowBlur = 16;
-  ctx.fillStyle = "#eafff5";
+  ctx.fillStyle = "#d8f5e8";
   ctx.fillText("talvi", c.width / 2, c.height / 2 + 8);
 
   const word = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: new THREE.CanvasTexture(c),
       transparent: true,
-      opacity: 0.95,
+      opacity: 1,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      toneMapped: false,
     }),
   );
   word.scale.set(5.5, 1.4, 1);
   group.add(word);
-
-  const halo = makeGlow(0x9dffb0, 7, 0.14);
-  group.add(halo);
 
   return { group, sprite: word };
 }
@@ -270,8 +262,7 @@ function arrival(t, tiles, lines, pole) {
     tile.group.scale.setScalar(s);
   }
   const p = Math.min(1, Math.max(0, t / 1.2));
-  pole.group.children[0].material.opacity = 0.95 * p;
-  pole.group.children[1].material.opacity = 0.4 * p;
+  pole.group.children[0].material.opacity = p;
   lines.mesh.material.opacity = 0.2 * p;
   return p;
 }

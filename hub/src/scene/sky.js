@@ -204,24 +204,25 @@ export function makeSky() {
 export function makeStardust(count) {
   const n = count;
   const pos = new Float32Array(n * 3);
-  const tmp = new THREE.Vector3();
-  const fwd = new THREE.Vector3();
+  const vel = new Float32Array(n * 3);
 
-  function place(i, cam, far) {
-    cam.getWorldDirection(fwd);
-    const right = tmp.set(1, 0, 0).applyQuaternion(cam.quaternion);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
-    const dist = far ? 40 + Math.random() * 70 : Math.random() * 80;
-    const spread = 14;
-    const p = cam.position
-      .clone()
-      .addScaledVector(fwd, dist)
-      .addScaledVector(right, (Math.random() - 0.5) * spread)
-      .addScaledVector(up, (Math.random() - 0.5) * spread);
-    pos[i * 3] = p.x;
-    pos[i * 3 + 1] = p.y;
-    pos[i * 3 + 2] = p.z;
+  function place(i) {
+    let x, y, z, r;
+    do {
+      x = (Math.random() - 0.5) * 36;
+      y = 1 + Math.random() * 16;
+      z = (Math.random() - 0.5) * 36;
+      r = Math.hypot(x, y - 6, z);
+    } while (r < 9);
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+    vel[i * 3] = (Math.random() - 0.5) * 0.08;
+    vel[i * 3 + 1] = (Math.random() - 0.5) * 0.05;
+    vel[i * 3 + 2] = (Math.random() - 0.5) * 0.08;
   }
+
+  for (let i = 0; i < n; i++) place(i);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
@@ -229,30 +230,27 @@ export function makeStardust(count) {
     geo,
     new THREE.PointsMaterial({
       map: starTexture(),
-      color: 0xdde8ff,
-      size: 1.15,
+      color: 0xc8d4e0,
+      size: 0.38,
       sizeAttenuation: true,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.2,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
   );
 
-  let seeded = false;
-  function update(dt, cam) {
-    cam.getWorldDirection(fwd);
-    if (!seeded) {
-      for (let i = 0; i < n; i++) place(i, cam, false);
-      seeded = true;
-    }
-    const speed = 22;
+  function update(dt) {
     for (let i = 0; i < n; i++) {
-      pos[i * 3] -= fwd.x * speed * dt;
-      pos[i * 3 + 1] -= fwd.y * speed * dt;
-      pos[i * 3 + 2] -= fwd.z * speed * dt;
-      tmp.set(pos[i * 3] - cam.position.x, pos[i * 3 + 1] - cam.position.y, pos[i * 3 + 2] - cam.position.z);
-      if (tmp.dot(fwd) < 0.4) place(i, cam, true);
+      vel[i * 3] += (Math.random() - 0.5) * 0.012 * dt;
+      vel[i * 3 + 1] += (Math.random() - 0.5) * 0.008 * dt;
+      vel[i * 3 + 2] += (Math.random() - 0.5) * 0.012 * dt;
+      vel[i * 3] *= 0.994;
+      vel[i * 3 + 1] *= 0.994;
+      vel[i * 3 + 2] *= 0.994;
+      pos[i * 3] += vel[i * 3] * dt;
+      pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
+      pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
     }
     geo.attributes.position.needsUpdate = true;
   }
