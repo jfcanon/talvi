@@ -47,15 +47,23 @@ export function buildWorld(scene) {
   scene.fog = new THREE.FogExp2(0x0a0a0c, 0.008);
 
   // --- lights --------------------------------------------------------------
-  scene.add(new THREE.AmbientLight(0x8a6, 0.5));
-  const key = new THREE.PointLight(0x7dffc4, 1.1, 42);
-  key.position.set(9, 15, 14);
+  scene.add(new THREE.AmbientLight(0x6a8, 0.22));
+  const key = new THREE.DirectionalLight(0xd8f0e4, 1.35);
+  key.position.set(12, 18, 10);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 2;
+  key.shadow.camera.far = 70;
+  key.shadow.camera.left = -18;
+  key.shadow.camera.right = 18;
+  key.shadow.camera.top = 18;
+  key.shadow.camera.bottom = -18;
+  key.shadow.bias = -0.0008;
   scene.add(key);
-  const rim = new THREE.PointLight(0xff2e88, 0.7, 42);
-  rim.position.set(-9, 7, -16);
-  scene.add(rim);
-  const fill = new THREE.PointLight(0x22e8ff, 0.35, 30);
-  fill.position.set(0, 2, -9);
+  scene.add(key.target);
+  key.target.position.copy(FOCAL);
+  const fill = new THREE.PointLight(0x8ab8a0, 0.28, 36);
+  fill.position.set(-6, 8, 8);
   scene.add(fill);
 
   scene.add(makeSky());
@@ -93,8 +101,8 @@ export function buildWorld(scene) {
       lines.mesh.material.opacity = (0.2 + 0.05 * Math.sin(t * 0.7)) * p;
     },
     setHighlight(b, on) {
-      b.mat.emissiveIntensity = on ? 1.15 : 0.55;
-      b.glow.material.opacity = on ? 0.55 : 0.3;
+      b.mat.emissiveIntensity = on ? 0.22 : 0.06;
+      b.glow.material.opacity = on ? 0.16 : 0.06;
     },
   };
 }
@@ -106,43 +114,34 @@ function makeTile(cfg) {
   const group = new THREE.Group();
 
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x0f1728,
-    roughness: 0.42,
-    metalness: 0.18,
-    transparent: true,
-    opacity: 0.96,
-    emissive: 0x0a3a2c,
-    emissiveIntensity: 0.55,
+    color: 0x121a22,
+    roughness: 0.86,
+    metalness: 0.04,
+    emissive: 0x061410,
+    emissiveIntensity: 0.06,
   });
   const body = new THREE.Mesh(new THREE.BoxGeometry(SIDE, SIDE, SIDE), mat);
+  body.castShadow = true;
+  body.receiveShadow = true;
   group.add(body);
 
   group.add(
     new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(SIDE, SIDE, SIDE)),
       new THREE.LineBasicMaterial({
-        color: 0x7dffc4,
+        color: 0x4a7a68,
         transparent: true,
-        opacity: 0.14,
-        blending: THREE.AdditiveBlending,
+        opacity: 0.22,
         depthWrite: false,
       }),
     ),
   );
 
-  const iconZ = makeIcon(cfg.glyph, 1.55);
-  iconZ.position.z = half + 0.02;
-  group.add(iconZ);
-  const iconX = iconZ.clone();
-  iconX.position.set(half + 0.02, 0, 0);
-  iconX.rotation.y = Math.PI / 2;
-  group.add(iconX);
-  const iconY = iconZ.clone();
-  iconY.position.set(0, half + 0.02, 0);
-  iconY.rotation.x = -Math.PI / 2;
-  group.add(iconY);
+  const icon = makeIcon(cfg.glyph, 1.55);
+  icon.position.z = half + 0.02;
+  group.add(icon);
 
-  const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.3 : 0.16);
+  const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.06 : 0.03);
   group.add(glow);
 
   let hit = null;
@@ -217,7 +216,7 @@ function makePoleStar() {
   word.scale.set(5.5, 1.4, 1);
   group.add(word);
 
-  const halo = makeGlow(0x9dffb0, 7, 0.4);
+  const halo = makeGlow(0x9dffb0, 7, 0.14);
   group.add(halo);
 
   return { group, sprite: word };
@@ -355,16 +354,14 @@ function makeIcon(glyph, size) {
   ctx.font = "700 150px " + DISPLAY_STACK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.9)";
-  ctx.shadowBlur = 40;
-  ctx.fillStyle = "#7dffc4";
+  ctx.fillStyle = "#c8f5e0";
   ctx.fillText(glyph, c.width / 2, c.height / 2 + 4);
   const mat = new THREE.MeshBasicMaterial({
     map: new THREE.CanvasTexture(c),
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+    toneMapped: false,
   });
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }
