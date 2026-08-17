@@ -1,4 +1,4 @@
-/* talvi hub — the explorable front door (blueprint A1–A4, v4).
+/* talvi hub — the explorable front door (v7.0).
  *
  * The power-app front door is a small 3D world you move through like Google
  * Earth: drag to look, scroll to zoom, click a building (or its floating
@@ -69,6 +69,8 @@
 
 html {
   background: var(--void);
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 body {
@@ -76,6 +78,8 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden; /* the world is the whole viewport; wheel = zoom, not scroll */
+  touch-action: none;
+  overscroll-behavior: none;
   background: transparent;
   color: var(--text-hi);
   font-family: var(--font-console);
@@ -91,6 +95,8 @@ body {
   height: 100%;
   display: block;
   z-index: 0;
+  touch-action: none;
+  -ms-touch-action: none;
 }
 
 /* The cube nameplates are 3D objects in the world (v4.1) — fixed to their
@@ -216,6 +222,7 @@ body {
     inset 0 1px 0 rgba(125, 255, 196, 0.08);
   display: flex;
   flex-direction: column;
+  touch-action: manipulation;
   transition: width 160ms ease;
 }
 
@@ -604,6 +611,7 @@ body {
   box-shadow: var(--glow-cyan);
   z-index: 6;
   font-family: var(--font-console);
+  touch-action: manipulation;
 }
 
 .agent[hidden] {
@@ -634,6 +642,7 @@ body {
 
 .agent__log {
   overflow-y: auto;
+  touch-action: pan-y;
   flex: 1;
   min-height: 6rem;
   max-height: 38vh;

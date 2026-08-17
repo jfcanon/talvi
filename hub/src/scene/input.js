@@ -1,4 +1,4 @@
-// talvi hub — orbit/dolly controller (v4, idea #2: Google-Earth navigation).
+// talvi hub — orbit/dolly controller (v7.0).
 //
 // The camera orbits a focal point: drag = yaw/pitch (look around), wheel /
 // pinch / +/- = dolly (zoom toward the world), always clamped so the camera
@@ -15,8 +15,8 @@ export class OrbitController {
     this.yaw = 0.5;
     this.pitch = 0.42;
     this.radius = radius;
-    this.minRadius = 5;
-    this.maxRadius = 32;
+    this.minRadius = 6;
+    this.maxRadius = 56;
     this.apply();
   }
 
