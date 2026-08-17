@@ -36,13 +36,46 @@ variable "talvi_zone_id" {
   type = string
 }
 
-# POST /email/routing/dns enables routing and adds+locks the required MX,
-# SPF (include:_spf.mx.cloudflare.net), and DKIM records. Do not also declare
-# those as cloudflare_dns_record — they would fight this resource. Destroying
-# this resource removes the MX/SPF/DKIM it added.
-resource "cloudflare_email_routing_dns" "apex" {
+# Apex MX/SPF as zone records. cloudflare_email_routing_dns rejected the
+# apex with error 2007 (must be a subdomain). Provider v5 name is
+# cloudflare_dns_record (v4's cloudflare_record).
+resource "cloudflare_dns_record" "mx_isaac" {
+  zone_id  = var.talvi_zone_id
+  name     = "@"
+  type     = "MX"
+  content  = "isaac.mx.cloudflare.net."
+  priority = 92
+  ttl      = 1
+  proxied  = false
+}
+
+resource "cloudflare_dns_record" "mx_clara" {
+  zone_id  = var.talvi_zone_id
+  name     = "@"
+  type     = "MX"
+  content  = "clara.mx.cloudflare.net."
+  priority = 92
+  ttl      = 1
+  proxied  = false
+}
+
+resource "cloudflare_dns_record" "mx_amira" {
+  zone_id  = var.talvi_zone_id
+  name     = "@"
+  type     = "MX"
+  content  = "amira.mx.cloudflare.net."
+  priority = 92
+  ttl      = 1
+  proxied  = false
+}
+
+resource "cloudflare_dns_record" "spf" {
   zone_id = var.talvi_zone_id
-  name    = "ygdcbtmc4u.uk"
+  name    = "@"
+  type    = "TXT"
+  content = "v=spf1 include:_spf.mx.cloudflare.net ~all"
+  ttl     = 1
+  proxied = false
 }
 
 # Account-level destination. First apply sends a verification email to this
@@ -67,5 +100,10 @@ resource "cloudflare_email_routing_rule" "jangofett86" {
     type  = "forward"
     value = [cloudflare_email_routing_address.gmail.email]
   }]
-  depends_on = [cloudflare_email_routing_dns.apex]
+  depends_on = [
+    cloudflare_dns_record.mx_isaac,
+    cloudflare_dns_record.mx_clara,
+    cloudflare_dns_record.mx_amira,
+    cloudflare_dns_record.spf,
+  ]
 }
