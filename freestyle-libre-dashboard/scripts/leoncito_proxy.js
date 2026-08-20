@@ -11,6 +11,15 @@
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    // Bare /leoncito (no trailing slash): the HTML's relative asset URLs
+    // (css/…, js/…, data/…) resolve against the page path, so from /leoncito
+    // they'd land on /css, /js, /data — outside this prefix, onto the hub's
+    // /* fallback, which returns HTML and breaks strict MIME checks (the
+    // dashboard rendered all dashes). Normalize to the directory form, same
+    // as relay/chat/learn.
+    if (url.pathname === "/leoncito") {
+      return Response.redirect(new URL("/leoncito/", request.url), 302);
+    }
     const rest = url.pathname.replace(/^\/leoncito\/?/, "/") + url.search;
     return fetch("https://leoncito-dashboard.pages.dev" + rest, request);
   },

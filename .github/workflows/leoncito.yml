@@ -7,14 +7,13 @@ name: Leoncito Glucose Dashboard
 # accumulates across runs — the 30d/all-time views need the full series, not
 # just the last 12h the API returns.
 #
-# NOTE: the schedule is disabled until the LibreLinkUp + Cloudflare secrets
-# exist in this repo (see freestyle-libre-dashboard/README.md). Trigger via
-# workflow_dispatch once secrets are added, then uncomment the schedule.
+# The schedule is enabled: secrets are in place and the fetch path is proven.
+# :17 was chosen to stay clear of the top-of-hour burst other jobs favor.
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '17 * * * *'   # every hour at :17
+  schedule:
+    - cron: '17 * * * *'   # every hour at :17
 
 permissions:
   contents: write
@@ -56,4 +55,8 @@ jobs:
       - name: Stage data for deploy
         run: mkdir -p site/data && cp data/glucose.json site/data/glucose.json
       - name: Deploy to Cloudflare Pages
-        run: npx --yes wrangler@4 pages deploy site --project-name leoncito-dashboard
+        # --branch main pins the production branch so a manual run from a
+        # feature branch still publishes to leoncito-dashboard.pages.dev
+        # (without it, wrangler uses the current git branch and a non-main
+        # run lands as a preview deployment, leaving the production URL 404).
+        run: npx --yes wrangler@4 pages deploy site --project-name leoncito-dashboard --branch main

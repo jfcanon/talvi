@@ -43,6 +43,7 @@ from typing import Any
 from pydantic import ValidationError
 from pylibrelinkup import PyLibreLinkUp
 from pylibrelinkup.api_url import APIUrl
+from pylibrelinkup.exceptions import RedirectError
 
 log = logging.getLogger("fetch_glucose")
 
@@ -152,15 +153,17 @@ def reading_dict(value: float, timestamp: datetime) -> dict[str, Any]:
 
 
 def resolve_regions(region: str | None) -> list[APIUrl]:
-    """Turn a --region value (member name like 'EU' or a full host URL) into
-    an ordered list of APIUrl members to try. Default: EU first, then US."""
+    """Turn a --region value (member name like 'EU', a full host URL, or a bare
+    host like 'api-la.libreview.io') into an ordered list of APIUrl members to
+    try. Default: EU first, then US."""
     by_value = {u.value: u for u in APIUrl}
     if region:
+        cleaned = region.strip().lower()
         try:
-            return [APIUrl[region.strip().upper()]]
+            return [APIUrl[cleaned.upper()]]
         except KeyError:
             pass
-        match = by_value.get(region.strip())
+        match = by_value.get(cleaned) or by_value.get(f"https://{cleaned}")
         if match:
             return [match]
         log.warning("unknown region %r; falling back to defaults", region)
@@ -179,13 +182,29 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
     client = None
     last_err: Exception | None = None
     regions = resolve_regions(region)
-    for host in regions:
+    tried: set[APIUrl] = set()
+    i = 0
+    while i < len(regions):
+        host = regions[i]
+        i += 1
+        if host in tried:
+            continue
+        tried.add(host)
         try:
             c = PyLibreLinkUp(email=email, password=password, api_url=host)
             c.authenticate()
             client = c
             log.info("authenticated via %s", host.value)
             break
+        except RedirectError as e:
+            # The API says this account lives in another region — retry there.
+            # LibreLinkUp geo-routes by caller IP, so which host works varies
+            # per runner (a US GitHub runner saw a LA redirect for this
+            # account); following the redirect makes auth location-proof.
+            log.info("account redirects to %s; retrying there", e.region.value)
+            if e.region not in tried and e.region not in regions:
+                regions.append(e.region)
+            continue
         except Exception as e:  # pylint: disable=broad-except
             last_err = e
             log.warning("auth failed via %s: %s", host.value, e)
@@ -244,7 +263,9 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
     if latest_ts is not None:
         store["last_updated"] = latest_ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     store["trend"] = trend
-    store["sensor_id"] = store.get("sensor_id") or str(patient.patient_id)[:6].upper()
+    # Always reflect the live patient id — keeps a mock seed value from
+    # lingering once real sensor data arrives.
+    store["sensor_id"] = str(patient.patient_id)[:6].upper()
 
     atomic_write(data_path, store)
     log.info("wrote %d readings (%d fresh) to %s",
