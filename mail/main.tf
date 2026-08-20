@@ -1,4 +1,4 @@
-# talvi mail — Cloudflare Email Routing for ygdcbtmc4u.uk.
+# talvi mail — Cloudflare Email Routing + Email Sending for ygdcbtmc4u.uk.
 #
 # Forwards jangofett86@ygdcbtmc4u.uk → jangofett86@gmail.com (NID-358).
 # Owner confirmed privacy, path A (Email Routing), and MX add.
@@ -35,6 +35,10 @@ variable "cloudflare_account_id" {
 variable "talvi_zone_id" {
   type = string
 }
+
+# ============================================================
+# EMAIL ROUTING (Inbound) — existing configuration
+# ============================================================
 
 # Apex MX/SPF as zone records. cloudflare_email_routing_dns rejected the
 # apex with error 2007 (must be a subdomain). Provider v5 name is
@@ -106,4 +110,48 @@ resource "cloudflare_email_routing_rule" "jangofett86" {
     cloudflare_dns_record.mx_amira,
     cloudflare_dns_record.spf,
   ]
+}
+
+# Catch-all rule → quickmail Worker
+# Using dedicated catch_all resource (provider v5) which supports worker action.
+resource "cloudflare_email_routing_catch_all" "quickmail" {
+  zone_id = var.talvi_zone_id
+  name    = "catch-all → quickmail worker"
+  enabled = true
+  matchers = [{
+    type = "all"
+  }]
+  actions = [{
+    type  = "worker"
+    value = ["quickmail"]
+  }]
+  depends_on = [
+    cloudflare_email_routing_rule.jangofett86,
+  ]
+}
+
+# ============================================================
+# EMAIL SENDING (Outbound) — cf-bounce subdomain
+# ============================================================
+#
+# Email Sending DNS records (cf-bounce MX/SPF/DKIM) are created
+# AUTOMATICALLY by Cloudflare when Email Sending is enabled in the
+# dashboard (Email → Email Sending → Enable). They are managed by
+# Cloudflare and not exposed as Terraform resources.
+#
+# To enable Email Sending:
+# 1. Go to Cloudflare Dashboard → Email → Email Sending
+# 2. Select ygdcbtmc4u.uk → Enable
+# 3. Cloudflare will create cf-bounce.ygdcbtmc4u.uk with MX/SPF/DKIM
+#
+# The DMARC record below protects both routing and sending.
+
+# DMARC record for the apex domain (protects both routing and sending)
+resource "cloudflare_dns_record" "dmarc" {
+  zone_id = var.talvi_zone_id
+  name    = "_dmarc"
+  type    = "TXT"
+  content = "v=DMARC1; p=none; rua=mailto:dmarc@ygdcbtmc4u.uk; ruf=mailto:dmarc@ygdcbtmc4u.uk; fo=1"
+  ttl     = 1
+  proxied = false
 }
