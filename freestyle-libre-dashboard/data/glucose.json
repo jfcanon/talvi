@@ -1496,8 +1496,48 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T07:09:26Z",
+      "glucose": 347.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T07:24:26Z",
+      "glucose": 340.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T07:39:26Z",
+      "glucose": 355.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T07:54:26Z",
+      "glucose": 348.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T08:00:00Z",
       "glucose": 243.1,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T08:09:26Z",
+      "glucose": 338.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T08:24:26Z",
+      "glucose": 330.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T08:39:26Z",
+      "glucose": 285.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T08:54:26Z",
+      "glucose": 226.0,
       "unit": "mg/dL"
     },
     {
@@ -1506,8 +1546,48 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T09:09:26Z",
+      "glucose": 219.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T09:24:26Z",
+      "glucose": 203.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T09:39:26Z",
+      "glucose": 223.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T09:54:26Z",
+      "glucose": 270.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T10:00:00Z",
       "glucose": 248.3,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T10:09:26Z",
+      "glucose": 260.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T10:24:26Z",
+      "glucose": 268.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T10:39:26Z",
+      "glucose": 294.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T10:54:26Z",
+      "glucose": 276.0,
       "unit": "mg/dL"
     },
     {
@@ -1516,8 +1596,48 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T11:09:26Z",
+      "glucose": 258.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T11:24:26Z",
+      "glucose": 284.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T11:39:26Z",
+      "glucose": 322.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T11:54:26Z",
+      "glucose": 295.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T12:00:00Z",
       "glucose": 241.8,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T12:09:26Z",
+      "glucose": 250.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T12:24:26Z",
+      "glucose": 255.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T12:39:26Z",
+      "glucose": 229.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T12:54:26Z",
+      "glucose": 197.0,
       "unit": "mg/dL"
     },
     {
@@ -1526,8 +1646,43 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T13:09:26Z",
+      "glucose": 218.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T13:24:26Z",
+      "glucose": 242.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T13:39:26Z",
+      "glucose": 261.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T13:54:26Z",
+      "glucose": 249.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T14:00:00Z",
       "glucose": 251.1,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T14:09:26Z",
+      "glucose": 238.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T14:24:13Z",
+      "glucose": 241.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T14:39:19Z",
+      "glucose": 240.0,
       "unit": "mg/dL"
     },
     {
@@ -1543,6 +1698,21 @@
     {
       "timestamp": "2026-08-20T17:00:00Z",
       "glucose": 251.5,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T17:10:25Z",
+      "glucose": 218.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T17:25:25Z",
+      "glucose": 199.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T17:40:32Z",
+      "glucose": 210.0,
       "unit": "mg/dL"
     },
     {
@@ -1566,7 +1736,7 @@
       "unit": "mg/dL"
     }
   ],
-  "last_updated": "2026-08-20T21:00:00Z",
+  "last_updated": "2026-08-20T19:05:59Z",
   "sensor_id": "MOCK-000001",
   "trend": "stable"
 }
