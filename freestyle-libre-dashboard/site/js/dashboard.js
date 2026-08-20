@@ -16,6 +16,7 @@ const els = {
   currentUnit: document.getElementById('current-unit'),
   currentStatus: document.getElementById('current-status'),
   currentRoc: document.getElementById('current-roc'),
+  currentTrend: document.getElementById('current-trend'),
   sensorId: document.getElementById('sensor-id'),
   sensorLife: document.querySelector('.sensor-life'),
   eventForm: document.getElementById('event-form'),
@@ -574,14 +575,18 @@ function bindEvent() {
 
     form.hidden = true;
     overlay.hidden = true;
-    els.eventForm.reset();
+    els.eventLabel.value = '';
+    els.eventTime.value = '';
+    els.eventNote.value = '';
   });
 
   // Form cancel
   els.eventCancel.addEventListener('click', () => {
     form.hidden = true;
     overlay.hidden = true;
-    els.eventForm.reset();
+    els.eventLabel.value = '';
+    els.eventTime.value = '';
+    els.eventNote.value = '';
   });
 }
 

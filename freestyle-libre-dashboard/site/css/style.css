@@ -293,7 +293,6 @@ main {
   width: 90%;
   max-width: 400px;
   color: var(--text);
-  backdrop-filter: blur(4px);
 }
 
 .event-form label {
