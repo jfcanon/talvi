@@ -155,3 +155,11 @@ workflows, so no deploy loops.
 - **Trailing-slash normalization** — bare `/leoncito` 302s to `/leoncito/`
   (same pattern as relay/chat/learn) plus `<base href="/leoncito/">` in the
   HTML, so relative asset URLs can never escape the subpath onto the hub.
+
+## LocalStorage limitation (events)
+
+Event markers are persisted per-browser via `localStorage` — no data is sent to
+a server. Events are local to the browser that created them; they will not
+sync across devices or persist if the user clears browsing data. This is a
+static-$0 constraint — no server or database is available.
+## Deviations from the original plan

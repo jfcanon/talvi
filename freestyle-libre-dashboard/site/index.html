@@ -25,6 +25,7 @@
       <div class="card metric-current">
         <span class="metric-label">Current glucose</span>
         <span class="metric-value" id="current-glucose" aria-live="polite">—</span>
+        <span class="metric-roc" id="current-roc" aria-hidden="true"></span>
         <span class="metric-unit" id="current-unit">mg/dL</span>
         <span class="metric-status" id="current-status"></span>
       </div>
@@ -35,6 +36,9 @@
       <div class="card">
         <span class="metric-label">Sensor</span>
         <span class="metric-value metric-value--sm" id="sensor-id">—</span>
+        <div class="sensor-life" aria-label="Sensor life countdown">
+          <div class="sensor-life-progress" style="width: 0%"></div>
+        </div>
       </div>
       <div class="card">
         <span class="metric-label">Last reading</span>
@@ -51,12 +55,22 @@
           <button class="tab" role="tab" id="tab-all" aria-selected="false" aria-controls="glucose-chart">All time</button>
         </div>
         <button class="btn" id="export-csv" type="button">Export CSV</button>
+        <button class="btn" id="add-event" type="button" aria-label="Add event">⊕</button>
       </div>
       <div class="chart-wrap">
         <canvas id="glucose-chart" role="img" aria-label="Line chart of glucose readings over time">
           Your browser does not support the HTML canvas element.
         </canvas>
         <p class="chart-empty" id="chart-empty" hidden>No glucose data yet.</p>
+      </div>
+      <div class="chart-summary" aria-label="Time-in-range summary">
+        <p class="summary-stat" id="summary-in-range">—</p>
+        <div class="summary-bar">
+          <div class="summary-bar-segment summary-bar-hypo" title="Hypo <70" style="width: 0%"></div>
+          <div class="summary-bar-segment summary-bar-low" title="Low 70–90" style="width: 0%"></div>
+          <div class="summary-bar-segment summary-bar-target" title="Target 90–270" style="width: 0%"></div>
+          <div class="summary-bar-segment summary-bar-high" title="High >270" style="width: 0%"></div>
+        </div>
       </div>
       <div class="legend" aria-label="Glucose ranges legend">
         <span class="legend-item legend-hypo">Hypo &lt;70</span>
@@ -79,6 +93,27 @@
   <footer class="site-footer">
     <p>Leoncito &middot; made with Chart.js &middot; <span id="footer-time"></span></p>
   </footer>
+
+  <!-- Event form -->
+  <div id="event-form" hidden>
+    <div class="event-form-overlay">
+      <div class="event-form">
+        <label for="event-label">Event type</label>
+        <select id="event-label">
+          <option value="food">Food</option>
+          <option value="insulin">Insulin</option>
+          <option value="exercise">Exercise</option>
+          <option value="other">Other</option>
+        </select>
+        <label for="event-time">Time</label>
+        <input type="datetime-local" id="event-time">
+        <label for="event-note">Note (optional</label>
+        <textarea id="event-note" rows="2" placeholder="What happened..."></textarea>
+        <button class="btn" id="event-cancel">Cancel</button>
+        <button class="btn" id="event-save">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/dashboard.js" defer></script>
 </body>

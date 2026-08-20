@@ -213,7 +213,129 @@ main {
 .legend-target::before { background: var(--target); }
 .legend-high::before   { background: var(--high); }
 
-/* Status card */
+/* Time-in-range summary */
+.summary-bar {
+  display: flex;
+  gap: 0.15rem;
+  margin-top: 0.5rem;
+  height: 0.6rem;
+  font-size: 0.7rem;
+}
+
+.summary-bar-segment {
+  flex: 1;
+  border-radius: 3px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s ease;
+}
+
+.summary-bar-hypo { background: var(--hypo); }
+.summary-bar-low   { background: var(--low); }
+.summary-bar-target{ background: var(--target); }
+.summary-bar-high  { background: var(--high); }
+
+.summary-stat {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.sensor-life {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.sensor-life-progress {
+  appearance: none;
+  width: 100%;
+  height: 0.4rem;
+  border-radius: 2px;
+  background: var(--bg-card-2);
+  outline: none;
+  margin-top: 0.25rem;
+}
+
+.sensor-life-progress::-webkit-progress-bar {
+  background: var(--bg-card-2);
+  border-radius: 2px;
+}
+
+.sensor-life-progress::-webkit-progress-value {
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.sensor-life-text {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.event-form-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.event-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 400px;
+  color: var(--text);
+  backdrop-filter: blur(4px);
+}
+
+.event-form label {
+  display: block;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  color: var(--text-muted);
+}
+
+.event-form select,
+.event-form input,
+.event-form textarea {
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.3rem;
+  border: 1px solid var(--text-muted);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.event-form input[type="datetime-local"] {
+  padding: 0.4rem;
+}
+
+.event-form .btn {
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.event-form .btn-group {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.event-form .btn-cancel {
+  margin-left: 0.5rem;
+  flex: 1;
+}
 .status-card p { margin: 0.25rem 0; color: var(--text-muted); font-size: 0.9rem; }
 
 .disclaimer {

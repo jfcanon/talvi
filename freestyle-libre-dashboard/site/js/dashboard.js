@@ -15,19 +15,51 @@ const els = {
   currentGlucose: document.getElementById('current-glucose'),
   currentUnit: document.getElementById('current-unit'),
   currentStatus: document.getElementById('current-status'),
-  currentTrend: document.getElementById('current-trend'),
+  currentRoc: document.getElementById('current-roc'),
   sensorId: document.getElementById('sensor-id'),
+  sensorLife: document.querySelector('.sensor-life'),
+  eventForm: document.getElementById('event-form'),
+  eventLabel: document.getElementById('event-label'),
+  eventTime: document.getElementById('event-time'),
+  eventNote: document.getElementById('event-note'),
+  eventCancel: document.getElementById('event-cancel'),
+  eventSave: document.getElementById('event-save'),
   lastUpdated: document.getElementById('last-updated'),
   syncStatus: document.getElementById('sync-status'),
   footerTime: document.getElementById('footer-time'),
   chartEmpty: document.getElementById('chart-empty'),
   exportCsv: document.getElementById('export-csv'),
   canvas: document.getElementById('glucose-chart'),
+  addEventBtn: document.getElementById('add-event'),
 };
 
 let store = { readings: [] };
 let currentView = '24h';
 let chart = null;
+
+/* ---------- rate-of-change (ROC) ---------- */
+
+function computeROC(readings) {
+  if (readings.length < 2) return null;
+  const last = readings[readings.length - 1];
+  const fifteenMinAgo = new Date(last.ts.getTime() - 15 * 60 * 1000);
+  const earlier = readings.find(
+    (r) => r.ts >= fifteenMinAgo && r.ts < last.ts
+  );
+  if (!earlier) return null;
+  const deltaGlucose = last.value - earlier.value;
+  const deltaMinutes = (last.ts - earlier.ts) / 60000;
+  const roc = deltaMinutes > 0 ? deltaGlucose / (deltaMinutes / 15) : 0;
+  return Number(roc.toFixed(1));
+}
+
+function rocArrowAndColor(roc) {
+  if (roc >= 4) return { arrow: '↑', color: 'var(--hypo)' };
+  if (roc <= -4) return { arrow: '↓', color: 'var(--hypo)' };
+  if (roc > 0) return { arrow: '→', color: 'var(--target)' };
+  if (roc < 0) return { arrow: '←', color: 'var(--low)' };
+  return { arrow: '→', color: 'var(--target)' };
+}
 
 /* ---------- helpers ---------- */
 
@@ -259,27 +291,111 @@ function render() {
   }];
   chart.update();
 
-  els.chartEmpty.hidden = values.length > 0;
+  // Time-in-range summary
+  const viewReadings = readings.filter((r) => {
+    const now = Date.now();
+    if (currentView === '24h') return now - r.ts.getTime() <= 86400000;
+    if (currentView === '7d') return now - r.ts.getTime() <= 7 * 86400000;
+    if (currentView === '30d') return now - r.ts.getTime() <= 30 * 86400000;
+    return true; // all
+  });
+
+  const zoneCounts = { hypo: 0, low: 0, target: 0, high: 0 };
+  viewReadings.forEach((r) => {
+    const z = zoneOf(r.value);
+    zoneCounts[z]++;
+  });
+  const total = viewReadings.length || 1;
+  const hypoPct = ((zoneCounts.hypo / total) * 100).toFixed(0);
+  const lowPct = ((zoneCounts.low / total) * 100).toFixed(0);
+  const targetPct = ((zoneCounts.target / total) * 100).toFixed(0);
+  const highPct = ((zoneCounts.high / total) * 100).toFixed(0);
+
+  const summaryBar = document.querySelectorAll('.summary-bar-segment');
+  summaryBar[0].style.width = `${hypoPct}%`;
+  summaryBar[0].setAttribute('aria-label', `${hypoPct}% hypo`);
+  summaryBar[1].style.width = `${lowPct}%`;
+  summaryBar[1].setAttribute('aria-label', `${lowPct}% low`);
+  summaryBar[2].style.width = `${targetPct}%`;
+  summaryBar[2].setAttribute('aria-label', `${targetPct}% target`);
+  summaryBar[3].style.width = `${highPct}%`;
+  summaryBar[3].setAttribute('aria-label', `${highPct}% high`);
+
+  const inRangePct = Number(targetPct);
+  document.getElementById('summary-in-range').textContent =
+    `${inRangePct}% in range (90–270) last ${currentView}`;
+
+  // Render event markers on chart
+  renderEvents(chart, store.readings || []);
+
+
+function computeSensorLife(readings) {
+  if (!readings.length) return { start: null, daysElapsed: 0, pct: 0, remaining: 14, label: '' };
+  const earliest = readings[0];
+  const now = new Date().getTime();
+  const daysElapsed = (now - earliest.ts.getTime()) / 86400000;
+  const pct = daysElapsed / 14;
+  const remaining = 14 - daysElapsed;
+
+  let label;
+  if (store.sensor_id) {
+    const sensorDate = new Date(earliest.ts);
+    const opts = { year: 'numeric', month: 'short', day: 'numeric' };
+    label = `Sensor active since ${sensorDate.toLocaleDateString(undefined, opts)} — ${Math.round(daysElapsed)} of 14 days remaining`;
+  } else {
+    label = 'estimate from first observed reading (not official activation date)';
+  }
+
+  return {
+    start: earliest.ts,
+    daysElapsed: Math.round(daysElapsed),
+    pct: Math.min(Math.max(pct, 0), 1),
+    remaining: Math.max(Math.round(remaining), 0),
+    label,
+  };
 }
+
 
 function updateMetrics(readings) {
   if (!readings.length) {
     els.currentGlucose.textContent = '—';
     els.currentStatus.textContent = '';
     els.currentTrend.textContent = '—';
+    els.currentRoc.textContent = '';
     els.sensorId.textContent = store.sensor_id || '—';
     els.lastUpdated.textContent = '—';
     return;
   }
   const last = readings[readings.length - 1];
   const zone = zoneOf(last.value);
+  const roc = computeROC(readings);
   els.currentGlucose.textContent = Math.round(last.value);
   els.currentGlucose.className = `metric-value value-${zone}`;
   els.currentUnit.textContent = last.unit;
   els.currentStatus.textContent = zoneLabel(zone);
   els.currentStatus.className = `metric-status value-${zone}`;
   els.currentTrend.textContent = store.trend || '—';
+  // Rate-of-change badge
+  els.currentRoc.textContent = roc
+    ? `${rocArrowAndColor(roc).arrow} ${Math.abs(roc).toFixed(1)} mg/dL/15min`
+    : '';
+  els.currentRoc.style.color = rocArrowAndColor(roc).color;
   els.sensorId.textContent = store.sensor_id || '—';
+
+  // Sensor life countdown
+  const sensorLife = computeSensorLife(readings);
+  if (sensorLife.start) {
+    const startDate = new Date(sensorLife.start);
+    const opts = { year: 'numeric', month: 'short', day: 'numeric' };
+    const startStr = startDate.toLocaleDateString(undefined, opts);
+    els.sensorLife.innerHTML = `
+      <div class="sensor-life-text">${sensorLife.label}</div>
+      <progress class="sensor-life-progress" value="${sensorLife.pct * 100}" max="100"></progress>
+      <span>${sensorLife.remaining} of 14 days remaining</span>
+    `;
+  } else {
+    els.sensorLife.innerHTML = '';
+  }
   els.lastUpdated.textContent = fmtTime(last.ts);
 }
 
@@ -344,9 +460,135 @@ function bindCsv() {
   });
 }
 
+
+
+function loadEvents() {
+  const raw = localStorage.getItem('leoncito-events');
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveEvents(events) {
+  localStorage.setItem('leoncito-events', JSON.stringify(events));
+}
+
+function renderEvents(chart, readings) {
+  const events = loadEvents();
+  if (!events.length) {
+    if (chart.data.datasets[1]) {
+      chart.data.datasets.pop();
+      chart.update();
+    }
+    return;
+  }
+
+  // Filter events to current view
+  const now = Date.now();
+  const viewStart = now - (currentView === '24h' ? 86400000 : currentView === '7d' ? 7 * 86400000 : currentView === '30d' ? 30 * 86400000 : 0);
+
+  const viewEvents = events.filter((e) => new Date(e.timestamp).getTime() >= viewStart);
+
+  // Build data for event markers: find closest reading index for each event
+  const dataset = {
+    label: 'Events',
+    data: [],
+    pointRadius: 6,
+    pointStyle: 'triangle',
+    borderColor: 'orange',
+    backgroundColor: 'orange',
+    fill: false,
+    tension: 0,
+  };
+
+  viewEvents.forEach((e) => {
+    const ts = new Date(e.timestamp).getTime();
+    // Find closest reading index in the current view
+    const viewReadings = (store.readings || [])
+      .map(r => ({ ...parseReading(r), ts: new Date(r.timestamp).getTime() }))
+      .sort((a, b) => a.ts - b.ts);
+
+    const inView = viewReadings.filter(r => r.ts >= viewStart && r.ts <= now);
+    if (!inView.length) return;
+
+    const closest = inView.reduce((a, b) => Math.abs(a.ts - ts) < Math.abs(b.ts - ts) ? a : b);
+    const idx = viewReadings.indexOf(closest);
+
+    // Only add if index is within the current view's data range
+    if (idx >= 0 && idx < (chart.data.labels ? chart.data.labels.length : 0)) {
+      dataset.data.push({ x: idx, y: closest.value });
+    }
+  });
+
+  if (dataset.data.length > 0) {
+    chart.data.datasets.push(dataset);
+    chart.update();
+  } else if (chart.data.datasets.length > 1) {
+    chart.data.datasets.pop();
+    chart.update();
+  }
+}
+
+function bindEvent() {
+  const form = els.eventForm;
+  const overlay = form.querySelector('.event-form-overlay');
+
+  // Show form
+  els.addEventBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    form.hidden = false;
+    overlay.hidden = false;
+    els.eventLabel.focus();
+  });
+
+  // Hide form when clicking outside
+  document.addEventListener('click', (e) => {
+    if (e.target === form || e.target === overlay) {
+      form.hidden = true;
+      overlay.hidden = true;
+    }
+  });
+
+  // Form save
+  els.eventSave.addEventListener('click', () => {
+    const label = els.eventLabel.value;
+    const time = els.eventTime.value;
+    const note = els.eventNote.value.trim();
+
+    if (!time) return;
+
+    const event = {
+      timestamp: time,
+      label,
+      note,
+    };
+
+    let events = loadEvents();
+    // Avoid duplicates at the same time
+    const existingIdx = events.findIndex(e => e.timestamp === time && e.label === label);
+    if (existingIdx >= 0) events.splice(existingIdx, 1);
+
+    events.push(event);
+    saveEvents(events);
+
+    // Re-render events on chart
+    renderEvents(chart, store.readings || []);
+
+    form.hidden = true;
+    overlay.hidden = true;
+    els.eventForm.reset();
+  });
+
+  // Form cancel
+  els.eventCancel.addEventListener('click', () => {
+    form.hidden = true;
+    overlay.hidden = true;
+    els.eventForm.reset();
+  });
+}
+
 /* ---------- boot ---------- */
 
 bindTabs();
 bindCsv();
+bindEvent();
 loadData();
 setInterval(loadData, REFRESH_MS);
