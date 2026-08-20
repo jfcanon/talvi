@@ -40,6 +40,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
 from pylibrelinkup import PyLibreLinkUp
 from pylibrelinkup.api_url import APIUrl
 
@@ -213,6 +214,12 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
     try:
         graph = client.graph(patient_identifier=patient.patient_id)  # ~last 12h
         latest = client.latest(patient_identifier=patient.patient_id)
+    except ValidationError as e:
+        # Connection exists but the API reports no glucose measurements yet
+        # (sensor not scanned since the follow was added, or still pending).
+        # Transient — not a pipeline failure. Keep existing data.
+        log.warning("connection present but no measurements yet (%s); scan the sensor with the LibreLink app", e.errors()[0].get("type") if e.errors() else "validation error")
+        return 0
     except Exception as e:  # pylint: disable=broad-except
         log.error("graph/latest failed: %s", e)
         return 2
