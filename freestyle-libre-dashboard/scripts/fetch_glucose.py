@@ -263,7 +263,9 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
     if latest_ts is not None:
         store["last_updated"] = latest_ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     store["trend"] = trend
-    store["sensor_id"] = store.get("sensor_id") or str(patient.patient_id)[:6].upper()
+    # Always reflect the live patient id — keeps a mock seed value from
+    # lingering once real sensor data arrives.
+    store["sensor_id"] = str(patient.patient_id)[:6].upper()
 
     atomic_write(data_path, store)
     log.info("wrote %d readings (%d fresh) to %s",
