@@ -4,12 +4,13 @@
 # Wrangler-only — no provider resource exists for it), see leoncito.yml.
 #
 # Routing: the apex host app.ygdcbtmc4u.uk is served by the talvi hub Worker
-# (its `/*` fallback). A request to /leoncito is therefore rewritten to the
-# Pages root (http_request_transform) and the origin is switched to the
-# Pages project (http_request_origin) BEFORE the Worker route would consume
-# it. If the hub ever claims /leoncito first, add a more-specific
-# cloudflare_workers_route exception or raise with the hub owner — the
-# rulesets here are the intended path.
+# (its `/*` fallback). /leoncito is served by a small proxy Worker on a
+# more-specific route (same pattern as relay/chat/learn). Why a Worker and
+# not rulesets: the transform-rule path rewrite needs regex_replace
+# (Business / WAF Advanced only) and the origin-rule HostHeader override
+# needs a paid plan — both 400'd on this zone. The Worker strips the
+# /leoncito prefix and proxies to the Pages project's *.pages.dev host, no
+# paid features involved.
 
 terraform {
   required_providers {
@@ -56,48 +57,29 @@ resource "cloudflare_pages_project" "leoncito" {
   production_branch = "main"
 }
 
-# Rewrite /leoncito(/...) -> /(...) so the static site's root index.html is
-# served (and its relative css/js/data paths keep resolving). Runs before the
-# origin switch below.
-resource "cloudflare_ruleset" "leoncito_path_rewrite" {
-  zone_id     = var.talvi_zone_id
-  name        = "Leoncito dashboard path rewrite"
-  description = "Strip the /leoncito prefix before origin selection"
-  # URI rewrites are only valid in the http_request_transform phase
-  # (http_request_late_transform is header-only — API error 20088).
-  phase = "http_request_transform"
-  kind  = "zone"
-
-  rules = [{
-    # URL-rewrite transform rule: the action is "rewrite" (not "rewrite_uri"),
-    # with the target under action_parameters.uri.
-    action     = "rewrite"
-    expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and starts_with(http.request.uri.path, \"/leoncito\"))"
-    action_parameters = {
-      uri = {
-        path = {
-          expression = "regex_replace(http.request.uri.path, \"^/leoncito/*\", \"/\")"
-        }
-      }
-    }
-  }]
+# The proxy Worker — strips the /leoncito prefix and proxies to the Pages
+# project. A plain ES module with no deps (unlike relay/chat/learn, which
+# esbuild to dist/index.js), so the repo file is uploaded verbatim.
+resource "cloudflare_workers_script" "leoncito_proxy" {
+  account_id         = var.cloudflare_account_id
+  script_name        = "leoncito-proxy"
+  main_module        = "leoncito_proxy.js"
+  content            = file("${path.module}/scripts/leoncito_proxy.js")
+  compatibility_date = "2026-08-20"
 }
 
-# Origin rule: send /leoncito to the Leoncito Pages project (host header
-# override). Mirrors the plan's referenced tutorial
-# (developers.cloudflare.com/rules/origin-rules/tutorials/point-to-pages-with-custom-domain/).
-resource "cloudflare_ruleset" "leoncito_origin" {
-  zone_id     = var.talvi_zone_id
-  name        = "Leoncito dashboard origin"
-  description = "Route the /leoncito subpath to the Leoncito Pages project"
-  phase       = "http_request_origin"
-  kind        = "zone"
+# Routes: app.ygdcbtmc4u.uk/leoncito (exact) and /leoncito/*. The hub owns
+# the `/*` fallback; these more-specific patterns win (same pattern as
+# relay/chat/learn). The exact route matters — a wildcard alone would 404 the
+# bare /leoncito.
+resource "cloudflare_workers_route" "leoncito" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/leoncito/*"
+  script  = cloudflare_workers_script.leoncito_proxy.script_name
+}
 
-  rules = [{
-    action     = "route"
-    expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and starts_with(http.request.uri.path, \"/leoncito\"))"
-    action_parameters = {
-      host_header = "leoncito-dashboard.pages.dev"
-    }
-  }]
+resource "cloudflare_workers_route" "leoncito_root" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/leoncito"
+  script  = cloudflare_workers_script.leoncito_proxy.script_name
 }
