@@ -1,0 +1,6 @@
+# Cloudflare Pages project for the Leoncito dashboard.
+# The deploy step copies data/glucose.json into site/data before deploying,
+# so the output directory is site/ and everything the page needs lives there.
+name = "leoncito-dashboard"
+compatibility_date = "2026-08-20"
+pages_build_output_dir = "site"

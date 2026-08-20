@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Leoncito's live glucose dashboard — Freestyle Libre 2 sensor data for a diabetic cat.">
+  <title>Leoncito's Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>Leoncito's Dashboard</h1>
+    <p class="tagline">Freestyle Libre 2 &middot; diabetic cat glucose monitor</p>
+  </header>
+
+  <main>
+    <section class="metrics" aria-label="Current glucose metrics">
+      <div class="card metric-current">
+        <span class="metric-label">Current glucose</span>
+        <span class="metric-value" id="current-glucose" aria-live="polite">—</span>
+        <span class="metric-unit" id="current-unit">mg/dL</span>
+        <span class="metric-status" id="current-status"></span>
+      </div>
+      <div class="card">
+        <span class="metric-label">Trend</span>
+        <span class="metric-value metric-value--sm" id="current-trend">—</span>
+      </div>
+      <div class="card">
+        <span class="metric-label">Sensor</span>
+        <span class="metric-value metric-value--sm" id="sensor-id">—</span>
+      </div>
+      <div class="card">
+        <span class="metric-label">Last reading</span>
+        <span class="metric-value metric-value--sm" id="last-updated">—</span>
+      </div>
+    </section>
+
+    <section class="card chart-card" aria-label="Glucose history chart">
+      <div class="chart-toolbar">
+        <div class="tabs" role="tablist" aria-label="Chart time range">
+          <button class="tab" role="tab" id="tab-24h" aria-selected="true" aria-controls="glucose-chart">24h</button>
+          <button class="tab" role="tab" id="tab-7d" aria-selected="false" aria-controls="glucose-chart">7d</button>
+          <button class="tab" role="tab" id="tab-30d" aria-selected="false" aria-controls="glucose-chart">30d</button>
+          <button class="tab" role="tab" id="tab-all" aria-selected="false" aria-controls="glucose-chart">All time</button>
+        </div>
+        <button class="btn" id="export-csv" type="button">Export CSV</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="glucose-chart" role="img" aria-label="Line chart of glucose readings over time">
+          Your browser does not support the HTML canvas element.
+        </canvas>
+        <p class="chart-empty" id="chart-empty" hidden>No glucose data yet.</p>
+      </div>
+      <div class="legend" aria-label="Glucose ranges legend">
+        <span class="legend-item legend-hypo">Hypo &lt;70</span>
+        <span class="legend-item legend-low">Low 70&ndash;90</span>
+        <span class="legend-item legend-target">Target 90&ndash;270</span>
+        <span class="legend-item legend-high">High &gt;270</span>
+      </div>
+    </section>
+
+    <section class="card status-card" aria-label="Data status">
+      <p id="sync-status">Last sync: —</p>
+      <p class="disclaimer">
+        Readings come from the Freestyle LibreLinkUp cloud service and reflect the
+        sensor's last scan. Data can lag by up to 8&nbsp;hours — this is normal and
+        does not affect long-term trends. Not a medical device; consult your vet.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Leoncito &middot; made with Chart.js &middot; <span id="footer-time"></span></p>
+  </footer>
+
+  <script src="js/dashboard.js" defer></script>
+</body>
+</html>
