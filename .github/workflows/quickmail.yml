@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
 
-      - uses: oven-sh/setup-bun@c6e2d9d1e3b5b3b5b5b5b5b5b5b5b5b5b5b5b5b5b # v1
+      - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
