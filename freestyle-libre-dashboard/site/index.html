@@ -27,14 +27,22 @@
         <span class="metric-value" id="current-glucose" aria-live="polite">—</span>
         <span class="metric-unit" id="current-unit">mg/dL</span>
         <span class="metric-status" id="current-status"></span>
+        <span class="roc-badge" id="roc-badge" aria-live="polite" hidden></span>
       </div>
       <div class="card">
         <span class="metric-label">Trend</span>
         <span class="metric-value metric-value--sm" id="current-trend">—</span>
       </div>
-      <div class="card">
+      <div class="card sensor-card">
         <span class="metric-label">Sensor</span>
         <span class="metric-value metric-value--sm" id="sensor-id">—</span>
+        <div class="sensor-life" id="sensor-life" hidden>
+          <div class="sensor-life-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="sensor-life-fill" id="sensor-life-fill"></div>
+          </div>
+          <span class="sensor-life-text" id="sensor-life-text"></span>
+          <span class="sensor-life-note">Estimate from first observed reading</span>
+        </div>
       </div>
       <div class="card">
         <span class="metric-label">Last reading</span>
@@ -42,7 +50,21 @@
       </div>
     </section>
 
-    <section class="card chart-card" aria-label="Glucose history chart">
+    <section class="card tir-card" aria-label="Time in range" hidden>
+      <div class="tir-header">
+        <span class="metric-label">Time in Range</span>
+        <span class="tir-view-label" id="tir-view-label">(24h)</span>
+      </div>
+      <div class="tir-bar" role="img" aria-label="Time in range breakdown">
+        <div class="tir-segment tir-hypo" id="tir-hypo" style="width: 0%"></div>
+        <div class="tir-segment tir-low" id="tir-low" style="width: 0%"></div>
+        <div class="tir-segment tir-target" id="tir-target" style="width: 0%"></div>
+        <div class="tir-segment tir-high" id="tir-high" style="width: 0%"></div>
+      </div>
+      <div class="tir-stats" id="tir-stats"></div>
+    </section>
+
+<section class="card chart-card" aria-label="Glucose history chart">
       <div class="chart-toolbar">
         <div class="tabs" role="tablist" aria-label="Chart time range">
           <button class="tab" role="tab" id="tab-24h" aria-selected="true" aria-controls="glucose-chart">24h</button>
@@ -59,11 +81,32 @@
         <p class="chart-empty" id="chart-empty" hidden>No glucose data yet.</p>
       </div>
       <div class="legend" aria-label="Glucose ranges legend">
-        <span class="legend-item legend-hypo">Hypo &lt;70</span>
+        <span class="legend-item legend-hypo">Hypo <70</span>
         <span class="legend-item legend-low">Low 70&ndash;90</span>
         <span class="legend-item legend-target">Target 90&ndash;270</span>
-        <span class="legend-item legend-high">High &gt;270</span>
+        <span class="legend-item legend-high">High >270</span>
       </div>
+    </section>
+
+    <section class="card events-card" aria-label="Logbook events">
+      <div class="events-header">
+        <span class="metric-label">Logbook</span>
+        <span class="events-note">Events stored locally in this browser only</span>
+      </div>
+      <form id="event-form" class="event-form" aria-label="Add logbook event">
+        <div class="event-form-row">
+          <select id="event-type" name="type" required>
+            <option value="food">🍽️ Food</option>
+            <option value="insulin">💉 Insulin</option>
+            <option value="exercise">🏃 Exercise</option>
+            <option value="other">📝 Other</option>
+          </select>
+          <input type="datetime-local" id="event-time" name="time" required>
+          <input type="text" id="event-note" name="note" placeholder="Optional note" maxlength="100">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Event</button>
+      </form>
+      <div class="events-list" id="events-list" aria-label="Saved events"></div>
     </section>
 
     <section class="card status-card" aria-label="Data status">
@@ -78,6 +121,7 @@
 
   <footer class="site-footer">
     <p>Leoncito &middot; made with Chart.js &middot; <span id="footer-time"></span></p>
+    <p class="disclaimer-note">Event data is stored in localStorage — not synced across devices or backed up.</p>
   </footer>
 
   <script src="js/dashboard.js" defer></script>

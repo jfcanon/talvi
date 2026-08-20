@@ -81,6 +81,28 @@ Cat zones: hypo <70 (red), low 70–90 (orange), target 90–270 (green), high
 >270 (yellow). Chart.js + annotation plugin via CDN; auto-refreshes every 5
 minutes; CSV export included.
 
+### Features (Stage 2)
+
+**F1 — Rate-of-change badge**: Computed from the last reading vs the reading
+~15 min earlier. Shows direction arrow (↑↗→↘↓) + mg/dL per 15 min, color-coded:
+red for fast (>±4), orange for moderate (>±1.5), green for stable.
+
+**F2 — Time-in-range summary**: Stacked bar + stats row showing percentage of
+readings in each zone (hypo <70, low 70–90, target 90–270, high >270) for the
+current view window (24h / 7d / 30d / all). Updates per view tab.
+
+**F3 — Sensor-life countdown**: Freestyle Libre sensors last 14 days. Estimates
+sensor start from the first reading carrying the current `sensor_id` (fallback:
+earliest reading). Shows progress bar, days elapsed/remaining, and "sensor
+change due" when exceeded. Labeled as an estimate from first observed reading.
+
+**F4 — Logbook event layer**: Mark events (food, insulin, exercise, other) on
+the timeline. Small form (label + time + optional note), rendered as triangle
+markers on the chart with tooltips. Events persist in `localStorage` (per
+browser only — **not synced across devices, not backed up, not shared**).
+Documented in the UI footer and on the page. Events survive view switches and
+are included in CSV export (separate "Events" section).
+
 ## Phase 3 — deployment
 
 ### 1. Add GitHub Actions secrets to this repo
