@@ -111,31 +111,26 @@ npx wrangler@4 pages project create leoncito-dashboard --production-branch main
 npx wrangler@4 pages deploy site --project-name leoncito-dashboard
 ```
 
-### 3. Enable the hourly schedule
+### 3. Hourly schedule
 
-`.github/workflows/leoncito.yml` ships with the schedule **commented out**.
-After the secrets above exist, run it once via **Actions → Leoncito → Run
-workflow**, then uncomment:
-
-```yaml
-schedule:
-  - cron: '17 * * * *'
-```
-
-Each run: fetches readings → commits `data/glucose.json` back (history
-accumulates) → deploys `site/` to Pages. Data commits use the default
-`GITHUB_TOKEN`, which does not re-trigger workflows, so no deploy loops.
+`.github/workflows/leoncito.yml` runs the fetch + deploy **hourly** (at `:17`
+each hour — kept clear of the top-of-hour burst other jobs favor) plus on
+demand via **Actions → Leoncito → Run workflow**. Each run: fetches readings
+→ commits `data/glucose.json` back (history accumulates) → deploys `site/` to
+Pages. Data commits use the default `GITHUB_TOKEN`, which does not re-trigger
+workflows, so no deploy loops.
 
 ## Current status
 
-- LibreLinkUp connection added (2026-08-20): the librelink app account
-  (`LIBRELINK_EMAIL_2` / `LIBRELINK_PASSWORD_2`) now has a patient linked.
-  The API reports **no glucose measurements yet** — data appears once the
-  sensor is scanned with the LibreLink app (LibreLinkUp only receives data on
-  scan). The fetch script handles this transient state gracefully (exit 0)
-  and starts populating the store automatically on the next hourly run.
-- Until the first scan lands, the dashboard runs on committed seed data
-  (`data/glucose.json`).
+- Live since 2026-08-20: the hourly fetch populates `data/glucose.json` from
+  the LibreLinkUp API (347+ readings as of writing) and deploys to
+  app.ygdcbtmc4u.uk/leoncito.
+- Routing fix (2026-08-20): the dashboard rendered all-dashes because bare
+  `/leoncito` (no trailing slash) made the browser resolve relative asset URLs
+  to `/css`, `/js`, `/data` — outside the prefix, onto the hub's `/*`
+  fallback, which returns HTML and fails strict MIME checks. The proxy Worker
+  now 302s `/leoncito` → `/leoncito/`, and `<base href="/leoncito/">` pins the
+  resolution regardless.
 
 ## Deviations from the original plan
 
@@ -157,3 +152,6 @@ accumulates) → deploys `site/` to Pages. Data commits use the default
   Worker on the `/leoncito` routes does the path rewrite + origin switch
   instead. Pages *assets* remain Wrangler-deployed (no Terraform resource for
   asset uploads).
+- **Trailing-slash normalization** — bare `/leoncito` 302s to `/leoncito/`
+  (same pattern as relay/chat/learn) plus `<base href="/leoncito/">` in the
+  HTML, so relative asset URLs can never escape the subpath onto the hub.
