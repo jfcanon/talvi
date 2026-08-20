@@ -5,7 +5,7 @@
 #
 # Routing: the apex host app.ygdcbtmc4u.uk is served by the talvi hub Worker
 # (its `/*` fallback). A request to /leoncito is therefore rewritten to the
-# Pages root (http_request_late_transform) and the origin is switched to the
+# Pages root (http_request_transform) and the origin is switched to the
 # Pages project (http_request_origin) BEFORE the Worker route would consume
 # it. If the hub ever claims /leoncito first, add a more-specific
 # cloudflare_workers_route exception or raise with the hub owner — the
@@ -63,14 +63,16 @@ resource "cloudflare_ruleset" "leoncito_path_rewrite" {
   zone_id     = var.talvi_zone_id
   name        = "Leoncito dashboard path rewrite"
   description = "Strip the /leoncito prefix before origin selection"
-  phase       = "http_request_late_transform"
-  kind        = "zone"
+  # URI rewrites are only valid in the http_request_transform phase
+  # (http_request_late_transform is header-only — API error 20088).
+  phase = "http_request_transform"
+  kind  = "zone"
 
   rules = [{
     # URL-rewrite transform rule: the action is "rewrite" (not "rewrite_uri"),
     # with the target under action_parameters.uri.
     action     = "rewrite"
-    expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and http.request.uri.path starts_with \"/leoncito\")"
+    expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and starts_with(http.request.uri.path, \"/leoncito\"))"
     action_parameters = {
       uri = {
         path = {
@@ -93,7 +95,7 @@ resource "cloudflare_ruleset" "leoncito_origin" {
 
   rules = [{
     action     = "route"
-    expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and http.request.uri.path starts_with \"/leoncito\")"
+    expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and starts_with(http.request.uri.path, \"/leoncito\"))"
     action_parameters = {
       host_header = "leoncito-dashboard.pages.dev"
     }
