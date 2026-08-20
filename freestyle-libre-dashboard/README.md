@@ -94,11 +94,15 @@ minutes; CSV export included.
 ### 2. Create the Pages project + routing (Terraform)
 
 The Pages project and the `/leoncito` routing are **managed by IAC** per DSC:
-`freestyle-libre-dashboard/main.tf` creates the `cloudflare_pages_project`,
-a path rewrite (`/leoncito/*` → `/`), and an origin rule routing the subpath
-to the project. `.github/workflows/terraform-leoncito.yml` plans on PR and
-applies on merge to `main` (talvi convention — Terraform never runs locally).
-Merge the Terraform first; assets deploy on top via Wrangler.
+`freestyle-libre-dashboard/main.tf` creates the `cloudflare_pages_project` and
+a small proxy Worker (`scripts/leoncito_proxy.js`) on the
+`app.ygdcbtmc4u.uk/leoncito(/*)` routes that strips the prefix and proxies to
+the Pages project. A Worker is used instead of a transform-rule URL rewrite +
+origin-rule host-header override — those need Business/WAF Advanced and a paid
+plan respectively, and both 400'd on this zone's free plan.
+`.github/workflows/terraform-leoncito.yml` plans on PR and applies on merge to
+`main` (talvi convention — Terraform never runs locally). Merge the Terraform
+first; assets deploy on top via Wrangler.
 
 Only if you deploy before the Terraform merges, create the project manually:
 
@@ -148,5 +152,8 @@ accumulates) → deploys `site/` to Pages. Data commits use the default
 - **Schedule disabled by default** until secrets are configured.
 - **Cloudflare infra is Terraform-managed** (`main.tf` +
   `terraform-leoncito.yml`, applied on merge to main per talvi convention);
-  the plan called for dashboard-side Origin Rules. Pages *assets* remain
-  Wrangler-deployed (no Terraform resource for asset uploads).
+  the plan called for dashboard-side Origin Rules, but those (and the
+  transform-rule URL rewrite) are paid-plan-only on this zone, so a proxy
+  Worker on the `/leoncito` routes does the path rewrite + origin switch
+  instead. Pages *assets* remain Wrangler-deployed (no Terraform resource for
+  asset uploads).
