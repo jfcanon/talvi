@@ -67,7 +67,9 @@ resource "cloudflare_ruleset" "leoncito_path_rewrite" {
   kind        = "zone"
 
   rules = [{
-    action     = "rewrite_uri"
+    # URL-rewrite transform rule: the action is "rewrite" (not "rewrite_uri"),
+    # with the target under action_parameters.uri.
+    action     = "rewrite"
     expression = "(http.host eq \"app.ygdcbtmc4u.uk\" and http.request.uri.path starts_with \"/leoncito\")"
     action_parameters = {
       uri = {
