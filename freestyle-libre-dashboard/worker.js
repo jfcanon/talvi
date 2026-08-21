@@ -5,15 +5,43 @@ const KV_KEY = 'glucose.json';
 const STATUS_KEY = '_status.json'; // last fetch result, for observability (RCA)
 const CRON_SCHEDULE = '17 * * * *'; // every hour at :17 (matches old GitHub Actions)
 
+// All timestamps are stored in Argentina time (GMT-3, America/Argentina/
+// Buenos_Aires — fixed UTC-3, no DST since 2009). LibreLinkUp returns UTC;
+// the JSON the dashboard consumes must read as Buenos Aires wall-clock.
+const ART_OFFSET_MS = -3 * 60 * 60 * 1000;
+const ART_OFFSET_SUFFIX = '-03:00';
+
+function toArtIso(value) {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  const local = new Date(d.getTime() - ART_OFFSET_MS); // local wall clock = UTC - 3h
+  return local.toISOString().replace(/\.\d{3}Z$/, ART_OFFSET_SUFFIX);
+}
+
+// Normalize any legacy UTC ("Z") timestamps to GMT-3. Idempotent on data that
+// is already GMT-3. Applied on read AND on merge so a store seeded with old
+// UTC values converges to the GMT-3 contract on first serve.
+function normalizeToArt(data) {
+  if (!data) return data;
+  return {
+    ...data,
+    last_updated: toArtIso(data.last_updated),
+    readings: (data.readings || []).map((r) => ({ ...r, timestamp: toArtIso(r.timestamp) })),
+    events: (data.events || []).map((e) => ({ ...e, timestamp: toArtIso(e.timestamp) })),
+  };
+}
+
 // LibreLinkUp's graph endpoint only returns ~12h per call, so each cron run
 // must MERGE with what's already stored instead of overwriting — otherwise the
 // KV store never accumulates the history the dashboard expects. New data wins
 // on duplicate timestamps; the combined set is capped at 120 days.
 function mergeHistory(existing, fresh) {
+  const existingN = normalizeToArt(existing);
+  const freshN = normalizeToArt(fresh);
   const cutoff = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
 
   const readingsMap = new Map();
-  for (const r of [...(existing?.readings || []), ...(fresh?.readings || [])]) {
+  for (const r of [...(existingN?.readings || []), ...(freshN?.readings || [])]) {
     if (r?.timestamp) readingsMap.set(r.timestamp, r);
   }
   const readings = Array.from(readingsMap.values())
@@ -21,7 +49,7 @@ function mergeHistory(existing, fresh) {
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   const eventMap = new Map();
-  for (const e of [...(existing?.events || []), ...(fresh?.events || [])]) {
+  for (const e of [...(existingN?.events || []), ...(freshN?.events || [])]) {
     if (e?.timestamp) eventMap.set(`${e.timestamp}|${e.type}`, e);
   }
   const events = Array.from(eventMap.values()).sort(
@@ -33,9 +61,9 @@ function mergeHistory(existing, fresh) {
     events,
     last_updated: readings.length
       ? readings[readings.length - 1].timestamp
-      : new Date().toISOString().replace('+00:00', 'Z'),
-    sensor_id: fresh?.sensor_id || existing?.sensor_id || null,
-    trend: fresh?.trend ?? existing?.trend ?? null,
+      : toArtIso(new Date()),
+    sensor_id: freshN?.sensor_id || existingN?.sensor_id || null,
+    trend: freshN?.trend ?? existingN?.trend ?? null,
   };
 }
 
@@ -167,6 +195,7 @@ async function fetchFromLibreLinkUp(env) {
 
   let jwt = null;
   let baseUrl = null;
+  let lastAuthError = null;
 
   // Try each region until one works
   for (const url of API_URLS) {
@@ -176,12 +205,15 @@ async function fetchFromLibreLinkUp(env) {
       console.log(`Authenticated via ${url}`);
       break;
     } catch (e) {
+      lastAuthError = e.message;
       console.warn(`Auth failed via ${url}: ${e.message}`);
     }
   }
 
   if (!jwt) {
-    throw new Error('LibreLinkUp auth failed on all regions');
+    // Surface the underlying HTTP status/text so /api/status pinpoints the
+    // cause (401 = bad credentials, 403 = blocked, 5xx = upstream, etc.).
+    throw new Error(`LibreLinkUp auth failed on all regions: ${lastAuthError}`);
   }
 
   const patients = await getPatients(jwt, baseUrl);
@@ -206,7 +238,7 @@ async function fetchFromLibreLinkUp(env) {
     const value = Number(m.valueInMgPerDl || m.ValueInMgPerDl || m.value_in_mg_per_dl);
     if (value >= MIN_GLUCOSE && value <= MAX_GLUCOSE) {
       readings.push({
-        timestamp: new Date(ts).toISOString().replace('+00:00', 'Z'),
+        timestamp: toArtIso(ts),
         glucose: Math.round(value * 10) / 10,
         unit: 'mg/dL',
       });
@@ -220,7 +252,7 @@ async function fetchFromLibreLinkUp(env) {
     const value = Number(latest.data.valueInMgPerDl);
     if (value >= MIN_GLUCOSE && value <= MAX_GLUCOSE) {
       const latestReading = {
-        timestamp: new Date(ts).toISOString().replace('+00:00', 'Z'),
+        timestamp: toArtIso(ts),
         glucose: Math.round(value * 10) / 10,
         unit: 'mg/dL',
       };
@@ -246,7 +278,7 @@ async function fetchFromLibreLinkUp(env) {
     const ts = e.timestamp;
     const eventType = EVENT_TYPE_LABEL[e.type] || String(e.type).toLowerCase();
     events.push({
-      timestamp: new Date(ts).toISOString().replace('+00:00', 'Z'),
+      timestamp: toArtIso(ts),
       type: eventType,
       carbs_g: e.carbs ?? null,
       insulin_units: e.insulin ?? null,
@@ -263,7 +295,7 @@ async function fetchFromLibreLinkUp(env) {
   return {
     readings: filtered,
     events: Array.from(eventMap.values()),
-    last_updated: filtered.length ? filtered[filtered.length - 1].timestamp : new Date().toISOString().replace('+00:00', 'Z'),
+    last_updated: filtered.length ? filtered[filtered.length - 1].timestamp : toArtIso(new Date()),
     sensor_id: String(patientId).slice(0, 6).toUpperCase(),
     trend,
   };
@@ -299,14 +331,18 @@ async function handleFetch(env) {
 }
 
 async function handleGetData(env) {
-  const stored = await env.LEONCITO_DATA.get(KV_KEY);
+  const stored = await env.LEONCITO_DATA.get(KV_KEY, 'json').catch(() => null);
   if (!stored) {
     return new Response(JSON.stringify({ readings: [], events: [], error: 'No data yet' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
-  return new Response(stored, {
+  // Normalize to GMT-3 on serve and persist the normalized copy so the store
+  // converges even before the next successful fetch (legacy UTC seed → ART).
+  const normalized = normalizeToArt(stored);
+  await env.LEONCITO_DATA.put(KV_KEY, JSON.stringify(normalized, null, 2)).catch(() => {});
+  return new Response(JSON.stringify(normalized), {
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
   });
 }
