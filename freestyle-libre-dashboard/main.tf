@@ -73,6 +73,14 @@ variable "ingest_token" {
   default   = null
 }
 
+# Clerk JWT verification key (PEM public key) — same value the hub binds as
+# CLERK_JWT_KEY. Public by design; worker.js uses it to verify the host-wide
+# __session cookie networklessly on /api/insulin (NID-402). Passed from the
+# repo secret via terraform-leoncito.yml (same plumbing as every sibling app).
+variable "clerk_jwt_key" {
+  type = string
+}
+
 # KV namespace for glucose data
 resource "cloudflare_workers_kv_namespace" "glucose_data" {
   account_id = var.cloudflare_account_id
@@ -138,6 +146,13 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
         name = "LIBRELINK_PASSWORD"
         text = var.librelink_password
       },
+      {
+        # Verifies the host-wide __session cookie on /api/insulin (NID-402);
+        # public by design — same shape as the hub's binding.
+        type = "plain_text"
+        name = "CLERK_JWT_KEY"
+        text = var.clerk_jwt_key
+      },
     ],
     # Bound only once the ingest token secret exists (see variable above).
     var.ingest_token != null ? [
@@ -148,6 +163,13 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
       }
     ] : []
   )
+}
+
+# Cron trigger for glucose Worker (hourly at :17)
+resource "cloudflare_workers_cron_trigger" "glucose_cron" {
+  account_id  = var.cloudflare_account_id
+  script_name = cloudflare_workers_script.leoncito_glucose.script_name
+  schedules   = [{ cron = "17 * * * *" }]
 }
 
 # Routes: app.ygdcbtmc4u.uk/leoncito (exact) and /leoncito/*. The hub owns
@@ -205,9 +227,16 @@ resource "cloudflare_workers_route" "glucose_api_ingest" {
   script  = cloudflare_workers_script.leoncito_glucose.script_name
 }
 
-# No cron trigger: fetching moved off the Worker to the owner's home network —
-# libreview.io 403s Cloudflare datacenter egress IPs, so hourly cron runs could
-# never succeed and only clobbered _status.json with failures. Re-add a
-# cloudflare_workers_cron_trigger + the worker's scheduled handler if egress
-# is ever unblocked.
+# Insulin-shot tracker API (NID-402). NOTE: there is no /api/* wildcard — the
+# existing routes above are exact matches, so the new endpoint needs its own.
+resource "cloudflare_workers_route" "insulin_api_exact" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/insulin"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}
 
+resource "cloudflare_workers_route" "insulin_api_wildcard" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/insulin/*"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}

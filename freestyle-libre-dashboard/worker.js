@@ -5,9 +5,12 @@
 // here via POST /api/ingest (bearer-gated with INGEST_TOKEN). This Worker
 // no longer talks to libreview.io itself; /api/fetch stays as a manual
 // diagnostic (and fails loudly while datacenter egress remains blocked).
+// The hourly cron (17 * * * *) remains scheduled — it invokes the Worker
+// but the scheduled handler is a no-op; re-add logic if egress is ever unblocked.
 
 const KV_KEY = 'glucose.json';
 const STATUS_KEY = '_status.json'; // last successful ingest/fetch, for observability (RCA)
+const INSULIN_KEY = 'insulin.json'; // owner-recorded insulin shots (NID-402)
 
 // Bounds for accepted ingest payloads. A fresh LibreLinkUp graph call is
 // ~12h at 5-min cadence (~144 readings); generous caps keep even a full
@@ -15,6 +18,73 @@ const STATUS_KEY = '_status.json'; // last successful ingest/fetch, for observab
 const MAX_INGEST_BYTES = 5 * 1024 * 1024;
 const MAX_INGEST_READINGS = 5000;
 const MAX_INGEST_EVENTS = 2000;
+
+// Clerk session gate (NID-402/NID-400). The worker is uploaded verbatim
+// (`content = file(...)` in main.tf, no esbuild), so @clerk/backend cannot be
+// imported here — verify the host-wide __session cookie directly instead:
+// networkless RS256 verification against CLERK_JWT_KEY (the same PEM the hub
+// binds), plus the azp/exp checks authenticateRequest would do. Fail-closed:
+// a missing binding or any verification error reads as unauthenticated.
+// NID-400 owns gating /api/glucose + /api/status; they can reuse this helper.
+const AUTHORIZED_PARTIES = ['https://app.ygdcbtmc4u.uk'];
+
+function b64urlToBytes(s) {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+function pemToSpki(pem) {
+  const body = pem.replace(/-----(?:BEGIN|END) PUBLIC KEY-----/g, '').replace(/\s+/g, '');
+  return Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
+}
+
+async function readSessionClaims(request, env) {
+  if (!env.CLERK_JWT_KEY) return null;
+  const cookie = request.headers.get('Cookie') || '';
+  const m = cookie.match(/(?:^|;\s*)__session=([^;]+)/);
+  if (!m) return null;
+  let token = m[1].trim();
+  try {
+    if (token.startsWith('"') && token.endsWith('"')) token = token.slice(1, -1);
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const header = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[0])));
+    if (header.alg !== 'RS256') return null;
+    const claims = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1])));
+    const now = Math.floor(Date.now() / 1000);
+    if (!claims.exp || claims.exp < now - 5) return null; // 5s clock skew
+    if (!AUTHORIZED_PARTIES.includes(claims.azp)) return null;
+    const key = await crypto.subtle.importKey(
+      'spki',
+      pemToSpki(env.CLERK_JWT_KEY),
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+    const ok = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      key,
+      b64urlToBytes(parts[2]),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
+    );
+    return ok ? claims : null;
+  } catch {
+    return null;
+  }
+}
+
+async function requireSession(request, env) {
+  const claims = await readSessionClaims(request, env);
+  if (!claims) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  return null;
+}
 
 // All timestamps are stored in Argentina time (GMT-3, America/Argentina/
 // Buenos_Aires — fixed UTC-3, no DST since 2009). LibreLinkUp returns UTC;
@@ -562,6 +632,112 @@ async function handleGetData(env) {
   });
 }
 
+/* ---------- Insulin-shot tracker (NID-402) ---------- */
+
+// Store shape: { shots: [{ id, timestamp (ISO -03:00), note?, created_at }], updated_at }
+// A day can hold multiple shots; ids are opaque (uuid). The cron never writes
+// this key — it is owner data, only mutated via /api/insulin.
+//
+// NOTE on toArtIso: it is NOT idempotent (a "-03:00" input is shifted again),
+// so writes here only convert inputs that are NOT already in store form;
+// "-03:00" timestamps pass through untouched (idempotent re-saves/upserts).
+// Everything else — Z, other offsets, offset-free, Date — goes through the
+// same toArtIso pipeline the glucose store uses on write.
+function toStoreTimestamp(value) {
+  const s = typeof value === 'string' ? value : null;
+  if (s && s.endsWith('-03:00') && !isNaN(new Date(s).getTime())) return s;
+  const converted = toArtIso(s ?? value);
+  return isNaN(new Date(converted).getTime()) ? null : converted;
+}
+
+async function getInsulinStore(env) {
+  const stored = await env.LEONCITO_DATA.get(INSULIN_KEY, 'json').catch(() => null);
+  return stored && Array.isArray(stored.shots) ? stored : { shots: [], updated_at: null };
+}
+
+function sortShots(shots) {
+  return shots.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+async function handleInsulinGet(env) {
+  const store = await getInsulinStore(env);
+  return new Response(JSON.stringify({ shots: sortShots(store.shots) }), {
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
+}
+
+async function handleInsulinPost(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'invalid JSON body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // timestamp optional → defaults to now. Foreign forms (Z, offset-free) are
+  // converted through the same pipeline the glucose store uses; store-form
+  // (-03:00) input passes through untouched so re-saves are idempotent.
+  const timestamp = toStoreTimestamp(body.timestamp || new Date());
+  if (!timestamp) {
+    return new Response(JSON.stringify({ error: 'invalid timestamp' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  if (body.note != null && typeof body.note !== 'string') {
+    return new Response(JSON.stringify({ error: 'note must be a string' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  const store = await getInsulinStore(env);
+  const shot = {
+    id: body.id && typeof body.id === 'string' ? body.id : crypto.randomUUID(),
+    timestamp,
+    note: body.note || null,
+    created_at: toArtIso(new Date()),
+  };
+  // Upsert by id (lets the client retry a save safely); cap at 2000 shots.
+  const existingIdx = store.shots.findIndex((s) => s.id === shot.id);
+  if (existingIdx >= 0) store.shots[existingIdx] = shot;
+  else store.shots.push(shot);
+  store.shots = sortShots(store.shots).slice(-2000);
+  store.updated_at = shot.created_at;
+  await env.LEONCITO_DATA.put(INSULIN_KEY, JSON.stringify(store, null, 2));
+  return new Response(JSON.stringify({ success: true, shot }), {
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
+}
+
+async function handleInsulinDelete(request, env) {
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+  if (!id) {
+    return new Response(JSON.stringify({ error: 'missing ?id=' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  const store = await getInsulinStore(env);
+  const before = store.shots.length;
+  store.shots = sortShots(store.shots.filter((s) => s.id !== id));
+  if (store.shots.length === before) {
+    return new Response(JSON.stringify({ error: 'shot not found', id }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  store.updated_at = toArtIso(new Date());
+  await env.LEONCITO_DATA.put(INSULIN_KEY, JSON.stringify(store, null, 2));
+  return new Response(JSON.stringify({ success: true, id }), {
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -597,6 +773,22 @@ export default {
       });
     }
 
+    // Insulin-shot tracker (NID-402) — owner-recorded shots in KV
+    // insulin.json. Every method requires a valid Clerk __session (the
+    // sibling NID-400 gate will extend the same check to /api/glucose +
+    // /api/status; requireSession above is written to be reused there).
+    if (url.pathname === '/api/insulin') {
+      const denied = await requireSession(request, env);
+      if (denied) return denied;
+      if (request.method === 'GET') return handleInsulinGet(env);
+      if (request.method === 'POST') return handleInsulinPost(request, env);
+      if (request.method === 'DELETE') return handleInsulinDelete(request, env);
+      return new Response(JSON.stringify({ error: 'method not allowed' }), {
+        status: 405,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
     // Health check
     if (url.pathname === '/health') {
       return new Response('OK', { headers: { 'Content-Type': 'text/plain' } });
@@ -604,6 +796,12 @@ export default {
 
     return new Response('Not Found', { status: 404 });
   },
-  // No scheduled handler — the Worker cron trigger was removed with the
-  // Terraform change that moved fetching to the home network (NID-403).
+  // Cron trigger is scheduled (17 * * * *) but the handler is a no-op because
+  // the LibreLinkUp fetch moved to the home-network fetcher (NID-403).
+  // Re-add logic here if datacenter egress is ever unblocked.
+  async scheduled(event, env, ctx) {
+    if (event.cron === '17 * * * *') {
+      console.log('Cron triggered: scheduled handler is a no-op (fetch moved to home network)');
+    }
+  },
 };

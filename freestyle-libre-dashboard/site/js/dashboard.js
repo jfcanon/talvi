@@ -11,6 +11,9 @@ const REFRESH_MS = 5 * 60 * 1000; // optional auto-refresh
 // API endpoint - can be overridden via <meta name="glucose-api" content="..."> in HTML
 const META_API = document.querySelector('meta[name="glucose-api"]');
 const DATA_URL = META_API?.content || 'data/glucose.json'; // fallback to static file
+const META_INSULIN_API = document.querySelector('meta[name="insulin-api"]');
+const INSULIN_API = META_INSULIN_API?.content || '/api/insulin';
+const INSULIN_CACHE_KEY = 'leoncito-insulin-cache'; // offline/device-local fallback
 const VIEWS = ['24h', '7d', '30d', 'all'];
 
 const els = {
@@ -43,11 +46,34 @@ const els = {
   sensorLifeLeft: document.getElementById('sensor-life-left'),
   sensorLifeExpires: document.getElementById('sensor-life-expires'),
   sensorLifeStatus: document.getElementById('sensor-life-status'),
+  // NID-402: insulin tracker
+  calGrid: document.getElementById('cal-grid'),
+  calMonthLabel: document.getElementById('cal-month-label'),
+  calPrev: document.getElementById('cal-prev'),
+  calNext: document.getElementById('cal-next'),
+  shotList: document.getElementById('shot-list'),
+  dayTitle: document.getElementById('insulin-day-title'),
+  shotTime: document.getElementById('shot-time'),
+  shotNote: document.getElementById('shot-note'),
+  shotAdd: document.getElementById('shot-add'),
+  addNow: document.getElementById('insulin-add-now'),
+  saveBtn: document.getElementById('insulin-save'),
+  statusLine: document.getElementById('insulin-status'),
 };
 
 let store = { readings: [], events: [] };
 let currentView = '24h';
 let chart = null;
+
+// Insulin tracker state. shots = persisted truth (server or cache);
+// pendingAdds / pendingDeletes are unsaved local edits (Save button syncs).
+let insulin = { shots: [], pendingAdds: [], pendingDeletes: new Set(), online: null };
+let calCursor = startOfDay(new Date());
+let selectedDayKey = isoDateKey(new Date());
+
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
 /* ---------- helpers ---------- */
 
@@ -243,6 +269,40 @@ function eventLabel(e) {
   return parts.join(' • ');
 }
 
+/* ---------- NID-402: injection markers on chart ---------- */
+
+// One solid pink vertical line + 💉 label per recorded shot (distinct from
+// the dashed LibreLinkUp logbook lines). Timestamps are ISO -03:00 and parse
+// natively on the chart's existing time scale.
+function buildInsulinAnnotations() {
+  const annotations = {};
+  const viewStart = getViewStart();
+  const shots = allInsulinShots();
+  shots.forEach((s) => {
+    const t = new Date(s.timestamp).getTime();
+    if (!isFinite(t) || t < viewStart) return;
+    const timeStr = fmtTime(new Date(s.timestamp));
+    annotations[`shot-${s.id}`] = {
+      type: 'line',
+      mode: 'x',
+      scaleID: 'x',
+      value: t,
+      borderColor: '#f472b6',
+      borderWidth: 2,
+      label: {
+        enabled: true,
+        content: `💉 ${timeStr}`,
+        position: 'start',
+        backgroundColor: '#f472b6',
+        color: '#fff',
+        font: { size: 10, weight: 'bold' },
+        padding: 4,
+      },
+    };
+  });
+  return annotations;
+}
+
 /* ---------- aggregation ---------- */
 
 function avg(vals) {
@@ -329,6 +389,7 @@ function aggregateDaily(readings, since, labelFn) {
 
 function annotationConfig(readings, events) {
   const eventAnnotations = buildEventAnnotations(readings, events);
+  const shotAnnotations = buildInsulinAnnotations();
   return {
     annotation: {
       drawTime: 'beforeDatasetsDraw',
@@ -368,6 +429,7 @@ function annotationConfig(readings, events) {
           label: { content: 'target 270', enabled: true, position: 'start', display: true },
         },
         ...eventAnnotations,
+        ...shotAnnotations,
       },
     },
   };
@@ -583,6 +645,287 @@ async function loadData() {
   }
 }
 
+/* ---------- NID-402: Insulin-shot tracker ---------- */
+
+// Every timestamp is stored/read as Buenos Aires wall clock (ISO -03:00),
+// matching the worker's GMT-3 contract — independent of the viewing device's
+// timezone. Stored strings are fixed-shape ("YYYY-MM-DDTHH:mm:ss.sss-03:00"),
+// so the calendar day key is a plain string slice.
+function artDateKey(tsStr) {
+  return String(tsStr).slice(0, 10);
+}
+
+function makeArtTimestamp(dateKey, timeStr) {
+  const t = String(timeStr || '00:00').slice(0, 5); // HH:MM
+  return `${dateKey}T${t}:00-03:00`;
+}
+
+function artNowParts() {
+  // Buenos Aires wall clock regardless of device timezone (UTC − 3h).
+  const d = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  return { date: d.slice(0, 10), time: d.slice(11, 16) };
+}
+
+function allInsulinShots() {
+  const deleted = insulin.pendingDeletes;
+  const merged = [
+    ...insulin.shots.filter((s) => !deleted.has(s.id)),
+    ...insulin.pendingAdds,
+  ];
+  return merged.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function insulinDirty() {
+  return insulin.pendingAdds.length > 0 || insulin.pendingDeletes.size > 0;
+}
+
+async function loadInsulin() {
+  try {
+    const res = await fetch(INSULIN_API, { cache: 'no-store' });
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+    const data = await res.json();
+    insulin.shots = Array.isArray(data.shots) ? data.shots : [];
+    insulin.online = true;
+    try { localStorage.setItem(INSULIN_CACHE_KEY, JSON.stringify(insulin.shots)); } catch {}
+  } catch (err) {
+    // Offline fallback: device-local copy (per NID-402 design decision #1).
+    insulin.online = false;
+    try { insulin.shots = JSON.parse(localStorage.getItem(INSULIN_CACHE_KEY) || '[]'); } catch {}
+    insulin.shots = Array.isArray(insulin.shots) ? insulin.shots : [];
+    setStatus(
+      err.status === 401
+        ? 'Sign-in required — showing device-local copy.'
+        : 'API unreachable — showing device-local copy; saves stay on this device.'
+    );
+  }
+  renderCalendar();
+  renderDayPanel();
+  updateSaveState();
+}
+
+async function saveInsulin() {
+  if (!insulinDirty()) return;
+  if (!insulin.online) {
+    saveLocalFallback();
+    return;
+  }
+  els.saveBtn.disabled = true;
+  setStatus('Saving…');
+  try {
+    for (const s of insulin.pendingAdds) {
+      const res = await fetch(INSULIN_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timestamp: s.timestamp, note: s.note }),
+      });
+      if (!res.ok) throw Object.assign(new Error(`save failed: HTTP ${res.status}`), { status: res.status });
+    }
+    for (const id of insulin.pendingDeletes) {
+      const res = await fetch(`${INSULIN_API}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 404) throw new Error(`delete failed: HTTP ${res.status}`);
+    }
+    insulin.pendingAdds = [];
+    insulin.pendingDeletes = new Set();
+    await loadInsulin(); // re-sync from source of truth (also refreshes markers)
+    setStatus('Saved ✓');
+    refreshChartAnnotations();
+  } catch (err) {
+    setStatus(err.status === 401
+      ? 'Sign-in required — not saved to the cloud. Try again after signing in.'
+      : `Could not save (${err.message}). Your edits are kept — press Save again.`);
+  } finally {
+    updateSaveState();
+  }
+}
+
+function saveLocalFallback() {
+  try {
+    localStorage.setItem(INSULIN_CACHE_KEY, JSON.stringify(allInsulinShots()));
+    insulin.shots = allInsulinShots();
+    insulin.pendingAdds = [];
+    insulin.pendingDeletes = new Set();
+    renderCalendar();
+    renderDayPanel();
+    setStatus('Saved on this device only (offline mode).');
+  } catch {
+    setStatus('Could not save — storage unavailable.');
+  } finally {
+    updateSaveState();
+  }
+}
+
+function setStatus(msg) {
+  if (els.statusLine) els.statusLine.textContent = msg;
+}
+
+function updateSaveState() {
+  els.saveBtn.disabled = !insulinDirty();
+}
+
+function refreshChartAnnotations() {
+  if (!chart) return;
+  const readings = (store.readings || []).map(parseReading);
+  chart.options.plugins.annotation.annotations =
+    annotationConfig(readings, store.events || []).annotation.annotations;
+  chart.update();
+}
+
+/* Calendar month view — Monday-first grid matching the weekday header. */
+
+function renderCalendar() {
+  if (!els.calGrid) return;
+  const year = calCursor.getFullYear();
+  const month = calCursor.getMonth();
+  els.calMonthLabel.textContent = calCursor.toLocaleDateString([], { month: 'long', year: 'numeric' });
+
+  const counts = new Map(); // dateKey -> shot count (persisted + pending)
+  for (const s of allInsulinShots()) {
+    const k = artDateKey(s.timestamp);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+
+  const todayKey = isoDateKey(new Date());
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  els.calGrid.innerHTML = '';
+  for (let i = 0; i < firstDow; i++) {
+    const pad = document.createElement('span');
+    pad.className = 'cal-cell cal-pad';
+    els.calGrid.appendChild(pad);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'cal-cell';
+    if (key === todayKey) cell.classList.add('cal-today');
+    if (key === selectedDayKey) cell.classList.add('cal-selected');
+    const num = document.createElement('span');
+    num.className = 'cal-day-num';
+    num.textContent = String(day);
+    cell.appendChild(num);
+    const n = counts.get(key) || 0;
+    if (n > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'cal-shot-badge';
+      badge.textContent = n > 1 ? `💉×${n}` : '💉';
+      cell.appendChild(badge);
+    }
+    cell.addEventListener('click', () => {
+      selectedDayKey = key;
+      renderCalendar();
+      renderDayPanel();
+    });
+    els.calGrid.appendChild(cell);
+  }
+}
+
+function renderDayPanel() {
+  if (!els.shotList) return;
+  const [y, m, d] = selectedDayKey.split('-').map(Number);
+  const dayDate = new Date(y, m - 1, d);
+  els.dayTitle.textContent = dayDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+
+  const shots = allInsulinShots().filter((s) => artDateKey(s.timestamp) === selectedDayKey);
+  els.shotList.innerHTML = '';
+  if (!shots.length) {
+    const li = document.createElement('li');
+    li.className = 'shot-empty';
+    li.textContent = 'No shots recorded for this day.';
+    els.shotList.appendChild(li);
+  }
+  for (const s of shots) {
+    const li = document.createElement('li');
+    li.className = 'shot-item';
+    const time = document.createElement('span');
+    time.className = 'shot-time';
+    time.textContent = fmtTime(new Date(s.timestamp));
+    li.appendChild(time);
+    if (s.note) {
+      const note = document.createElement('span');
+      note.className = 'shot-note';
+      note.textContent = s.note;
+      li.appendChild(note);
+    }
+    if (!insulin.pendingDeletes.has(s.id)) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'shot-delete';
+      del.setAttribute('aria-label', `Delete shot at ${time.textContent}`);
+      del.textContent = '✕';
+      del.addEventListener('click', () => removeShot(s.id));
+      li.appendChild(del);
+    } else {
+      li.classList.add('shot-deleted');
+      const undo = document.createElement('button');
+      undo.type = 'button';
+      undo.className = 'shot-delete';
+      undo.textContent = '↺';
+      undo.addEventListener('click', () => {
+        insulin.pendingDeletes.delete(s.id);
+        renderCalendar();
+        renderDayPanel();
+        updateSaveState();
+      });
+      li.appendChild(undo);
+    }
+    els.shotList.appendChild(li);
+  }
+
+  // Default the time input to now (Buenos Aires wall clock).
+  if (!els.shotTime.value) {
+    const { time } = artNowParts();
+    els.shotTime.value = time;
+  }
+}
+
+function removeShot(id) {
+  if (String(id).startsWith('tmp-')) {
+    insulin.pendingAdds = insulin.pendingAdds.filter((s) => s.id !== id);
+  } else {
+    insulin.pendingDeletes.add(id);
+  }
+  renderCalendar();
+  renderDayPanel();
+  updateSaveState();
+}
+
+function addShot(dateKey, timeStr, note) {
+  insulin.pendingAdds.push({
+    id: `tmp-${crypto.randomUUID()}`,
+    timestamp: makeArtTimestamp(dateKey, timeStr),
+    note: note || null,
+  });
+  selectedDayKey = dateKey;
+  renderCalendar();
+  renderDayPanel();
+  updateSaveState();
+}
+
+function bindInsulin() {
+  if (!els.calGrid) return;
+  els.calPrev.addEventListener('click', () => {
+    calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  els.calNext.addEventListener('click', () => {
+    calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + 1, 1);
+    renderCalendar();
+  });
+  els.addNow.addEventListener('click', () => {
+    const { date, time } = artNowParts();
+    addShot(date, time, els.shotNote.value.trim() || null);
+    els.shotTime.value = time;
+  });
+  els.shotAdd.addEventListener('click', () => {
+    const time = els.shotTime.value || artNowParts().time;
+    addShot(selectedDayKey, time, els.shotNote.value.trim() || null);
+    els.shotNote.value = '';
+  });
+  els.saveBtn.addEventListener('click', saveInsulin);
+}
+
 /* ---------- interactions ---------- */
 
 function bindTabs() {
@@ -613,5 +956,7 @@ function bindCsv() {
 
 bindTabs();
 bindCsv();
+bindInsulin();
 loadData();
+loadInsulin();
 setInterval(loadData, REFRESH_MS);
