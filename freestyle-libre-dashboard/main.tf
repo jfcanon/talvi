@@ -115,10 +115,17 @@ resource "cloudflare_workers_route" "leoncito_root" {
   script  = cloudflare_workers_script.leoncito_proxy.script_name
 }
 
-# Glucose Worker route for API endpoint
-resource "cloudflare_workers_route" "glucose_api" {
+# Glucose Worker route for API endpoint - exact match for /api/glucose
+resource "cloudflare_workers_route" "glucose_api_exact" {
   zone_id = var.talvi_zone_id
-  pattern = "app.ygdcbtmc4u.uk/api/glucose*"
+  pattern = "app.ygdcbtmc4u.uk/api/glucose"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}
+
+# Glucose Worker route for API endpoint - wildcard for /api/glucose/*
+resource "cloudflare_workers_route" "glucose_api_wildcard" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/glucose/*"
   script  = cloudflare_workers_script.leoncito_glucose.script_name
 }
 
