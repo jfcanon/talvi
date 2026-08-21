@@ -167,3 +167,10 @@ resource "cloudflare_workers_route" "glucose_api_wildcard" {
   script  = cloudflare_workers_script.leoncito_glucose.script_name
 }
 
+# Glucose Worker route for fetch-status observability endpoint
+resource "cloudflare_workers_route" "glucose_api_status" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/status"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}
+
