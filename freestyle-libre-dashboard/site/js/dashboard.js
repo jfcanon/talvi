@@ -253,20 +253,24 @@ function buildView(view, readings) {
   const now = Date.now();
   const dayMs = 86400000;
 
+  // buildView returns labels as ISO timestamps (not display strings) — the
+  // time scale owns tick formatting via viewTimeConfig(). Passing display
+  // strings here produced invalid Dates (e.g. new Date("09:00")) which the
+  // time scale rendered as raw epoch/year-looking ticks.
   if (view === '24h') {
     const pts = readings.filter((r) => now - r.ts.getTime() <= dayMs);
     return {
-      labels: pts.map((r) => fmtTime(r.ts)),
+      labels: pts.map((r) => r.ts.toISOString()),
       values: pts.map((r) => r.value),
     };
   }
 
   if (view === '7d') {
-    return aggregateDaily(readings, now - 7 * dayMs, (d) => fmtShortDate(d));
+    return aggregateDaily(readings, now - 7 * dayMs, (d) => d.toISOString());
   }
 
   if (view === '30d') {
-    return aggregateDaily(readings, now - 30 * dayMs, (d) => fmtDate(d));
+    return aggregateDaily(readings, now - 30 * dayMs, (d) => d.toISOString());
   }
 
   // all time — weekly averages
@@ -279,10 +283,30 @@ function buildView(view, readings) {
   const keys = [...buckets.keys()].sort();
   const labels = keys.map((k) => {
     const [y, w] = k.split('-W');
-    const d = new Date(Date.UTC(Number(y), 0, 1 + (Number(w) - 1) * 7));
-    return `Wk ${w} ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+    return new Date(Date.UTC(Number(y), 0, 1 + (Number(w) - 1) * 7)).toISOString();
   });
   return { labels, values: keys.map((k) => avg(buckets.get(k))) };
+}
+
+// Per-view X-axis time scale config: what unit the ticks use and how much
+// detail each tick label carries. Applied on every render so tab switches
+// restyle the axis without recreating the chart.
+function viewTimeConfig(view) {
+  if (view === '24h') return { unit: 'hour', maxTicks: 12, tooltipFormat: 'EEE d MMM HH:mm' };
+  if (view === '7d') return { unit: 'day', maxTicks: 7, tooltipFormat: 'EEE d MMM' };
+  if (view === '30d') return { unit: 'day', maxTicks: 15, tooltipFormat: 'EEE d MMM' };
+  return { unit: 'week', maxTicks: 12, tooltipFormat: 'd MMM yyyy' };
+}
+
+// Week tick label as a day-of-month range: "17/08–23/08" (Monday → Sunday).
+function weekTickLabel(value) {
+  const d = new Date(value);
+  const start = new Date(d);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6); // Sunday
+  const fmt = (x) => x.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+  return `${fmt(start)}–${fmt(end)}`;
 }
 
 function aggregateDaily(readings, since, labelFn) {
@@ -385,11 +409,13 @@ function createChart() {
         },
         x: {
           type: 'time',
+          // Unit / label formats are set per view in render() via
+          // viewTimeConfig() — these are just the initial defaults.
           time: {
-            tooltipFormat: 'HH:mm',
-            displayFormats: { hour: 'HH:mm', day: 'MMM d', week: 'MMM d' },
+            tooltipFormat: 'EEE d MMM HH:mm',
+            displayFormats: { hour: 'HH:mm', day: 'EEE d MMM', week: 'd MMM' },
           },
-          ticks: { maxTicksLimit: 12, color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#8fa3bf' },
+          ticks: { maxTicksLimit: 12, color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#8fa3bf', callback: null },
           grid: { display: false },
         },
       },
@@ -426,6 +452,13 @@ function render() {
   }];
   // Update annotations for events
   chart.options.plugins.annotation.annotations = annotationConfig(readings, store.events || []).annotation.annotations;
+  // Apply per-view X-axis time config (unit, tick density, week ranges).
+  const tcfg = viewTimeConfig(currentView);
+  const xScale = chart.options.scales.x;
+  xScale.time.unit = tcfg.unit;
+  xScale.time.tooltipFormat = tcfg.tooltipFormat;
+  xScale.ticks.maxTicksLimit = tcfg.maxTicks;
+  xScale.ticks.callback = tcfg.unit === 'week' ? weekTickLabel : null;
   chart.update();
 
   els.chartEmpty.hidden = values.length > 0;
