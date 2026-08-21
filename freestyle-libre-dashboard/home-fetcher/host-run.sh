@@ -12,6 +12,10 @@
 
 set -euo pipefail
 
+# launchd runs agents with a minimal PATH (/usr/bin:/bin:...) — restore the
+# Homebrew tooling this script needs (bw, limactl).
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
 VM_NAME="${LEONCITO_LIMA_VM:-agente}"
 LIBRE_EMAIL_ITEM="${LEONCITO_BW_LIBRE_EMAIL_ITEM:-LIBRELINK_EMAIL_2}"
 LIBRE_PASSWORD_ITEM="${LEONCITO_BW_LIBRE_PASSWORD_ITEM:-LIBRELINK_PASSWORD_2}"
@@ -37,13 +41,24 @@ if [ -z "${BW_SESSION:-}" ] || ! bw status --session "$BW_SESSION" 2>/dev/null |
   BW_SESSION=""
   if security find-generic-password -s leoncito-bitwarden >/dev/null 2>&1; then
     BW_PASSWORD="$(security find-generic-password -s leoncito-bitwarden -w)"
-    BW_SESSION="$(bw unlock --passwordenv BW_PASSWORD --raw)"
+    # script(1) gives bw a pseudo-TTY: under launchd/cron stdin is not a TTY
+    # and bw's interactive unlock aborts (rc=1, empty key). Clean the pty
+    # noise (CR, ANSI, backspaces) off the captured session key.
+    BW_SESSION="$(script -q /dev/null bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null \
+      | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr -d '\b\n')"
     unset BW_PASSWORD
   elif [ -n "${BW_PASSWORD:-}" ]; then
     BW_SESSION="$(bw unlock --passwordenv BW_PASSWORD --raw)"
   fi
 fi
 [ -n "$BW_SESSION" ] || { log "no unlocked Bitwarden session available"; exit 4; }
+# This bw build exits 0 with empty output even on an invalid session —
+# verify the session actually unlocked (a mistyped Keychain password
+# surfaces here as 'decryption operation failed').
+if ! bw status --session "$BW_SESSION" 2>/dev/null | grep -q '"status":"unlocked"'; then
+  log "keychain password rejected by Bitwarden — run ~/.leoncito-fetcher/finish-keychain.sh"
+  exit 4
+fi
 
 # The CLI serves a local cache — sync before any get, every run.
 bw sync --session "$BW_SESSION" >/dev/null
