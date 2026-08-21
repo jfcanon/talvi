@@ -84,12 +84,14 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
   main_module        = "worker.js"
   content            = file("${path.module}/worker.js")
   compatibility_date = "2026-08-20"
-  module             = true
+}
 
-  kv_namespace_bindings = [{
-    name = "LEONCITO_DATA"
-    namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
-  }]
+# KV namespace binding for glucose Worker
+resource "cloudflare_workers_kv_namespace_binding" "glucose_kv_binding" {
+  account_id    = var.cloudflare_account_id
+  script_name   = cloudflare_workers_script.leoncito_glucose.script_name
+  namespace_id  = cloudflare_workers_kv_namespace.glucose_data.id
+  binding_name  = "LEONCITO_DATA"
 }
 
 # Cron trigger for glucose Worker (hourly at :17)
