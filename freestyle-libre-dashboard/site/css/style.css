@@ -351,6 +351,196 @@ main {
 .legend-item.event-insulin::before { background: #f472b6; }
 .legend-item.event-note::before   { background: #60a5fa; }
 
+/* NID-402: Insulin-shot tracker */
+.insulin-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.insulin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.insulin-actions { display: flex; gap: 0.5rem; }
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #06281f;
+  font-weight: 600;
+}
+
+.btn-primary:hover { color: #06281f; filter: brightness(1.1); }
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.btn:disabled { cursor: not-allowed; opacity: 0.45; }
+.btn-primary:disabled:hover { color: #06281f; border-color: var(--accent); }
+
+.calendar-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.cal-month { font-weight: 600; }
+
+.calendar-nav .btn { padding: 0.25rem 0.75rem; font-size: 1rem; line-height: 1.2; }
+
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cal-weekdays span {
+  text-align: center;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding-bottom: 0.25rem;
+}
+
+.cal-cell {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.15rem;
+  cursor: pointer;
+  appearance: none;
+}
+
+.cal-cell:hover { border-color: var(--accent); }
+
+.cal-pad { background: transparent; border-color: transparent; cursor: default; }
+.cal-pad:hover { border-color: transparent; }
+
+.cal-today .cal-day-num { color: var(--accent-2); font-weight: 700; }
+
+.cal-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-card-2));
+}
+
+.cal-shot-badge {
+  font-size: 0.68rem;
+  background: rgba(244, 114, 182, 0.18);
+  border-radius: 6px;
+  padding: 0 0.25rem;
+}
+
+.insulin-day { margin-top: 1rem; }
+
+.insulin-day h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--text-muted); }
+
+.shot-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.shot-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--bg-card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.shot-time { font-weight: 700; color: #f472b6; }
+
+.shot-note { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.shot-deleted { opacity: 0.45; text-decoration: line-through; }
+
+.shot-empty { color: var(--text-muted); font-size: 0.9rem; }
+
+.shot-delete {
+  margin-left: auto;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+}
+
+.shot-delete:hover { color: var(--hypo); background: rgba(244, 63, 94, 0.12); }
+.shot-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.shot-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.shot-form label { font-size: 0.85rem; color: var(--text-muted); }
+
+.shot-form input[type="time"],
+.shot-form input[type="text"] {
+  background: var(--bg-card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.55rem;
+}
+
+.shot-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.shot-form input[type="text"] { flex: 1; min-width: 140px; }
+
+.insulin-status {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-height: 1em;
+}
+
+.legend-item.event-tracker-shot::before { content: none; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* Status card */
 .status-card p { margin: 0.25rem 0; color: var(--text-muted); font-size: 0.9rem; }
 

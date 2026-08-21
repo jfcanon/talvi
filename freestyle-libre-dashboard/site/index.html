@@ -6,6 +6,8 @@
   <meta name="description" content="Leoncito's live glucose dashboard — Freestyle Libre 2 sensor data for a diabetic cat.">
   <!-- Glucose API endpoint - override via meta tag for Worker deployment -->
   <meta name="glucose-api" content="https://app.ygdcbtmc4u.uk/api/glucose">
+  <!-- Insulin tracker API (NID-402) - same Worker, Clerk-gated -->
+  <meta name="insulin-api" content="https://app.ygdcbtmc4u.uk/api/insulin">
   <!-- Base path: the app lives at app.ygdcbtmc4u.uk/leoncito/, so relative
        asset URLs (css/, js/, data/) must resolve under /leoncito/ — not the
        origin root. The proxy Worker also 302s bare /leoncito → /leoncito/,
@@ -119,6 +121,38 @@
       </div>
     </section>
 
+    <!-- Insulin-shot tracker (NID-402): calendar + save, markers on the chart -->
+    <section class="card insulin-card" aria-label="Insulin shot tracker">
+      <div class="insulin-header">
+        <h2>Insulin Shots</h2>
+        <div class="insulin-actions">
+          <button class="btn" id="insulin-add-now" type="button" title="Record a shot right now">💉 Add now</button>
+          <button class="btn btn-primary" id="insulin-save" type="button" disabled>Save</button>
+        </div>
+      </div>
+      <div class="calendar-nav">
+        <button class="btn" id="cal-prev" type="button" aria-label="Previous month">‹</button>
+        <span class="cal-month" id="cal-month-label" aria-live="polite"></span>
+        <button class="btn" id="cal-next" type="button" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-weekdays" aria-hidden="true">
+        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+      </div>
+      <div class="cal-grid" id="cal-grid" role="grid" aria-label="Injection calendar"></div>
+      <div class="insulin-day">
+        <h3 id="insulin-day-title">Select a day</h3>
+        <ul class="shot-list" id="shot-list"></ul>
+        <div class="shot-form">
+          <label for="shot-time">Time</label>
+          <input type="time" id="shot-time" step="300">
+          <label for="shot-note" class="visually-hidden">Note (optional)</label>
+          <input type="text" id="shot-note" placeholder="Note (optional)" maxlength="80">
+          <button class="btn" id="shot-add" type="button">Add shot</button>
+        </div>
+      </div>
+      <p class="insulin-status" id="insulin-status"></p>
+    </section>
+
     <section class="card chart-card" aria-label="Glucose history chart">
       <div class="chart-toolbar">
         <div class="tabs" role="tablist" aria-label="Chart time range">
@@ -147,6 +181,11 @@
         <span class="legend-item event-food">● Food</span>
         <span class="legend-item event-insulin">● Insulin</span>
         <span class="legend-item event-note">● Note</span>
+      </div>
+      <!-- NID-402: tracker-shot marker legend -->
+      <div class="event-legend" aria-label="Injection markers legend">
+        <span class="legend-title">Shots:</span>
+        <span class="legend-item event-tracker-shot">💉 recorded insulin injection</span>
       </div>
     </section>
 

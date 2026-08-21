@@ -20,11 +20,14 @@ env:
   # LibreLinkUp credentials — must match repo secrets added by the owner
   # (TF_VAR_LIBRELINK_EMAIL / TF_VAR_LIBRELINK_PASSWORD). Without these the
   # glucose worker's required vars (main.tf) make `terraform plan` fail.
-  TF_VAR_librelink_email:      ${{ secrets.TF_VAR_LIBRELINK_EMAIL }}
-  TF_VAR_librelink_password:   ${{ secrets.TF_VAR_LIBRELINK_PASSWORD }}
+  TF_VAR_librelink_email:       ${{ secrets.TF_VAR_LIBRELINK_EMAIL }}
+  TF_VAR_librelink_password:    ${{ secrets.TF_VAR_LIBRELINK_PASSWORD }}
   # Bearer token for POST /api/ingest (home fetcher). Optional until the owner
   # adds the secret; plan passes without it, but ingest stays disabled.
-  TF_VAR_ingest_token:         ${{ secrets.TF_VAR_INGEST_TOKEN }}
+  TF_VAR_ingest_token:          ${{ secrets.TF_VAR_INGEST_TOKEN }}
+  # Clerk JWT verification key for /api/insulin auth (NID-402) — same repo
+  # secret every sibling app's workflow already passes to its worker.
+  TF_VAR_clerk_jwt_key:         ${{ secrets.CLERK_JWT_KEY }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
