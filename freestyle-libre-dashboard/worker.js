@@ -638,11 +638,11 @@ async function handleGetData(env) {
 // A day can hold multiple shots; ids are opaque (uuid). The cron never writes
 // this key — it is owner data, only mutated via /api/insulin.
 //
-// NOTE on toArtIso: it is NOT idempotent (a "-03:00" input is shifted again),
-// so writes here only convert inputs that are NOT already in store form;
-// "-03:00" timestamps pass through untouched (idempotent re-saves/upserts).
-// Everything else — Z, other offsets, offset-free, Date — goes through the
-// same toArtIso pipeline the glucose store uses on write.
+// Store-form ("-03:00") timestamps pass through untouched; everything else —
+// Z, other offsets, offset-free, Date — goes through the same toArtIso
+// pipeline the glucose store uses on write. (toArtIso became idempotent with
+// the offset-sign fix in #195; the explicit pass-through keeps writes stable
+// regardless of how that helper evolves.)
 function toStoreTimestamp(value) {
   const s = typeof value === 'string' ? value : null;
   if (s && s.endsWith('-03:00') && !isNaN(new Date(s).getTime())) return s;
@@ -679,7 +679,7 @@ async function handleInsulinPost(request, env) {
 
   // timestamp optional → defaults to now. Foreign forms (Z, offset-free) are
   // converted through the same pipeline the glucose store uses; store-form
-  // (-03:00) input passes through untouched so re-saves are idempotent.
+  // (-03:00) input passes through untouched so re-saves stay byte-stable.
   const timestamp = toStoreTimestamp(body.timestamp || new Date());
   if (!timestamp) {
     return new Response(JSON.stringify({ error: 'invalid timestamp' }), {
