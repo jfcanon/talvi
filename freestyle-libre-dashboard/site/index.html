@@ -40,6 +40,77 @@
         <span class="metric-label">Last reading</span>
         <span class="metric-value metric-value--sm" id="last-updated">—</span>
       </div>
+      <!-- F1: Rate of Change -->
+      <div class="card">
+        <span class="metric-label">Rate of Change</span>
+        <span class="metric-value metric-value--sm" id="roc-value">—</span>
+        <span class="metric-unit" id="roc-unit">mg/dL/hr</span>
+        <span class="metric-value metric-value--sm" id="roc-arrow">—</span>
+      </div>
+    </section>
+
+    <!-- F2: Time in Range Summary -->
+    <section class="card tir-summary" aria-label="Time in range summary">
+      <h2>Time in Range (24h)</h2>
+      <div class="tir-grid">
+        <div class="tir-item">
+          <span class="tir-label">Target (90–270)</span>
+          <span class="tir-value" id="tir-target">—</span>
+        </div>
+        <div class="tir-item">
+          <span class="tir-label">Low (70–90)</span>
+          <span class="tir-value" id="tir-low">—</span>
+        </div>
+        <div class="tir-item">
+          <span class="tir-label">Hypo (<70)</span>
+          <span class="tir-value" id="tir-hypo">—</span>
+        </div>
+        <div class="tir-item">
+          <span class="tir-label">High (>270)</span>
+          <span class="tir-value" id="tir-high">—</span>
+        </div>
+      </div>
+      <div class="tir-stats">
+        <div class="tir-stat">
+          <span class="tir-stat-label">Hypo events</span>
+          <span class="tir-stat-value" id="tir-hypo-count">—</span>
+        </div>
+        <div class="tir-stat">
+          <span class="tir-stat-label">Hyper events</span>
+          <span class="tir-stat-value" id="tir-hyper-count">—</span>
+        </div>
+        <div class="tir-stat">
+          <span class="tir-stat-label">Min</span>
+          <span class="tir-stat-value" id="tir-min">—</span>
+        </div>
+        <div class="tir-stat">
+          <span class="tir-stat-label">Max</span>
+          <span class="tir-stat-value" id="tir-max">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- F3: Sensor Life Countdown -->
+    <section class="card sensor-life" aria-label="Sensor life countdown">
+      <h2>Sensor Life</h2>
+      <div class="sensor-life-grid">
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Elapsed</span>
+          <span class="sensor-life-value" id="sensor-life-elapsed">—</span>
+        </div>
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Remaining</span>
+          <span class="sensor-life-value" id="sensor-life-left">—</span>
+        </div>
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Expires</span>
+          <span class="sensor-life-value" id="sensor-life-expires">—</span>
+        </div>
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Status</span>
+          <span class="sensor-life-value metric-status" id="sensor-life-status">—</span>
+        </div>
+      </div>
     </section>
 
     <section class="card chart-card" aria-label="Glucose history chart">
@@ -59,10 +130,17 @@
         <p class="chart-empty" id="chart-empty" hidden>No glucose data yet.</p>
       </div>
       <div class="legend" aria-label="Glucose ranges legend">
-        <span class="legend-item legend-hypo">Hypo &lt;70</span>
+        <span class="legend-item legend-hypo">Hypo <70</span>
         <span class="legend-item legend-low">Low 70&ndash;90</span>
         <span class="legend-item legend-target">Target 90&ndash;270</span>
-        <span class="legend-item legend-high">High &gt;270</span>
+        <span class="legend-item legend-high">High >270</span>
+      </div>
+      <!-- F4: Event legend -->
+      <div class="event-legend" aria-label="Event markers legend" hidden>
+        <span class="legend-title">Events:</span>
+        <span class="legend-item event-food">● Food</span>
+        <span class="legend-item event-insulin">● Insulin</span>
+        <span class="legend-item event-note">● Note</span>
       </div>
     </section>
 

@@ -1,5 +1,5 @@
 /* Leoncito dashboard — Chart.js glucose views for a diabetic cat.
- * Data contract: data/glucose.json with { readings: [{timestamp, glucose, unit}], ... }
+ * Data contract: data/glucose.json with { readings: [{timestamp, glucose, unit}], events: [...], ... }
  */
 
 'use strict';
@@ -23,9 +23,27 @@ const els = {
   chartEmpty: document.getElementById('chart-empty'),
   exportCsv: document.getElementById('export-csv'),
   canvas: document.getElementById('glucose-chart'),
+  // F1: Rate of change
+  rocValue: document.getElementById('roc-value'),
+  rocUnit: document.getElementById('roc-unit'),
+  rocArrow: document.getElementById('roc-arrow'),
+  // F2: Time in range
+  tirTarget: document.getElementById('tir-target'),
+  tirLow: document.getElementById('tir-low'),
+  tirHypo: document.getElementById('tir-hypo'),
+  tirHigh: document.getElementById('tir-high'),
+  tirHypoCount: document.getElementById('tir-hypo-count'),
+  tirHyperCount: document.getElementById('tir-hyper-count'),
+  tirMin: document.getElementById('tir-min'),
+  tirMax: document.getElementById('tir-max'),
+  // F3: Sensor life
+  sensorLifeElapsed: document.getElementById('sensor-life-elapsed'),
+  sensorLifeLeft: document.getElementById('sensor-life-left'),
+  sensorLifeExpires: document.getElementById('sensor-life-expires'),
+  sensorLifeStatus: document.getElementById('sensor-life-status'),
 };
 
-let store = { readings: [] };
+let store = { readings: [], events: [] };
 let currentView = '24h';
 let chart = null;
 
@@ -86,6 +104,143 @@ function gradientFill(ctx, chartArea) {
   return grad;
 }
 
+/* ---------- F1: Rate of Change (velocity) ---------- */
+
+function computeROC(readings) {
+  if (readings.length < 2) return { rocPerHour: null, rocPerMin: null, arrow: '—' };
+  const last = readings[readings.length - 1];
+  const prev = readings[readings.length - 2];
+  const dtHours = (last.ts - prev.ts) / 3600000; // hours between readings
+  if (dtHours <= 0) return { rocPerHour: null, rocPerMin: null, arrow: '—' };
+  const rocPerHour = (last.value - prev.value) / dtHours;
+  const rocPerMin = rocPerHour / 60;
+  let arrow = '→';
+  if (rocPerHour > 2) arrow = '↑↑';
+  else if (rocPerHour > 0.5) arrow = '↑';
+  else if (rocPerHour < -2) arrow = '↓↓';
+  else if (rocPerHour < -0.5) arrow = '↓';
+  return { rocPerHour, rocPerMin, arrow };
+}
+
+/* ---------- F2: Time in Range + Excursions ---------- */
+
+function computeTimeInRange(readings) {
+  if (!readings.length) return null;
+  const values = readings.map(r => r.value);
+  const total = values.length;
+  let hypo = 0, low = 0, target = 0, high = 0;
+  let hypoEvents = 0, hyperEvents = 0;
+  let inHypo = false, inHyper = false;
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+
+  for (const v of values) {
+    const z = zoneOf(v);
+    if (z === 'hypo') { hypo++; if (!inHypo) { hypoEvents++; inHypo = true; } else inHypo = false; }
+    else if (z === 'low') { low++; inHypo = false; }
+    else if (z === 'target') { target++; inHypo = false; inHyper = false; }
+    else { high++; if (!inHyper) { hyperEvents++; inHyper = true; } else inHyper = false; }
+  }
+
+  return {
+    total,
+    targetPct: total ? Math.round((target / total) * 100 * 10) / 10 : 0,
+    lowPct: total ? Math.round((low / total) * 100 * 10) / 10 : 0,
+    hypoPct: total ? Math.round((hypo / total) * 100 * 10) / 10 : 0,
+    highPct: total ? Math.round((high / total) * 100 * 10) / 10 : 0,
+    hypoEvents,
+    hyperEvents,
+    minVal,
+    maxVal,
+  };
+}
+
+/* ---------- F3: Sensor Life Countdown ---------- */
+
+function computeSensorLife(readings, sensorId) {
+  if (!readings.length) return null;
+  const firstReading = readings[0].ts;
+  const now = new Date();
+  const SENSOR_LIFE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+  const elapsedMs = now - firstReading;
+  const elapsedDays = elapsedMs / (24 * 60 * 60 * 1000);
+  const leftDays = Math.max(0, 14 - elapsedDays);
+  const expires = new Date(firstReading.getTime() + SENSOR_LIFE_MS);
+  const replaceNow = leftDays <= 1;
+  return {
+    sensorStart: firstReading.toISOString().replace('T', ' ').slice(0, 16),
+    daysElapsed: Math.round(elapsedDays * 10) / 10,
+    daysLeft: Math.round(leftDays * 10) / 10,
+    expires: expires.toISOString().replace('T', ' ').slice(0, 16),
+    replaceNow,
+  };
+}
+
+/* ---------- F4: Event markers on chart ---------- */
+
+function buildEventAnnotations(readings, events) {
+  if (!events || !events.length) return {};
+  const annotations = {};
+  events.forEach((e, i) => {
+    const eventTime = new Date(e.timestamp).getTime();
+    // Only show events in current view range
+    const viewStart = getViewStart();
+    if (eventTime < viewStart) return;
+    const color = eventColor(e.type);
+    annotations[`event-${i}`] = {
+      type: 'line',
+      mode: 'x',
+      scaleID: 'x',
+      value: eventTime,
+      borderColor: color,
+      borderWidth: 2,
+      borderDash: [5, 5],
+      label: {
+        enabled: true,
+        content: eventLabel(e),
+        position: 'start',
+        backgroundColor: color,
+        color: '#fff',
+        font: { size: 10, weight: 'bold' },
+        padding: 4,
+      },
+    };
+  });
+  return annotations;
+}
+
+function getViewStart() {
+  const now = Date.now();
+  const dayMs = 86400000;
+  switch (currentView) {
+    case '24h': return now - dayMs;
+    case '7d': return now - 7 * dayMs;
+    case '30d': return now - 30 * dayMs;
+    default: return 0;
+  }
+}
+
+function eventColor(type) {
+  switch (type) {
+    case 'food': return '#34d399'; // green
+    case 'insulin': return '#f472b6'; // pink
+    case 'note': return '#60a5fa'; // blue
+    case 'exercise': return '#fbbf24'; // amber
+    case 'medication': return '#a78bfa'; // purple
+    default: return '#9ca3af'; // gray
+  }
+}
+
+function eventLabel(e) {
+  const t = new Date(e.timestamp);
+  const timeStr = fmtTime(t);
+  const parts = [timeStr, e.type];
+  if (e.carbs_g) parts.push(`${e.carbs_g}g carbs`);
+  if (e.insulin_units) parts.push(`${e.insulin_units}U insulin`);
+  if (e.note) parts.push(e.note);
+  return parts.join(' • ');
+}
+
 /* ---------- aggregation ---------- */
 
 function avg(vals) {
@@ -120,7 +275,6 @@ function buildView(view, readings) {
     buckets.get(k).push(r.value);
   });
   const keys = [...buckets.keys()].sort();
-  // label with the first day of the bucket's month/day
   const labels = keys.map((k) => {
     const [y, w] = k.split('-W');
     const d = new Date(Date.UTC(Number(y), 0, 1 + (Number(w) - 1) * 7));
@@ -147,7 +301,8 @@ function aggregateDaily(readings, since, labelFn) {
 
 /* ---------- chart ---------- */
 
-function annotationConfig() {
+function annotationConfig(readings, events) {
+  const eventAnnotations = buildEventAnnotations(readings, events);
   return {
     annotation: {
       drawTime: 'beforeDatasetsDraw',
@@ -186,6 +341,7 @@ function annotationConfig() {
           borderWidth: 1,
           label: { content: 'target 270', enabled: true, position: 'start', display: true },
         },
+        ...eventAnnotations,
       },
     },
   };
@@ -197,6 +353,7 @@ function createChart() {
     return;
   }
   const [r, g, b] = accentRGB();
+  const readings = (store.readings || []).map(parseReading).sort((a, b) => a.ts - b.ts);
   chart = new Chart(els.canvas, {
     type: 'line',
     data: { labels: [], datasets: [{ data: [] }] },
@@ -213,7 +370,7 @@ function createChart() {
           },
         },
         annotation: {
-          annotations: annotationConfig().annotation.annotations,
+          annotations: annotationConfig(readings, store.events || []).annotation.annotations,
         },
       },
       scales: {
@@ -225,6 +382,11 @@ function createChart() {
           grid: { color: 'rgba(128,148,180,0.12)' },
         },
         x: {
+          type: 'time',
+          time: {
+            tooltipFormat: 'HH:mm',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d', week: 'MMM d' },
+          },
           ticks: { maxTicksLimit: 12, color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#8fa3bf' },
           grid: { display: false },
         },
@@ -238,6 +400,9 @@ function render() {
   const readings = (store.readings || []).map(parseReading).sort((a, b) => a.ts - b.ts);
   updateMetrics(readings);
   updateSync(readings);
+  updateROC(readings);
+  updateTimeInRange(readings);
+  updateSensorLife(readings);
 
   if (!chart) chart = createChart();
   if (!chart) return;
@@ -245,10 +410,10 @@ function render() {
   const { labels, values } = buildView(currentView, readings);
   const [r, g, b] = accentRGB();
 
-  chart.data.labels = labels;
+  chart.data.labels = labels.map(l => new Date(l)); // time scale expects Date objects
   chart.data.datasets = [{
     label: 'Glucose',
-    data: values,
+    data: values.map((v, i) => ({ x: new Date(labels[i]), y: v })),
     borderColor: `rgb(${r},${g},${b})`,
     borderWidth: 2,
     tension: 0.25,
@@ -257,10 +422,72 @@ function render() {
     fill: true,
     backgroundColor: (ctx) => gradientFill(ctx.chart.ctx, ctx.chart.chartArea),
   }];
+  // Update annotations for events
+  chart.options.plugins.annotation.annotations = annotationConfig(readings, store.events || []).annotation.annotations;
   chart.update();
 
   els.chartEmpty.hidden = values.length > 0;
 }
+
+/* ---------- F1: Update Rate of Change ---------- */
+
+function updateROC(readings) {
+  if (!els.rocValue) return;
+  const { rocPerHour, rocPerMin, arrow } = computeROC(readings);
+  if (rocPerHour === null) {
+    els.rocValue.textContent = '—';
+    els.rocArrow.textContent = '—';
+    return;
+  }
+  els.rocValue.textContent = rocPerHour >= 0 ? `+${rocPerHour.toFixed(1)}` : rocPerHour.toFixed(1);
+  els.rocUnit.textContent = 'mg/dL/hr';
+  els.rocArrow.textContent = arrow;
+  // Color code
+  const rocEl = els.rocValue.parentElement;
+  if (rocPerHour > 2) rocEl.className = 'metric-value value-high';
+  else if (rocPerHour > 0.5) rocEl.className = 'metric-value value-low';
+  else if (rocPerHour < -2) rocEl.className = 'metric-value value-hypo';
+  else if (rocPerHour < -0.5) rocEl.className = 'metric-value value-low';
+  else rocEl.className = 'metric-value value-target';
+}
+
+/* ---------- F2: Update Time in Range ---------- */
+
+function updateTimeInRange(readings) {
+  if (!els.tirTarget) return;
+  const tir = computeTimeInRange(readings);
+  if (!tir) {
+    [els.tirTarget, els.tirLow, els.tirHypo, els.tirHigh].forEach(el => el && (el.textContent = '—'));
+    [els.tirHypoCount, els.tirHyperCount, els.tirMin, els.tirMax].forEach(el => el && (el.textContent = '—'));
+    return;
+  }
+  els.tirTarget.textContent = `${tir.targetPct}%`;
+  els.tirLow.textContent = `${tir.lowPct}%`;
+  els.tirHypo.textContent = `${tir.hypoPct}%`;
+  els.tirHigh.textContent = `${tir.highPct}%`;
+  els.tirHypoCount.textContent = tir.hypoEvents;
+  els.tirHyperCount.textContent = tir.hyperEvents;
+  els.tirMin.textContent = `${Math.round(tir.minVal)} mg/dL`;
+  els.tirMax.textContent = `${Math.round(tir.maxVal)} mg/dL`;
+}
+
+/* ---------- F3: Update Sensor Life ---------- */
+
+function updateSensorLife(readings) {
+  if (!els.sensorLifeElapsed) return;
+  const life = computeSensorLife(readings, store.sensor_id);
+  if (!life) {
+    [els.sensorLifeElapsed, els.sensorLifeLeft, els.sensorLifeExpires, els.sensorLifeStatus].forEach(el => el && (el.textContent = '—'));
+    return;
+  }
+  els.sensorLifeElapsed.textContent = `${life.daysElapsed} days`;
+  els.sensorLifeLeft.textContent = `${life.daysLeft} days`;
+  els.sensorLifeExpires.textContent = life.expires;
+  els.sensorLifeStatus.textContent = life.replaceNow ? '⚠️ Replace soon' : '✓ Active';
+  els.sensorLifeStatus.className = life.replaceNow ? 'metric-status value-hypo' : 'metric-status value-target';
+}
+
+/* ---------- metrics & sync ---------- */
 
 function updateMetrics(readings) {
   if (!readings.length) {
@@ -309,9 +536,12 @@ async function loadData() {
     store = await res.json();
     render();
   } catch (err) {
-    store = { readings: [] };
+    store = { readings: [], events: [] };
     updateMetrics([]);
     updateSync([]);
+    updateROC([]);
+    updateTimeInRange([]);
+    updateSensorLife([]);
     showEmpty('Could not load glucose data.');
     if (chart) { chart.data.labels = []; chart.data.datasets = [{ data: [] }]; chart.update(); }
     console.error('Leoncito: failed to load data', err);

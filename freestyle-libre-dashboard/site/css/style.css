@@ -77,7 +77,7 @@ main {
 /* Metric cards */
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
 }
 
@@ -116,6 +116,123 @@ main {
 .value-low   { color: var(--low) !important; }
 .value-target{ color: var(--target) !important; }
 .value-high  { color: var(--high) !important; }
+
+/* F2: Time in Range */
+.tir-summary h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.tir-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+  .tir-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.tir-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--bg-card-2);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.tir-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.tir-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.tir-value-target { color: var(--target); }
+.tir-value-low { color: var(--low); }
+.tir-value-hypo { color: var(--hypo); }
+.tir-value-high { color: var(--high); }
+
+.tir-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 600px) {
+  .tir-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+.tir-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.tir-stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.tir-stat-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--accent-2);
+}
+
+/* F3: Sensor Life */
+.sensor-life h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.sensor-life-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 600px) {
+  .sensor-life-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.sensor-life-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--bg-card-2);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.sensor-life-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.sensor-life-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text);
+}
 
 /* Chart card */
 .chart-toolbar {
@@ -212,6 +329,27 @@ main {
 .legend-low::before    { background: var(--low); }
 .legend-target::before { background: var(--target); }
 .legend-high::before   { background: var(--high); }
+
+/* F4: Event Legend */
+.event-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.legend-item.event-food::before   { background: #34d399; }
+.legend-item.event-insulin::before { background: #f472b6; }
+.legend-item.event-note::before   { background: #60a5fa; }
 
 /* Status card */
 .status-card p { margin: 0.25rem 0; color: var(--text-muted); font-size: 0.9rem; }

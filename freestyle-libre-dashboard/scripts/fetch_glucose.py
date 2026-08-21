@@ -62,6 +62,14 @@ TREND_LABEL = {
     "UP_FAST": "rising fast",
 }
 
+EVENT_TYPE_LABEL = {
+    "MEAL": "food",
+    "INSULIN": "insulin",
+    "NOTE": "note",
+    "EXERCISE": "exercise",
+    "MEDICATION": "medication",
+}
+
 DEFAULT_DATA_PATH = "data/glucose.json"
 DEFAULT_MAX_DAYS = 120  # cap history to bound repo growth
 MOCK_SENSOR_ID = "MOCK-000001"
@@ -84,7 +92,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def load_existing(path: Path) -> dict[str, Any]:
     """Load the current store, or a minimal empty one if absent/corrupt."""
-    empty: dict[str, Any] = {"readings": [], "last_updated": None, "sensor_id": None, "trend": None}
+    empty: dict[str, Any] = {"readings": [], "events": [], "last_updated": None, "sensor_id": None, "trend": None}
     if not path.exists():
         return empty
     try:
@@ -229,10 +237,13 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
     latest_value: float | None = None
     latest_ts: datetime | None = None
     trend: str | None = None
+    events: list[dict[str, Any]] = []
 
     try:
         graph = client.graph(patient_identifier=patient.patient_id)  # ~last 12h
         latest = client.latest(patient_identifier=patient.patient_id)
+        # Fetch logbook events (food, insulin, notes) for the full history window
+        logbook = client.logbook(patient_identifier=patient.patient_id)
     except ValidationError as e:
         # Connection exists but the API reports no glucose measurements yet
         # (sensor not scanned since the follow was added, or still pending).
@@ -256,6 +267,20 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
         if latest.trend is not None:
             trend = TREND_LABEL.get(latest.trend.name, latest.trend.name)
 
+    # Process logbook events
+    for e in logbook:
+        ts = e.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        event_type = EVENT_TYPE_LABEL.get(e.type.name if hasattr(e.type, 'name') else str(e.type), str(e.type).lower())
+        events.append({
+            "timestamp": ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "type": event_type,
+            "carbs_g": getattr(e, 'carbs', None),
+            "insulin_units": getattr(e, 'insulin', None),
+            "note": getattr(e, 'notes', None),
+        })
+
     merged = merge_readings(store.get("readings", []), fresh, max_days)
     store["readings"] = merged
     if merged:
@@ -263,6 +288,12 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
     if latest_ts is not None:
         store["last_updated"] = latest_ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     store["trend"] = trend
+    # Merge events: dedup by timestamp+type, keep latest
+    existing_events = store.get("events", [])
+    by_ts_type = {(e["timestamp"], e["type"]): e for e in existing_events}
+    for e in events:
+        by_ts_type[(e["timestamp"], e["type"])] = e
+    store["events"] = list(by_ts_type.values())
     # Always reflect the live patient id — keeps a mock seed value from
     # lingering once real sensor data arrives.
     store["sensor_id"] = str(patient.patient_id)[:6].upper()
@@ -301,14 +332,38 @@ def fetch_mock(data_path: Path, days: int, max_days: int) -> int:
         readings.append(reading_dict(glucose, t))
         t += timedelta(hours=1)
 
+    # Generate mock events (food, insulin, notes) for F4
+    events: list[dict[str, Any]] = []
+    event_rng = random.Random(43)
+    # Add a few food events
+    for _ in range(3):
+        event_time = start + timedelta(hours=event_rng.randint(12, days * 24 - 12))
+        events.append({
+            "timestamp": event_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "type": "food",
+            "carbs_g": event_rng.randint(10, 30),
+            "insulin_units": None,
+            "note": "meal",
+        })
+    # Add an insulin event
+    event_time = start + timedelta(hours=event_rng.randint(6, days * 24 - 6))
+    events.append({
+        "timestamp": event_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "type": "insulin",
+        "carbs_g": None,
+        "insulin_units": round(event_rng.uniform(1, 3), 1),
+        "note": "insulin dose",
+    })
+
     store = {
         "readings": readings,
         "last_updated": readings[-1]["timestamp"],
         "sensor_id": MOCK_SENSOR_ID,
         "trend": "stable",
+        "events": events,
     }
     atomic_write(data_path, store)
-    log.info("mock: wrote %d sample readings to %s", len(readings), data_path)
+    log.info("mock: wrote %d sample readings and %d events to %s", len(readings), len(events), data_path)
     return 0
 
 
