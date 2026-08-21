@@ -2,7 +2,42 @@
 // Replaces GitHub Actions fetch_glucose.py + static data/glucose.json
 
 const KV_KEY = 'glucose.json';
+const STATUS_KEY = '_status.json'; // last fetch result, for observability (RCA)
 const CRON_SCHEDULE = '17 * * * *'; // every hour at :17 (matches old GitHub Actions)
+
+// LibreLinkUp's graph endpoint only returns ~12h per call, so each cron run
+// must MERGE with what's already stored instead of overwriting — otherwise the
+// KV store never accumulates the history the dashboard expects. New data wins
+// on duplicate timestamps; the combined set is capped at 120 days.
+function mergeHistory(existing, fresh) {
+  const cutoff = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+
+  const readingsMap = new Map();
+  for (const r of [...(existing?.readings || []), ...(fresh?.readings || [])]) {
+    if (r?.timestamp) readingsMap.set(r.timestamp, r);
+  }
+  const readings = Array.from(readingsMap.values())
+    .filter(r => new Date(r.timestamp) >= cutoff)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  const eventMap = new Map();
+  for (const e of [...(existing?.events || []), ...(fresh?.events || [])]) {
+    if (e?.timestamp) eventMap.set(`${e.timestamp}|${e.type}`, e);
+  }
+  const events = Array.from(eventMap.values()).sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  return {
+    readings,
+    events,
+    last_updated: readings.length
+      ? readings[readings.length - 1].timestamp
+      : new Date().toISOString().replace('+00:00', 'Z'),
+    sensor_id: fresh?.sensor_id || existing?.sensor_id || null,
+    trend: fresh?.trend ?? existing?.trend ?? null,
+  };
+}
 
 const MIN_GLUCOSE = 40.0;
 const MAX_GLUCOSE = 500.0;
@@ -235,15 +270,27 @@ async function fetchFromLibreLinkUp(env) {
 }
 
 async function handleFetch(env) {
+  const status = { checked_at: new Date().toISOString().replace('+00:00', 'Z') };
   try {
-    const data = await fetchFromLibreLinkUp(env);
+    const fresh = await fetchFromLibreLinkUp(env);
+    const existing = await env.LEONCITO_DATA.get(KV_KEY, 'json').catch(() => null);
+    const data = mergeHistory(existing, fresh);
     await env.LEONCITO_DATA.put(KV_KEY, JSON.stringify(data, null, 2));
-    console.log(`Stored ${data.readings.length} readings and ${data.events.length} events to KV`);
+    Object.assign(status, {
+      ok: true,
+      total_readings: data.readings.length,
+      new_readings: fresh.readings.length,
+      total_events: data.events.length,
+    });
+    await env.LEONCITO_DATA.put(STATUS_KEY, JSON.stringify(status));
+    console.log(`Stored ${data.readings.length} readings (${fresh.readings.length} fresh) and ${data.events.length} events to KV`);
     return new Response(JSON.stringify({ success: true, ...data }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('Fetch failed:', err);
+    Object.assign(status, { ok: false, error: err.message });
+    await env.LEONCITO_DATA.put(STATUS_KEY, JSON.stringify(status)).catch(() => {});
     return new Response(JSON.stringify({ success: false, error: err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -276,6 +323,14 @@ export default {
     // Manual trigger endpoint (for testing)
     if (url.pathname === '/api/fetch') {
       return handleFetch(env);
+    }
+
+    // Last fetch status — surfaces auth/fetch errors for RCA when data is missing
+    if (url.pathname === '/api/status') {
+      const status = await env.LEONCITO_DATA.get(STATUS_KEY, 'json').catch(() => null);
+      return new Response(JSON.stringify(status || { ok: null, error: 'no fetch recorded yet' }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
     }
 
     // Health check
