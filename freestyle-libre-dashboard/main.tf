@@ -74,11 +74,17 @@ variable "ingest_token" {
 }
 
 # Clerk JWT verification key (PEM public key) — same value the hub binds as
-# CLERK_JWT_KEY. Public by design; worker.js uses it to verify the host-wide
-# __session cookie networklessly on /api/insulin (NID-402). Passed from the
+# CLERK_JWT_KEY. Public by design; worker.js and leoncito_proxy.js use it to
+# verify the host-wide __session cookie networklessly (vendored RS256+azp/exp,
+# no @clerk/backend — worker uploads verbatim). Covers /api/insulin (NID-402)
+# and NID-400 gates on /leoncito, /api/glucose, /api/status. Passed from the
 # repo secret via terraform-leoncito.yml (same plumbing as every sibling app).
+# Nullable default keeps `terraform plan` non-interactive if secret not yet wired;
+# runtime is fail-closed when empty (all gated routes deny).
 variable "clerk_jwt_key" {
-  type = string
+  type      = string
+  sensitive = true
+  default   = null
 }
 
 # KV namespace for glucose data
@@ -113,15 +119,28 @@ resource "cloudflare_pages_project" "leoncito" {
 # The proxy Worker — strips the /leoncito prefix and proxies to the Pages
 # project. A plain ES module with no deps (unlike relay/chat/learn, which
 # esbuild to dist/index.js), so the repo file is uploaded verbatim.
+# NID-400: Clerk-gated — verifies host-wide __session via vendored RS256
+# verifier with CLERK_JWT_KEY (no @clerk/backend — avoids bundling, matches
+# worker.js NID-402 pattern). Fail-closed when key absent.
 resource "cloudflare_workers_script" "leoncito_proxy" {
   account_id         = var.cloudflare_account_id
   script_name        = "leoncito-proxy"
   main_module        = "leoncito_proxy.js"
   content            = file("${path.module}/scripts/leoncito_proxy.js")
   compatibility_date = "2026-08-20"
+
+  bindings = [
+    {
+      type = "plain_text"
+      name = "CLERK_JWT_KEY"
+      text = coalesce(var.clerk_jwt_key, "")
+    },
+  ]
 }
 
 # Glucose Worker — fetches LibreLinkUp data on cron, stores in KV, serves via HTTP
+# NID-400: /api/glucose, /api/status (and /api/insulin NID-402) now gated via
+# same vendored Clerk __session verifier (CLERK_JWT_KEY only, no bundling).
 resource "cloudflare_workers_script" "leoncito_glucose" {
   account_id         = var.cloudflare_account_id
   script_name        = "leoncito-glucose"
@@ -147,11 +166,11 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
         text = var.librelink_password
       },
       {
-        # Verifies the host-wide __session cookie on /api/insulin (NID-402);
-        # public by design — same shape as the hub's binding.
+        # Verifies the host-wide __session cookie on /api/insulin (NID-402)
+        # and NID-400 gates; runtime is fail-closed when empty.
         type = "plain_text"
         name = "CLERK_JWT_KEY"
-        text = var.clerk_jwt_key
+        text = coalesce(var.clerk_jwt_key, "")
       },
     ],
     # Bound only once the ingest token secret exists (see variable above).

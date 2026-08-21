@@ -99,11 +99,14 @@ export default {
     if (pathname === "/h.js") return assetResponse(H_JS, "text/javascript; charset=utf-8");
 
     if (pathname === "/") {
-      // The front door knows whether this visitor is signed in, so the blade
-      // login control can say SIGN IN or SIGN OUT (the 3D welcome page itself
-      // is the hub session's design; this is the auth state it needs).
+      // Harden (NID-400): unauth'd visitors are hard-redirected to the host-wide
+      // sign-in with a same-origin ?redirect=/ return target. Authenticated
+      // visitors see the 3D hub blade with the correct auth state.
       const authed = await isAuthenticated(request, env);
-      return new Response(hubPage({ authed }), { headers: HTML_HEADERS });
+      if (authed) {
+        return new Response(hubPage({ authed }), { headers: HTML_HEADERS });
+      }
+      return Response.redirect(new URL("/sign-in?redirect=/", request.url).toString(), 302);
     }
 
     // "/sign-in" and "/sso-callback" — the two clerk-js pages (s7 handover §4).
@@ -184,6 +187,15 @@ export default {
     // loop. Mirror of chat's /chat/<name>/ws route — same plain-route shape,
     // same CSP (connect-src 'self' permits the same-origin upgrade).
     if (pathname === "/agent/ws") {
+      if (!(await isAuthenticated(request, env))) {
+        if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
+          return new Response("unauthorized", { status: 401 });
+        }
+        return Response.redirect(
+          new URL("/sign-in?redirect=" + encodeURIComponent(pathname), request.url).toString(),
+          302,
+        );
+      }
       const stub = env.AGENT.getByName("main");
       return stub.fetch(request);
     }
@@ -196,6 +208,18 @@ export default {
     // standard web practice and sidesteps the quirk entirely.
     if (pathname === "/chat" || pathname === "/relay") {
       return Response.redirect(new URL(pathname + "/", request.url).toString(), 301);
+    }
+
+    // NID-400 fallback gate (green is the only env): every other path on the
+    // apex host requires a valid Clerk session. Public exceptions above have
+    // already returned (healthz, h.css/h.js, sign-in, sso-callback, signout).
+    // Browser visits redirect to the host-wide sign-in with a same-origin
+    // ?redirect= return target so post-login bounces back.
+    if (!(await isAuthenticated(request, env))) {
+      return Response.redirect(
+        new URL("/sign-in?redirect=" + encodeURIComponent(pathname), request.url).toString(),
+        302,
+      );
     }
 
     // Uniform 404 for everything else — a not-yet-migrated route reads exactly
