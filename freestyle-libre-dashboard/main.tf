@@ -11,6 +11,9 @@
 # needs a paid plan — both 400'd on this zone. The Worker strips the
 # /leoncito prefix and proxies to the Pages project's *.pages.dev host, no
 # paid features involved.
+#
+# Glucose Worker: separate Worker that fetches from LibreLinkUp on cron,
+# stores in KV, serves data via /api/glucose endpoint.
 
 terraform {
   required_providers {
@@ -49,6 +52,12 @@ variable "talvi_zone_id" {
   type = string
 }
 
+# KV namespace for glucose data
+resource "cloudflare_workers_kv_namespace" "glucose_data" {
+  account_id = var.cloudflare_account_id
+  title      = "leoncito-glucose-data"
+}
+
 # The Pages project itself. Assets are deployed by leoncito.yml via
 # `wrangler pages deploy site --project-name leoncito-dashboard`.
 resource "cloudflare_pages_project" "leoncito" {
@@ -68,6 +77,28 @@ resource "cloudflare_workers_script" "leoncito_proxy" {
   compatibility_date = "2026-08-20"
 }
 
+# Glucose Worker — fetches LibreLinkUp data on cron, stores in KV, serves via HTTP
+resource "cloudflare_workers_script" "leoncito_glucose" {
+  account_id         = var.cloudflare_account_id
+  script_name        = "leoncito-glucose"
+  main_module        = "worker.js"
+  content            = file("${path.module}/worker.js")
+  compatibility_date = "2026-08-20"
+
+  bindings = [{
+    name        = "LEONCITO_DATA"
+    type        = "kv_namespace"
+    namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
+  }]
+}
+
+# Cron trigger for glucose Worker (hourly at :17)
+resource "cloudflare_workers_cron_trigger" "glucose_cron" {
+  account_id    = var.cloudflare_account_id
+  script_name   = cloudflare_workers_script.leoncito_glucose.script_name
+  schedules     = [{ cron = "17 * * * *" }]
+}
+
 # Routes: app.ygdcbtmc4u.uk/leoncito (exact) and /leoncito/*. The hub owns
 # the `/*` fallback; these more-specific patterns win (same pattern as
 # relay/chat/learn). The exact route matters — a wildcard alone would 404 the
@@ -82,4 +113,18 @@ resource "cloudflare_workers_route" "leoncito_root" {
   zone_id = var.talvi_zone_id
   pattern = "app.ygdcbtmc4u.uk/leoncito"
   script  = cloudflare_workers_script.leoncito_proxy.script_name
+}
+
+# Glucose Worker route for API endpoint
+resource "cloudflare_workers_route" "glucose_api" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/glucose*"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}
+
+# Also route the worker subdomain for direct access
+resource "cloudflare_workers_route" "glucose_worker_subdomain" {
+  zone_id = var.talvi_zone_id
+  pattern = "leoncito-worker.ygdcbtmc4u.uk/*"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
 }

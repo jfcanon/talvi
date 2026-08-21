@@ -4,3 +4,27 @@
 name = "leoncito-dashboard"
 compatibility_date = "2026-08-20"
 pages_build_output_dir = "site"
+
+# Leoncito Glucose Worker — fetches from LibreLinkUp on cron, stores in KV, serves via HTTP
+[build]
+command = ""
+cwd = "freestyle-libre-dashboard"
+
+# KV namespace for glucose data
+[[kv_namespaces]]
+binding = "LEONCITO_DATA"
+id = "<KV_NAMESPACE_ID>"
+preview_id = "<KV_PREVIEW_ID>"
+
+# Cron trigger for hourly fetch at :17
+[triggers]
+crons = ["17 * * * *"]
+
+# Worker script
+main = "worker.js"
+compatibility_date = "2026-08-20"
+name = "leoncito-glucose-worker"
+
+# Environment variables (secrets set via wrangler secret put)
+[vars]
+# LIBRELINK_EMAIL and LIBRELINK_PASSWORD set as secrets

@@ -1,62 +1,48 @@
 name: Leoncito Glucose Dashboard
 
-# Hourly fetch of Leoncito's glucose readings (LibreLinkUp) + deploy the
-# static dashboard to Cloudflare Pages at app.ygdcbtmc4u.uk/leoncito.
-#
-# The fetch commits updated data/glucose.json back to the repo so history
-# accumulates across runs — the 30d/all-time views need the full series, not
-# just the last 12h the API returns.
-#
-# The schedule is enabled: secrets are in place and the fetch path is proven.
-# :17 was chosen to stay clear of the top-of-hour burst other jobs favor.
+# Deploy the static dashboard to Cloudflare Pages at app.ygdcbtmc4u.uk/leoncito.
+# Glucose data fetching is now handled by Cloudflare Worker (leoncito-glucose)
+# running on a cron trigger (hourly at :17), storing data in KV, and serving
+# via /api/glucose endpoint. The dashboard fetches from this endpoint dynamically.
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '17 * * * *'   # every hour at :17
+  push:
+    branches: [main]
+    paths:
+      - 'freestyle-libre-dashboard/site/**'
+      - 'freestyle-libre-dashboard/worker.js'
+      - 'freestyle-libre-dashboard/wrangler.toml'
+      - 'freestyle-libre-dashboard/main.tf'
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  LIBRELINK_EMAIL:       ${{ secrets.LIBRELINK_EMAIL }}
-  LIBRELINK_PASSWORD:    ${{ secrets.LIBRELINK_PASSWORD }}
   CLOUDFLARE_API_TOKEN:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
-  fetch-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: freestyle-libre-dashboard
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: true
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-      - name: Install deps
-        run: pip install -r requirements.txt
-      - name: Fetch glucose data
-        run: python scripts/fetch_glucose.py
-      - name: Commit updated data
-        run: |
-          git config user.name  "leoncito-bot"
-          git config user.email "leoncito-bot@users.noreply.github.com"
-          git add data/glucose.json
-          if git diff --cached --quiet; then
-            echo "no data changes; skipping commit"
-          else
-            git commit -m "chore(data): update Leoncito glucose readings"
-            git push
-          fi
-      - name: Stage data for deploy
-        run: mkdir -p site/data && cp data/glucose.json site/data/glucose.json
       - name: Deploy to Cloudflare Pages
         # --branch main pins the production branch so a manual run from a
         # feature branch still publishes to leoncito-dashboard.pages.dev
         # (without it, wrangler uses the current git branch and a non-main
         # run lands as a preview deployment, leaving the production URL 404).
         run: npx --yes wrangler@4 pages deploy site --project-name leoncito-dashboard --branch main
+
+  # Optional: Deploy Worker via wrangler (if not using Terraform)
+  # deploy-worker:
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: freestyle-libre-dashboard
+  #   steps:
+  #     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+  #     - run: npx --yes wrangler@4 deploy --env production
