@@ -6,6 +6,7 @@ name: Terraform Leoncito
 # own state key (talvi/leoncito/terraform.tfstate).
 
 on:
+  workflow_dispatch:
   pull_request: { branches: [main, master] }
   push:         { branches: [main, master] }
 
