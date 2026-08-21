@@ -5,10 +5,19 @@ sensor. Reads the LibreLinkUp cloud API hourly, stores readings as JSON, and
 serves a Chart.js dashboard from Cloudflare Pages.
 
 ```
-[LibreLinkUp API] → [fetch_glucose.py (hourly CI)] → [data/glucose.json] → [site/ (Chart.js)] → [Cloudflare Pages]
-                                                                                                  ↓
-                                                                         app.ygdcbtmc4u.uk/leoncito
+[LibreLinkUp API] ──(home network, residential IP)──▶ [Lima VM fetcher (15 min)]
+                                                            │ POST /api/ingest
+                                                            ▼ Bearer INGEST_TOKEN
+                      [leoncito-glucose Worker: KV store, GMT-3 merge] ──▶ [site/ (Chart.js)] ──▶ Cloudflare Pages
+                                                                            ↓
+                                                     app.ygdcbtmc4u.uk/leoncito
 ```
+
+Since NID-403 the LibreLinkUp fetch runs on the **home network** (see
+`home-fetcher/README.md`): libreview.io 403-blocks Cloudflare datacenter
+egress IPs, so worker-side cron could never succeed. The Worker keeps the
+store + dashboard backend role and accepts pushes on `POST /api/ingest`
+(bearer-gated).
 
 ## Layout
 
@@ -56,6 +65,8 @@ Exit codes:
   **or** the connection exists but has no measurements yet (sensor not
   scanned since the follow was added — scan with the LibreLink app).
 - `2` — missing credentials or API/auth failure (loud, so CI notices).
+- `3` — ingest failure in `--ingest-url` mode: non-HTTPS URL, missing bearer
+  token env var, or the Worker rejected the POST.
 
 Credentials: use the **librelink app** pair (vault items `LIBRELINK_EMAIL_2` /
 `LIBRELINK_PASSWORD_2`) for `LIBRELINK_EMAIL` / `LIBRELINK_PASSWORD` — that is
@@ -131,6 +142,11 @@ workflows, so no deploy loops.
   fallback, which returns HTML and fails strict MIME checks. The proxy Worker
   now 302s `/leoncito` → `/leoncito/`, and `<base href="/leoncito/">` pins the
   resolution regardless.
+- NID-403 (2026-08-21): libreview.io started 403-blocking Cloudflare
+  datacenter egress IPs, killing the worker-side cron and `/api/fetch`.
+  Fetching moved to a home-network Lima VM pushing `POST /api/ingest` every
+  15 min — see `home-fetcher/README.md`. The Worker cron trigger was removed;
+  `/api/fetch` remains as a manual diagnostic.
 
 ## Deviations from the original plan
 

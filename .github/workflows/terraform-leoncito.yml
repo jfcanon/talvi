@@ -21,6 +21,9 @@ env:
   # glucose worker's required vars (main.tf) make `terraform plan` fail.
   TF_VAR_librelink_email:      ${{ secrets.TF_VAR_LIBRELINK_EMAIL }}
   TF_VAR_librelink_password:   ${{ secrets.TF_VAR_LIBRELINK_PASSWORD }}
+  # Bearer token for POST /api/ingest (home fetcher). Optional until the owner
+  # adds the secret; plan passes without it, but ingest stays disabled.
+  TF_VAR_ingest_token:         ${{ secrets.TF_VAR_INGEST_TOKEN }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 

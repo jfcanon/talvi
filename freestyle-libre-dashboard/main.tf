@@ -63,6 +63,16 @@ variable "librelink_password" {
   sensitive = true
 }
 
+# Shared bearer token gating POST /api/ingest from the home fetcher (NID-403).
+# Nullable so `terraform plan` passes before the owner adds the GitHub secret;
+# without a value no INGEST_TOKEN binding is created and the Worker rejects
+# every ingest request (fail-closed). Generate with: openssl rand -hex 32.
+variable "ingest_token" {
+  type      = string
+  sensitive = true
+  default   = null
+}
+
 # KV namespace for glucose data
 resource "cloudflare_workers_kv_namespace" "glucose_data" {
   account_id = var.cloudflare_account_id
@@ -111,30 +121,33 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
   content            = file("${path.module}/worker.js")
   compatibility_date = "2026-08-20"
 
-  bindings = [
-    {
-      name        = "LEONCITO_DATA"
-      type        = "kv_namespace"
-      namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
-    },
-    {
-      type = "secret_text"
-      name = "LIBRELINK_EMAIL"
-      text = var.librelink_email
-    },
-    {
-      type = "secret_text"
-      name = "LIBRELINK_PASSWORD"
-      text = var.librelink_password
-    },
-  ]
-}
-
-# Cron trigger for glucose Worker (hourly at :17)
-resource "cloudflare_workers_cron_trigger" "glucose_cron" {
-  account_id    = var.cloudflare_account_id
-  script_name   = cloudflare_workers_script.leoncito_glucose.script_name
-  schedules     = [{ cron = "17 * * * *" }]
+  bindings = concat(
+    [
+      {
+        name         = "LEONCITO_DATA"
+        type         = "kv_namespace"
+        namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
+      },
+      {
+        type = "secret_text"
+        name = "LIBRELINK_EMAIL"
+        text = var.librelink_email
+      },
+      {
+        type = "secret_text"
+        name = "LIBRELINK_PASSWORD"
+        text = var.librelink_password
+      },
+    ],
+    # Bound only once the ingest token secret exists (see variable above).
+    var.ingest_token != null ? [
+      {
+        type = "secret_text"
+        name = "INGEST_TOKEN"
+        text = var.ingest_token
+      }
+    ] : []
+  )
 }
 
 # Routes: app.ygdcbtmc4u.uk/leoncito (exact) and /leoncito/*. The hub owns
@@ -176,9 +189,25 @@ resource "cloudflare_workers_route" "glucose_api_status" {
 
 # Manual-fetch trigger — forces a LibreLinkUp sync outside the cron. Lets the
 # owner (or a debugger) refresh data on demand and see the exact auth error.
+# Note: datacenter egress is IP-blocked by libreview.io (NID-403), so this
+# only succeeds from allowed networks; the home fetcher uses /api/ingest.
 resource "cloudflare_workers_route" "glucose_api_fetch" {
   zone_id = var.talvi_zone_id
   pattern = "app.ygdcbtmc4u.uk/api/fetch"
   script  = cloudflare_workers_script.leoncito_glucose.script_name
 }
+
+# Ingest endpoint for the home-network fetcher (NID-403): POSTs fresh
+# LibreLinkUp windows, bearer-gated with the INGEST_TOKEN secret binding.
+resource "cloudflare_workers_route" "glucose_api_ingest" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/ingest"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}
+
+# No cron trigger: fetching moved off the Worker to the owner's home network —
+# libreview.io 403s Cloudflare datacenter egress IPs, so hourly cron runs could
+# never succeed and only clobbered _status.json with failures. Re-add a
+# cloudflare_workers_cron_trigger + the worker's scheduled handler if egress
+# is ever unblocked.
 
