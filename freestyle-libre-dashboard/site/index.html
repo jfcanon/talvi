@@ -59,7 +59,7 @@
 
     <!-- F2: Time in Range Summary -->
     <section class="card tir-summary" aria-label="Time in range summary">
-      <h2>Time in Range (24h)</h2>
+      <h2>Time in Range (today)</h2>
       <div class="tir-grid">
         <div class="tir-item">
           <span class="tir-label">Target (90–270)</span>
@@ -155,12 +155,12 @@
 
     <section class="card chart-card" aria-label="Glucose history chart">
       <div class="chart-toolbar">
-        <div class="tabs" role="tablist" aria-label="Chart time range">
-          <button class="tab" role="tab" id="tab-24h" aria-selected="true" aria-controls="glucose-chart">24h</button>
-          <button class="tab" role="tab" id="tab-7d" aria-selected="false" aria-controls="glucose-chart">7d</button>
-          <button class="tab" role="tab" id="tab-30d" aria-selected="false" aria-controls="glucose-chart">30d</button>
-          <button class="tab" role="tab" id="tab-all" aria-selected="false" aria-controls="glucose-chart">All time</button>
-        </div>
+<div class="tabs" role="tablist" aria-label="Chart time range">
+        <button class="tab" role="tab" id="tab-today" aria-selected="true" aria-controls="glucose-chart">TODAY</button>
+        <button class="tab" role="tab" id="tab-7d" aria-selected="false" aria-controls="glucose-chart">7d</button>
+        <button class="tab" role="tab" id="tab-30d" aria-selected="false" aria-controls="glucose-chart">30d</button>
+        <button class="tab" role="tab" id="tab-all" aria-selected="false" aria-controls="glucose-chart">All time</button>
+      </div>
         <button class="btn" id="export-csv" type="button">Export CSV</button>
       </div>
       <div class="chart-wrap">
