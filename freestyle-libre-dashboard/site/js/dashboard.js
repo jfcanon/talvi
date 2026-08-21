@@ -529,6 +529,17 @@ function render() {
   xScale.time.tooltipFormat = tcfg.tooltipFormat;
   xScale.ticks.maxTicksLimit = tcfg.maxTicks;
   xScale.ticks.callback = tcfg.unit === 'week' ? weekTickLabel : null;
+  // For "today" view, force the axis to show the full calendar day (00:00–23:59 ART)
+  // regardless of the actual data range. Chart.js time scale otherwise fits to data.
+  if (currentView === 'today') {
+    const todayStart = startOfTodayArtMs();
+    const dayMs = 86400000;
+    xScale.min = new Date(todayStart);
+    xScale.max = new Date(todayStart + dayMs);
+  } else {
+    delete xScale.min;
+    delete xScale.max;
+  }
   chart.update();
 
   els.chartEmpty.hidden = values.length > 0;
