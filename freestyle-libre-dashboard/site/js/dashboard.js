@@ -1,5 +1,5 @@
 /* Leoncito dashboard — Chart.js glucose views for a diabetic cat.
- * Data contract: data/glucose.json with { readings: [{timestamp, glucose, unit}], events: [...], ... }
+ * Data contract: API returns { readings: [{timestamp, glucose, unit}], events: [...], ... }
  */
 
 'use strict';
@@ -8,7 +8,9 @@
 const ZONES = { HYPO: 70, LOW: 90, TARGET_HIGH: 270 };
 const REFRESH_MS = 5 * 60 * 1000; // optional auto-refresh
 
-const DATA_URL = 'data/glucose.json';
+// API endpoint - can be overridden via <meta name="glucose-api" content="..."> in HTML
+const META_API = document.querySelector('meta[name="glucose-api"]');
+const DATA_URL = META_API?.content || 'data/glucose.json'; // fallback to static file
 const VIEWS = ['24h', '7d', '30d', 'all'];
 
 const els = {
