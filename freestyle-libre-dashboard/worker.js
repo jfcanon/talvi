@@ -742,8 +742,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // API endpoint for dashboard to fetch data
-    if (url.pathname === '/api/glucose') {
+    // API endpoint for dashboard to fetch data — Clerk-gated (NID-400)
+    // Reuses the same vendored __session verifier as /api/insulin.
+    if (url.pathname === '/api/glucose' || url.pathname.startsWith('/api/glucose/')) {
+      const denied = await requireSession(request, env);
+      if (denied) return denied;
       return handleGetData(env);
     }
 
@@ -766,7 +769,10 @@ export default {
     }
 
     // Last fetch status — surfaces auth/fetch errors for RCA when data is missing
+    // Clerk-gated (NID-400) like /api/glucose.
     if (url.pathname === '/api/status') {
+      const denied = await requireSession(request, env);
+      if (denied) return denied;
       const status = await env.LEONCITO_DATA.get(STATUS_KEY, 'json').catch(() => null);
       return new Response(JSON.stringify(status || { ok: null, error: 'no fetch recorded yet' }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
