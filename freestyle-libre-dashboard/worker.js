@@ -1,9 +1,20 @@
-// Leoncito Glucose Worker — fetches from LibreLinkUp on cron, stores in KV, serves via HTTP
-// Replaces GitHub Actions fetch_glucose.py + static data/glucose.json
+// Leoncito Glucose Worker — store + dashboard backend.
+// Since NID-403 the LibreLinkUp fetch runs OFF this Worker: libreview.io
+// blocks Cloudflare datacenter egress IPs with 403 (residential IPs work),
+// so a fetcher on the owner's home network pulls readings and pushes them
+// here via POST /api/ingest (bearer-gated with INGEST_TOKEN). This Worker
+// no longer talks to libreview.io itself; /api/fetch stays as a manual
+// diagnostic (and fails loudly while datacenter egress remains blocked).
 
 const KV_KEY = 'glucose.json';
-const STATUS_KEY = '_status.json'; // last fetch result, for observability (RCA)
-const CRON_SCHEDULE = '17 * * * *'; // every hour at :17 (matches old GitHub Actions)
+const STATUS_KEY = '_status.json'; // last successful ingest/fetch, for observability (RCA)
+
+// Bounds for accepted ingest payloads. A fresh LibreLinkUp graph call is
+// ~12h at 5-min cadence (~144 readings); generous caps keep even a full
+// backfill well under the limit while bounding abuse if the token leaks.
+const MAX_INGEST_BYTES = 5 * 1024 * 1024;
+const MAX_INGEST_READINGS = 5000;
+const MAX_INGEST_EVENTS = 2000;
 
 // All timestamps are stored in Argentina time (GMT-3, America/Argentina/
 // Buenos_Aires — fixed UTC-3, no DST since 2009). LibreLinkUp returns UTC;
@@ -305,8 +316,198 @@ async function fetchFromLibreLinkUp(env) {
   };
 }
 
+// Constant-time string comparison via SHA-256 digests — comparing digests of
+// fixed length avoids both length leaks and early-exit timing differences.
+async function timingSafeEqual(a, b) {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(a)),
+    crypto.subtle.digest('SHA-256', enc.encode(b)),
+  ]);
+  const va = new Uint8Array(da);
+  const vb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
+
+// Structural validation for an ingest payload. Returns { error } on a
+// malformed record (reject the whole POST) or { readings, events } with
+// out-of-range values dropped (same policy as the Worker's own fetch path:
+// 40–500 mg/dL is the full LibreLinkUp measurable range).
+function validateIngestPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { error: 'payload must be a JSON object' };
+  }
+  if (!Array.isArray(payload.readings)) {
+    return { error: "payload.readings must be an array" };
+  }
+  if (payload.readings.length > MAX_INGEST_READINGS) {
+    return { error: `payload.readings exceeds ${MAX_INGEST_READINGS} entries` };
+  }
+  if (payload.events !== undefined && !Array.isArray(payload.events)) {
+    return { error: "payload.events must be an array" };
+  }
+  if ((payload.events?.length || 0) > MAX_INGEST_EVENTS) {
+    return { error: `payload.events exceeds ${MAX_INGEST_EVENTS} entries` };
+  }
+  for (const k of ['sensor_id', 'trend', 'last_updated']) {
+    if (payload[k] !== undefined && payload[k] !== null && typeof payload[k] !== 'string') {
+      return { error: `payload.${k} must be a string or null` };
+    }
+  }
+
+  const readings = [];
+  let dropped = 0;
+  for (const r of payload.readings) {
+    if (!r || typeof r !== 'object'
+        || typeof r.timestamp !== 'string'
+        || isNaN(new Date(r.timestamp).getTime())) {
+      return { error: 'each reading needs {timestamp: ISO string, glucose: number}' };
+    }
+    if (typeof r.glucose !== 'number' || !Number.isFinite(r.glucose)) {
+      return { error: 'each reading needs a numeric glucose value' };
+    }
+    if (r.unit !== undefined && r.unit !== null && r.unit !== 'mg/dL') {
+      return { error: `unsupported unit ${JSON.stringify(r.unit)} (only mg/dL)` };
+    }
+    if (r.glucose < MIN_GLUCOSE || r.glucose > MAX_GLUCOSE) {
+      dropped++;
+      continue;
+    }
+    readings.push({
+      timestamp: toArtIso(r.timestamp),
+      glucose: Math.round(r.glucose * 10) / 10,
+      unit: 'mg/dL',
+    });
+  }
+
+  const events = [];
+  for (const e of payload.events || []) {
+    if (!e || typeof e !== 'object'
+        || typeof e.timestamp !== 'string'
+        || isNaN(new Date(e.timestamp).getTime())
+        || typeof e.type !== 'string') {
+      return { error: 'each event needs {timestamp: ISO string, type: string}' };
+    }
+    events.push({
+      timestamp: toArtIso(e.timestamp),
+      type: EVENT_TYPE_LABEL[e.type] || String(e.type).toLowerCase(),
+      carbs_g: e.carbs_g ?? null,
+      insulin_units: e.insulin_units ?? null,
+      note: e.note ?? null,
+    });
+  }
+
+  return {
+    readings,
+    events,
+    dropped,
+    sensor_id: payload.sensor_id ?? null,
+    // Translate LibreLinkUp's UP_SLOW-style enums to dashboard labels — same
+    // mapping the Worker's own fetch path applies before merging.
+    trend: payload.trend ? (TREND_LABEL[payload.trend] || payload.trend) : null,
+    last_updated: payload.last_updated ?? null,
+  };
+}
+
+// POST /api/ingest — home fetcher pushes a fresh LibreLinkUp window here.
+// Auth: Authorization: Bearer $INGEST_TOKEN (Worker secret binding, set in
+// main.tf from the ingest_token TF var / GitHub secret TF_VAR_INGEST_TOKEN).
+// The store contract is unchanged: mergeHistory dedupes by timestamp, caps at
+// 120 days, sorts ascending, normalizes to GMT-3. Fail-closed: no INGEST_TOKEN
+// binding means every request is rejected.
+async function handleIngest(request, env) {
+  if (!env.INGEST_TOKEN) {
+    // Not configured yet → refuse rather than run open.
+    return new Response(JSON.stringify({ success: false, error: 'ingest not configured' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const auth = request.headers.get('Authorization') || '';
+  const expected = `Bearer ${env.INGEST_TOKEN}`;
+  if (!(await timingSafeEqual(auth, expected))) {
+    return new Response(JSON.stringify({ success: false, error: 'unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const contentLength = Number(request.headers.get('Content-Length') || 0);
+  if (contentLength > MAX_INGEST_BYTES) {
+    return new Response(JSON.stringify({ success: false, error: 'payload too large' }), {
+      status: 413,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ success: false, error: 'invalid JSON body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const v = validateIngestPayload(payload);
+  if (v.error) {
+    await writeStatus(env, { ok: false, source: 'ingest', error: `rejected: ${v.error}` });
+    return new Response(JSON.stringify({ success: false, error: v.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const existing = await env.LEONCITO_DATA.get(KV_KEY, 'json').catch(() => null);
+    const fresh = {
+      readings: v.readings,
+      events: v.events,
+      last_updated: v.last_updated || (v.readings.length ? v.readings[v.readings.length - 1].timestamp : toArtIso(new Date())),
+      sensor_id: v.sensor_id,
+      trend: v.trend,
+    };
+    const data = mergeHistory(existing, fresh);
+    await env.LEONCITO_DATA.put(KV_KEY, JSON.stringify(data, null, 2));
+    await writeStatus(env, {
+      ok: true,
+      source: 'ingest',
+      total_readings: data.readings.length,
+      new_readings: fresh.readings.length,
+      dropped_readings: v.dropped,
+      total_events: data.events.length,
+    });
+    return new Response(JSON.stringify({
+      success: true,
+      total_readings: data.readings.length,
+      accepted_readings: fresh.readings.length,
+      dropped_readings: v.dropped,
+      total_events: data.events.length,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error('Ingest failed:', err);
+    await writeStatus(env, { ok: false, source: 'ingest', error: err.message }).catch(() => {});
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+// Shared status writer so every path records into _status.json consistently.
+// checked_at stays UTC ISO (machine-facing); reading timestamps remain GMT-3.
+async function writeStatus(env, extra) {
+  const status = { checked_at: new Date().toISOString().replace('+00:00', 'Z'), ...extra };
+  await env.LEONCITO_DATA.put(STATUS_KEY, JSON.stringify(status));
+  return status;
+}
+
 async function handleFetch(env) {
-  const status = { checked_at: new Date().toISOString().replace('+00:00', 'Z') };
+  let status = { checked_at: new Date().toISOString().replace('+00:00', 'Z') };
   try {
     const fresh = await fetchFromLibreLinkUp(env);
     const existing = await env.LEONCITO_DATA.get(KV_KEY, 'json').catch(() => null);
@@ -370,9 +571,22 @@ export default {
       return handleGetData(env);
     }
 
-    // Manual trigger endpoint (for testing)
+    // Manual trigger endpoint (for testing / diagnostics — datacenter egress
+    // is IP-blocked by libreview.io, so this fails loudly until run from an
+    // allowed network; the home fetcher + /api/ingest is the real pipeline)
     if (url.pathname === '/api/fetch') {
       return handleFetch(env);
+    }
+
+    // Home fetcher pushes fresh LibreLinkUp windows here (bearer-gated)
+    if (url.pathname === '/api/ingest') {
+      if (request.method !== 'POST') {
+        return new Response(JSON.stringify({ success: false, error: 'method not allowed' }), {
+          status: 405,
+          headers: { 'Content-Type': 'application/json', 'Allow': 'POST' },
+        });
+      }
+      return handleIngest(request, env);
     }
 
     // Last fetch status — surfaces auth/fetch errors for RCA when data is missing
@@ -390,12 +604,6 @@ export default {
 
     return new Response('Not Found', { status: 404 });
   },
-
-  // Cron trigger - runs hourly at :17
-  async scheduled(event, env, ctx) {
-    if (event.cron === CRON_SCHEDULE) {
-      console.log('Cron triggered: fetching glucose data');
-      await handleFetch(env);
-    }
-  },
+  // No scheduled handler — the Worker cron trigger was removed with the
+  // Terraform change that moved fetching to the home network (NID-403).
 };

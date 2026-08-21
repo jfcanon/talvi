@@ -25,6 +25,14 @@ Usage:
     python scripts/fetch_glucose.py --mock               # deterministic sample data
     python scripts/fetch_glucose.py --data out.json      # custom output path
     python scripts/fetch_glucose.py --region api-eu.libreview.io
+    python scripts/fetch_glucose.py --ingest-url https://host/api/ingest
+
+Ingest mode (--ingest-url): after a successful live fetch, POST the fresh
+readings to the dashboard Worker's /api/ingest endpoint (bearer token read
+from the env var named by --ingest-token-env, default INGEST_TOKEN). The
+Worker merges into its KV store, so only the fresh window is sent — the
+home machine keeps no authoritative copy. Used by the home-network fetcher
+since libreview.io blocks Cloudflare datacenter egress IPs (NID-403).
 """
 
 from __future__ import annotations
@@ -36,6 +44,8 @@ import os
 import random
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -87,6 +97,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                    help=f"keep at most this many days of history (default: {DEFAULT_MAX_DAYS})")
     p.add_argument("--days", type=int, default=14,
                    help="mock mode: generate this many days of data (default: 14)")
+    p.add_argument("--ingest-url", default=None,
+                   help="POST the fresh window to this URL after a successful fetch "
+                        "(e.g. https://app.ygdcbtmc4u.uk/api/ingest)")
+    p.add_argument("--ingest-token-env", default="INGEST_TOKEN",
+                   help=f"env var holding the ingest bearer token (default: INGEST_TOKEN)")
     return p.parse_args(argv)
 
 
@@ -152,6 +167,48 @@ def atomic_write(path: Path, data: dict[str, Any]) -> None:
             os.unlink(tmp)
 
 
+def push_to_ingest(url: str, token_env: str, payload: dict[str, Any]) -> int:
+    """POST the fresh window to the Worker's /api/ingest endpoint.
+
+    The Worker merges into its KV store (dedupe by timestamp), so only the
+    fresh readings are sent — no authoritative copy lives on this machine.
+    HTTPS-only: the payload is authenticated but not something to send in
+    the clear.
+    """
+    if not url.startswith("https://"):
+        log.error("--ingest-url must be https:// (got %r)", url)
+        return 3
+    token = os.environ.get(token_env, "").strip()
+    if not token:
+        log.error("%s not set (refusing to POST unauthenticated)", token_env)
+        return 3
+
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            log.info("ingest %s: %s", resp.status,
+                     {k: result.get(k) for k in ("total_readings", "accepted_readings",
+                                                 "dropped_readings") if k in result})
+            return 0
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:300]
+        log.error("ingest failed: HTTP %s: %s", e.code, detail)
+        return 3
+    except Exception as e:  # pylint: disable=broad-except
+        log.error("ingest failed: %s", e)
+        return 3
+
+
 def reading_dict(value: float, timestamp: datetime) -> dict[str, Any]:
     return {
         "timestamp": timestamp.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -178,7 +235,8 @@ def resolve_regions(region: str | None) -> list[APIUrl]:
     return [APIUrl.EU, APIUrl.US]
 
 
-def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
+def fetch_live(data_path: Path, region: str | None, max_days: int,
+               ingest_url: str | None = None, ingest_token_env: str = "INGEST_TOKEN") -> int:
     email = os.environ.get("LIBRELINK_EMAIL", "").strip()
     password = os.environ.get("LIBRELINK_PASSWORD", "").strip()
     if not email or not password:
@@ -303,6 +361,23 @@ def fetch_live(data_path: Path, region: str | None, max_days: int) -> int:
              len(merged), len(fresh), data_path)
     if latest_value is not None:
         log.info("latest: %.1f mg/dL at %s (%s)", latest_value, latest_ts, trend)
+
+    # Push the FRESH window (not the merged store) to the Worker — its
+    # mergeHistory dedupes by timestamp, so this is idempotent and a failed
+    # POST loses nothing as long as a later run succeeds within the ~12h
+    # graph window.
+    if ingest_url:
+        fresh_payload = {
+            "readings": fresh,
+            "events": events,
+            "last_updated": (
+                latest_ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                if latest_ts is not None else store["last_updated"]
+            ),
+            "sensor_id": str(patient.patient_id)[:6].upper(),
+            "trend": trend,
+        }
+        return push_to_ingest(ingest_url, ingest_token_env, fresh_payload)
     return 0
 
 
@@ -374,7 +449,9 @@ def main(argv: list[str]) -> int:
 
     if args.mock:
         return fetch_mock(data_path, args.days, args.max_days)
-    return fetch_live(data_path, args.region, args.max_days)
+    return fetch_live(data_path, args.region, args.max_days,
+                      ingest_url=args.ingest_url,
+                      ingest_token_env=args.ingest_token_env)
 
 
 if __name__ == "__main__":
