@@ -1686,13 +1686,53 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T14:57:18Z",
+      "glucose": 260.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T15:00:00Z",
       "glucose": 253.7,
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T15:12:18Z",
+      "glucose": 226.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T15:27:18Z",
+      "glucose": 186.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T15:42:18Z",
+      "glucose": 194.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T16:00:00Z",
       "glucose": 255.2,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T16:09:59Z",
+      "glucose": 203.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T16:27:18Z",
+      "glucose": 210.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T16:42:18Z",
+      "glucose": 219.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T16:57:18Z",
+      "glucose": 235.0,
       "unit": "mg/dL"
     },
     {
@@ -1716,8 +1756,33 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T17:57:18Z",
+      "glucose": 222.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T18:00:00Z",
       "glucose": 244.9,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T18:12:18Z",
+      "glucose": 205.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T18:27:18Z",
+      "glucose": 174.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T18:40:59Z",
+      "glucose": 191.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T18:56:04Z",
+      "glucose": 234.0,
       "unit": "mg/dL"
     },
     {
@@ -1726,8 +1791,38 @@
       "unit": "mg/dL"
     },
     {
+      "timestamp": "2026-08-20T19:12:18Z",
+      "glucose": 248.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T19:26:18Z",
+      "glucose": 233.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T19:41:20Z",
+      "glucose": 218.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T19:57:18Z",
+      "glucose": 230.0,
+      "unit": "mg/dL"
+    },
+    {
       "timestamp": "2026-08-20T20:00:00Z",
       "glucose": 241.1,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T20:12:18Z",
+      "glucose": 243.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-20T20:27:18Z",
+      "glucose": 225.0,
       "unit": "mg/dL"
     },
     {
@@ -1736,7 +1831,310 @@
       "unit": "mg/dL"
     }
   ],
-  "last_updated": "2026-08-20T20:04:19Z",
+  "last_updated": "2026-08-20T22:57:28Z",
   "sensor_id": "019F51",
-  "trend": "stable"
+  "trend": "stable",
+  "events": [
+    {
+      "timestamp": "2026-08-20T19:59:18Z",
+      "type": "3",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-20T19:05:59Z",
+      "type": "3",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-20T14:29:26Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-19T12:57:50Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-18T13:09:08Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-18T13:01:31Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-18T09:49:47Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-17T19:23:26Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-17T18:58:36Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-15T11:02:53Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-15T09:54:35Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T19:24:04Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T17:47:07Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T17:30:45Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T15:37:13Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T15:13:58Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T12:18:34Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T11:49:15Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-14T09:05:31Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-12T17:08:15Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-12T13:45:52Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-12T11:13:06Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-11T13:46:49Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-11T11:30:36Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-10T14:50:45Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-10T13:40:47Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-09T08:59:02Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-09T02:45:59Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-09T01:41:47Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-09T01:31:14Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-09T00:42:30Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-08T19:31:38Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-08T14:45:48Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T22:20:34Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T20:23:49Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T18:05:04Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T15:41:45Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T14:55:23Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T13:32:56Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T13:25:30Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T11:52:02Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T09:26:22Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-07T02:08:43Z",
+      "type": "1",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    }
+  ]
 }
