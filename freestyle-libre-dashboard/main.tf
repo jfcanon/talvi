@@ -52,6 +52,17 @@ variable "talvi_zone_id" {
   type = string
 }
 
+# LibreLinkUp credentials — GitHub Actions SECRETS, never logged or stored in state
+variable "librelink_email" {
+  type      = string
+  sensitive = true
+}
+
+variable "librelink_password" {
+  type      = string
+  sensitive = true
+}
+
 # KV namespace for glucose data
 resource "cloudflare_workers_kv_namespace" "glucose_data" {
   account_id = var.cloudflare_account_id
@@ -85,11 +96,23 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
   content            = file("${path.module}/worker.js")
   compatibility_date = "2026-08-20"
 
-  bindings = [{
-    name        = "LEONCITO_DATA"
-    type        = "kv_namespace"
-    namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
-  }]
+  bindings = [
+    {
+      name        = "LEONCITO_DATA"
+      type        = "kv_namespace"
+      namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
+    },
+    {
+      type = "secret_text"
+      name = "LIBRELINK_EMAIL"
+      text = var.librelink_email
+    },
+    {
+      type = "secret_text"
+      name = "LIBRELINK_PASSWORD"
+      text = var.librelink_password
+    },
+  ]
 }
 
 # Cron trigger for glucose Worker (hourly at :17)
