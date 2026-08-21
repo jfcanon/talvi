@@ -12,6 +12,10 @@
 
 set -euo pipefail
 
+# launchd runs agents with a minimal PATH (/usr/bin:/bin:...) — restore the
+# Homebrew tooling this script needs (bw, limactl).
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
 VM_NAME="${LEONCITO_LIMA_VM:-agente}"
 LIBRE_EMAIL_ITEM="${LEONCITO_BW_LIBRE_EMAIL_ITEM:-LIBRELINK_EMAIL_2}"
 LIBRE_PASSWORD_ITEM="${LEONCITO_BW_LIBRE_PASSWORD_ITEM:-LIBRELINK_PASSWORD_2}"
@@ -19,7 +23,14 @@ TOKEN_ITEM="${LEONCITO_BW_TOKEN_ITEM:-Leoncito ingest token}"
 INGEST_URL="${LEONCITO_INGEST_URL:-https://app.ygdcbtmc4u.uk/api/ingest}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"   # talvi repo root
+# Source files live either next to this script (durable install in
+# ~/.leoncito-fetcher/bin) or in the repo checkout (running from a clone).
+if [ -f "$SCRIPT_DIR/fetch_glucose.py" ]; then
+  SRC_DIR="$SCRIPT_DIR"
+else
+  SRC_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/freestyle-libre-dashboard"
+fi
+[ -f "$SRC_DIR/fetch_glucose.py" ] || { log "fetch_glucose.py not found next to $0"; exit 4; }
 VM_STATE="$HOME/.leoncito-fetcher"
 mkdir -p "$VM_STATE"
 LOG="$VM_STATE/host.log"
@@ -69,9 +80,8 @@ fi
 # 3. Sync code + ensure Python venv inside the VM (cheap no-ops when current).
 # ---------------------------------------------------------------------------
 limactl shell "$VM_NAME" -- mkdir -p ~/leoncito-fetcher/state
-for f in scripts/fetch_glucose.py requirements.txt home-fetcher/vm-job.sh; do
-  limactl cp "$REPO_DIR/freestyle-libre-dashboard/$f" \
-    "$VM_NAME:leoncito-fetcher/$(basename "$f")"
+for f in fetch_glucose.py vm-job.sh; do
+  limactl cp "$SRC_DIR/$f" "$VM_NAME:leoncito-fetcher/$f"
 done
 limactl shell "$VM_NAME" -- bash -c '
   set -e
@@ -80,8 +90,8 @@ limactl shell "$VM_NAME" -- bash -c '
     sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
     python3 -m venv .venv
   fi
-  .venv/bin/pip install --quiet --disable-pip-version-check \
-    $(grep -v "^#" requirements.txt | tr "\n" " ")
+  # deps of scripts/fetch_glucose.py (see ../scripts + repo requirements.txt)
+  .venv/bin/pip install --quiet --disable-pip-version-check pylibrelinkup pydantic
 '
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+
 #!/bin/bash
 # Leoncito home fetcher — ONE-TIME setup on the home Mac.
 #
@@ -5,9 +6,6 @@
 # installs the launchd agent (every 15 min), and stores the Bitwarden master
 # password in the macOS Keychain so scheduled runs can unlock the vault
 # non-interactively. Idempotent: safe to re-run.
-#
-# Prereqs already on this machine: limactl (agente VM), docker NOT required,
-# bw CLI logged in once interactively, gh not needed here.
 
 set -euo pipefail
 
@@ -25,14 +23,17 @@ limactl list 2>/dev/null | grep -q "^$VM_NAME " || {
 limactl list 2>/dev/null | grep -q "^$VM_NAME Running" || limactl start "$VM_NAME"
 
 echo "== 2/5 Syncing fetch scripts into the VM"
-limactl shell "$VM_NAME" -- mkdir -p ~/leoncito-fetcher/state
+limactl shell "$VM_NAME" -- bash -c 'mkdir -p "$HOME/leoncito-fetcher/state"'
+
 for f in scripts/fetch_glucose.py requirements.txt home-fetcher/vm-job.sh; do
+  VM_HOME=$(limactl shell "$VM_NAME" env | grep "^HOME=" | cut -d= -f2)
   limactl cp "$REPO_DIR/freestyle-libre-dashboard/$f" \
-    "$VM_NAME:leoncito-fetcher/$(basename "$f")"
+    "$VM_NAME:$VM_HOME/leoncito-fetcher/$(basename "$f")"
 done
+
 limactl shell "$VM_NAME" -- bash -c '
   set -e
-  cd ~/leoncito-fetcher
+  cd "$HOME/leoncito-fetcher"
   if [ ! -x .venv/bin/python ]; then
     sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
     python3 -m venv .venv
@@ -44,12 +45,14 @@ echo "   venv ready in VM"
 
 echo "== 3/5 Bitwarden master password → macOS Keychain"
 if security find-generic-password -s leoncito-bitwarden >/dev/null 2>&1; then
-  echo "   already stored (service: leoncito-bitwarden)"
+  echo "   already stored (service: leoncito-bitwarden) — delete it first to re-store:"
+  echo "     security delete-generic-password -s leoncito-bitwarden"
 else
   echo "   Enter the Bitwarden MASTER PASSWORD (input hidden; stored in your login keychain):"
   read -rs BW_PW
-  printf '%s' "$BW_PW" | security add-generic-password \
-    -s leoncito-bitwarden -a "$USER" -w -U
+  # NOTE: -w takes the password as an ARGUMENT. `printf | security -w -U` is a
+  # trap: bare `-w` followed by another flag stores that flag as the value.
+  security add-generic-password -s leoncito-bitwarden -a "$USER" -w "$BW_PW" -U
   unset BW_PW
   echo "   stored."
 fi
@@ -74,6 +77,11 @@ ITEMS
 bw lock >/dev/null 2>&1 || true
 
 echo "== 5/5 Installing launchd agent ($PLIST_LABEL, every 15 min)"
+# Self-contained install: the agent must not depend on any repo checkout
+# staying in place, so it runs from ~/.leoncito-fetcher/bin.
+mkdir -p "$VM_STATE/bin"
+cp "$SCRIPT_DIR/host-run.sh" "$SCRIPT_DIR/vm-job.sh" \
+   "$REPO_DIR/scripts/fetch_glucose.py" "$VM_STATE/bin/"
 cat >"$VM_STATE/$PLIST_LABEL.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -83,22 +91,33 @@ cat >"$VM_STATE/$PLIST_LABEL.plist" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$SCRIPT_DIR/host-run.sh</string>
+    <string>$VM_STATE/bin/host-run.sh</string>
   </array>
   <key>StartInterval</key><integer>900</integer>
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>$VM_STATE/launchd.out.log</string>
-  <key>StandardErrorPath</key><string>$VM_STATE/launchd.err.log</string>
+  <key>StandardErrorPath</string><string>$VM_STATE/launchd.err.log</string>
   <key>Nice</key><integer>10</integer>
 </dict>
 </plist>
 EOF
+plutil -lint "$VM_STATE/$PLIST_LABEL.plist"
 launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$(id -u)" "$VM_STATE/$PLIST_LABEL.plist"
+if ! launchctl bootstrap "gui/$(id -u)" "$VM_STATE/$PLIST_LABEL.plist"; then
+  echo "   bootstrap failed — retrying once (error 141 'Reentrancy avoided' can be transient)"
+  sleep 3
+  launchctl bootstrap "gui/$(id -u)" "$VM_STATE/$PLIST_LABEL.plist" || true
+fi
+if launchctl print "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1; then
+  echo "   agent loaded ✓"
+else
+  echo "   agent NOT loaded — retry manually:"
+  echo "     launchctl bootstrap gui/\$(id -u) $VM_STATE/$PLIST_LABEL.plist"
+fi
 
 echo
 echo "Setup complete. The agent runs at login + every 15 min."
-echo "  Run now:        bash \"$SCRIPT_DIR/host-run.sh\""
+echo "  Run now:        bash \"$VM_STATE/bin/host-run.sh\""
 echo "  Data/status:    curl -s https://app.ygdcbtmc4u.uk/api/status"
 echo "  Host log:       tail -f $VM_STATE/host.log"
 echo "  VM log:         limactl shell $VM_NAME -- tail -f ~/leoncito-fetcher/state/fetch.log"
