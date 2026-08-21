@@ -14,7 +14,7 @@ const DATA_URL = META_API?.content || 'data/glucose.json'; // fallback to static
 const META_INSULIN_API = document.querySelector('meta[name="insulin-api"]');
 const INSULIN_API = META_INSULIN_API?.content || '/api/insulin';
 const INSULIN_CACHE_KEY = 'leoncito-insulin-cache'; // offline/device-local fallback
-const VIEWS = ['24h', '7d', '30d', 'all'];
+const VIEWS = ['today', '7d', '30d', 'all'];
 
 const els = {
   currentGlucose: document.getElementById('current-glucose'),
@@ -62,7 +62,7 @@ const els = {
 };
 
 let store = { readings: [], events: [] };
-let currentView = '24h';
+let currentView = 'today';
 let chart = null;
 
 // Insulin tracker state. shots = persisted truth (server or cache);
@@ -113,6 +113,14 @@ function weekKey(d) {
   const first = new Date(Date.UTC(year, 0, 1));
   const week = Math.ceil(((copy - first) / 86400000 + 1) / 7);
   return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
+// Buenos Aires (GMT-3, fixed, no DST) start of today as epoch ms.
+// Timestamps in the store are ISO -03:00 wall-clock strings.
+function startOfTodayArtMs() {
+  const nowUtc = Date.now();
+  const artNow = new Date(nowUtc - 3 * 60 * 60 * 1000); // UTC -> ART
+  return new Date(artNow.getFullYear(), artNow.getMonth(), artNow.getDate()).getTime();
 }
 
 function accentRGB() {
@@ -238,12 +246,11 @@ function buildEventAnnotations(readings, events) {
 }
 
 function getViewStart() {
-  const now = Date.now();
   const dayMs = 86400000;
   switch (currentView) {
-    case '24h': return now - dayMs;
-    case '7d': return now - 7 * dayMs;
-    case '30d': return now - 30 * dayMs;
+    case 'today': return startOfTodayArtMs();
+    case '7d': return startOfTodayArtMs() - 7 * dayMs;
+    case '30d': return startOfTodayArtMs() - 30 * dayMs;
     default: return 0;
   }
 }
@@ -310,15 +317,16 @@ function avg(vals) {
 }
 
 function buildView(view, readings) {
-  const now = Date.now();
+  const todayStart = startOfTodayArtMs();
   const dayMs = 86400000;
 
   // buildView returns labels as ISO timestamps (not display strings) — the
   // time scale owns tick formatting via viewTimeConfig(). Passing display
   // strings here produced invalid Dates (e.g. new Date("09:00")) which the
   // time scale rendered as raw epoch/year-looking ticks.
-  if (view === '24h') {
-    const pts = readings.filter((r) => now - r.ts.getTime() <= dayMs);
+  if (view === 'today') {
+    const todayEnd = todayStart + dayMs;
+    const pts = readings.filter((r) => r.ts.getTime() >= todayStart && r.ts.getTime() < todayEnd);
     return {
       labels: pts.map((r) => r.ts.toISOString()),
       values: pts.map((r) => r.value),
@@ -326,11 +334,11 @@ function buildView(view, readings) {
   }
 
   if (view === '7d') {
-    return aggregateDaily(readings, now - 7 * dayMs, (d) => d.toISOString());
+    return aggregateDaily(readings, todayStart - 7 * dayMs, (d) => d.toISOString());
   }
 
   if (view === '30d') {
-    return aggregateDaily(readings, now - 30 * dayMs, (d) => d.toISOString());
+    return aggregateDaily(readings, todayStart - 30 * dayMs, (d) => d.toISOString());
   }
 
   // all time — weekly averages
@@ -352,7 +360,7 @@ function buildView(view, readings) {
 // detail each tick label carries. Applied on every render so tab switches
 // restyle the axis without recreating the chart.
 function viewTimeConfig(view) {
-  if (view === '24h') return { unit: 'hour', maxTicks: 12, tooltipFormat: 'EEE d MMM HH:mm' };
+  if (view === 'today') return { unit: 'hour', maxTicks: 24, tooltipFormat: 'EEE d MMM HH:mm' };
   if (view === '7d') return { unit: 'day', maxTicks: 7, tooltipFormat: 'EEE d MMM' };
   if (view === '30d') return { unit: 'day', maxTicks: 15, tooltipFormat: 'EEE d MMM' };
   return { unit: 'week', maxTicks: 12, tooltipFormat: 'd MMM yyyy' };
