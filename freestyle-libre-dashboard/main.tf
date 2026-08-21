@@ -96,7 +96,7 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
 resource "cloudflare_workers_cron_trigger" "glucose_cron" {
   account_id    = var.cloudflare_account_id
   script_name   = cloudflare_workers_script.leoncito_glucose.script_name
-  schedules     = ["17 * * * *"]
+  schedules     = [{ cron = "17 * * * *" }]
 }
 
 # Routes: app.ygdcbtmc4u.uk/leoncito (exact) and /leoncito/*. The hub owns
