@@ -71,16 +71,17 @@ resource "cloudflare_workers_kv_namespace" "glucose_data" {
 
 # Seed the KV store with the historical data/glucose.json so the dashboard has
 # ~2 weeks of history immediately after first apply, before the next cron run
-# accumulates.
-# TEMP (PR #195): ignore_changes removed so this apply overwrites the KV key
-# corrupted by the toArtIso sign bug (timestamps shifted +6h per read). Next
-# PR restores `lifecycle { ignore_changes = [value] }` so the Worker owns the
-# key at runtime again.
+# accumulates. `ignore_changes = [value]` hands ownership to the Worker after
+# seed — otherwise every apply would revert the key to this repo file and fight
+# the runtime writes (perpetual plan drift + data loss).
 resource "cloudflare_workers_kv" "glucose_seed" {
   account_id   = var.cloudflare_account_id
   namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
   key_name     = "glucose.json"
   value        = file("${path.module}/data/glucose.json")
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 # The Pages project itself. Assets are deployed by leoncito.yml via
