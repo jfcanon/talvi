@@ -122,9 +122,3 @@ resource "cloudflare_workers_route" "glucose_api" {
   script  = cloudflare_workers_script.leoncito_glucose.script_name
 }
 
-# Also route the worker subdomain for direct access
-resource "cloudflare_workers_route" "glucose_worker_subdomain" {
-  zone_id = var.talvi_zone_id
-  pattern = "leoncito-worker.ygdcbtmc4u.uk/*"
-  script  = cloudflare_workers_script.leoncito_glucose.script_name
-}
