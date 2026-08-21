@@ -1,5 +1,5 @@
-// Clerk auth for the relay — ported from the blue release (talvi-blue-auth-
-// handover.md, s7). Server-side session verification only: the __session
+// Clerk auth for the relay — in-worker session verification (blue pattern origin,
+// decommissioned 2026-08-21). Server-side session verification only: the __session
 // cookie is a Clerk JWT, verified locally with @clerk/backend — no clerk-js on
 // any page, no Clerk API call per request, no CSP change anywhere. The sign-in
 // itself lives at the app ROOT (the hub worker serves /sign-in); this worker
