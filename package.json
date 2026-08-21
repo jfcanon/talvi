@@ -8,7 +8,7 @@
     "verify:chat": "node scripts/chat-verify.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.2"
   },
   "dependencies": {
     "@clerk/backend": "^3.16.7"
