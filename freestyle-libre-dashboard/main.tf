@@ -85,17 +85,18 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
   content            = file("${path.module}/worker.js")
   compatibility_date = "2026-08-20"
 
-  kv_namespace_bindings = [{
-    name = "LEONCITO_DATA"
+  bindings = [{
+    name        = "LEONCITO_DATA"
+    type        = "kv_namespace"
     namespace_id = cloudflare_workers_kv_namespace.glucose_data.id
   }]
 }
 
 # Cron trigger for glucose Worker (hourly at :17)
 resource "cloudflare_workers_cron_trigger" "glucose_cron" {
-  account_id  = var.cloudflare_account_id
-  script_name = cloudflare_workers_script.leoncito_glucose.script_name
-  schedules   = ["17 * * * *"]
+  account_id    = var.cloudflare_account_id
+  script_name   = cloudflare_workers_script.leoncito_glucose.script_name
+  schedules     = ["17 * * * *"]
 }
 
 # Routes: app.ygdcbtmc4u.uk/leoncito (exact) and /leoncito/*. The hub owns
