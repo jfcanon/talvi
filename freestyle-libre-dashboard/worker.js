@@ -8,13 +8,17 @@ const CRON_SCHEDULE = '17 * * * *'; // every hour at :17 (matches old GitHub Act
 // All timestamps are stored in Argentina time (GMT-3, America/Argentina/
 // Buenos_Aires — fixed UTC-3, no DST since 2009). LibreLinkUp returns UTC;
 // the JSON the dashboard consumes must read as Buenos Aires wall-clock.
-const ART_OFFSET_MS = -3 * 60 * 60 * 1000;
+const ART_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC → ART: subtract 3h (fixed, no DST)
 const ART_OFFSET_SUFFIX = '-03:00';
 
 function toArtIso(value) {
   const d = new Date(value);
   if (isNaN(d.getTime())) return value;
-  const local = new Date(d.getTime() - ART_OFFSET_MS); // local wall clock = UTC - 3h
+  // Local wall clock (ART) = instant − 3h, labeled with the -03:00 suffix.
+  // (Bug fixed 2026-08-21: ART_OFFSET_MS was -3h, so `getTime() - ART_OFFSET_MS`
+  // ADDED 3h and every normalize pass shifted all timestamps +6h forward —
+  // each read of /api/glucose re-wrote the store with future-dated readings.)
+  const local = new Date(d.getTime() - ART_OFFSET_MS);
   return local.toISOString().replace(/\.\d{3}Z$/, ART_OFFSET_SUFFIX);
 }
 
