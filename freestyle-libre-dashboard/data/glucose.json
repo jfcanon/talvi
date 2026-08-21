@@ -1869,9 +1869,24 @@
       "timestamp": "2026-08-20T23:57:56Z",
       "glucose": 184.0,
       "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-21T00:13:01Z",
+      "glucose": 214.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-21T00:28:07Z",
+      "glucose": 235.0,
+      "unit": "mg/dL"
+    },
+    {
+      "timestamp": "2026-08-21T00:43:16Z",
+      "glucose": 208.0,
+      "unit": "mg/dL"
     }
   ],
-  "last_updated": "2026-08-21T00:15:56Z",
+  "last_updated": "2026-08-21T01:04:18Z",
   "sensor_id": "019F51",
   "trend": "stable",
   "events": [
@@ -2178,6 +2193,20 @@
     },
     {
       "timestamp": "2026-08-20T23:16:35Z",
+      "type": "3",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-21T00:39:07Z",
+      "type": "3",
+      "carbs_g": null,
+      "insulin_units": null,
+      "note": null
+    },
+    {
+      "timestamp": "2026-08-21T00:17:57Z",
       "type": "3",
       "carbs_g": null,
       "insulin_units": null,
