@@ -174,3 +174,11 @@ resource "cloudflare_workers_route" "glucose_api_status" {
   script  = cloudflare_workers_script.leoncito_glucose.script_name
 }
 
+# Manual-fetch trigger — forces a LibreLinkUp sync outside the cron. Lets the
+# owner (or a debugger) refresh data on demand and see the exact auth error.
+resource "cloudflare_workers_route" "glucose_api_fetch" {
+  zone_id = var.talvi_zone_id
+  pattern = "app.ygdcbtmc4u.uk/api/fetch"
+  script  = cloudflare_workers_script.leoncito_glucose.script_name
+}
+

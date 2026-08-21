@@ -333,7 +333,7 @@ async function handleFetch(env) {
 async function handleGetData(env) {
   const stored = await env.LEONCITO_DATA.get(KV_KEY, 'json').catch(() => null);
   if (!stored) {
-    return new Response(JSON.stringify({ readings: [], events: [], error: 'No data yet' }), {
+    return new Response(JSON.stringify({ readings: [], events: [], error: 'No data yet' }, null, 2), {
       status: 404,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
@@ -341,8 +341,18 @@ async function handleGetData(env) {
   // Normalize to GMT-3 on serve and persist the normalized copy so the store
   // converges even before the next successful fetch (legacy UTC seed → ART).
   const normalized = normalizeToArt(stored);
+  // Sort ascending by timestamp — the read path must not depend on whoever
+  // wrote the key last (mergeHistory sorts, but the seed file or any
+  // out-of-order write may not be).
+  normalized.readings = (normalized.readings || []).sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
+  normalized.events = (normalized.events || []).sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
   await env.LEONCITO_DATA.put(KV_KEY, JSON.stringify(normalized, null, 2)).catch(() => {});
-  return new Response(JSON.stringify(normalized), {
+  // Pretty-printed (2-space indent) for human-friendly reads.
+  return new Response(JSON.stringify(normalized, null, 2), {
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
   });
 }
