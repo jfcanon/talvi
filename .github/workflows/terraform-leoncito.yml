@@ -16,6 +16,11 @@ env:
   CLOUDFLARE_API_TOKEN:         ${{ secrets.CLOUDFLARE_API_TOKEN }}
   TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   TF_VAR_talvi_zone_id:         ${{ vars.TALVI_ZONE_ID }}
+  # LibreLinkUp credentials — must match repo secrets added by the owner
+  # (TF_VAR_LIBRELINK_EMAIL / TF_VAR_LIBRELINK_PASSWORD). Without these the
+  # glucose worker's required vars (main.tf) make `terraform plan` fail.
+  TF_VAR_librelink_email:      ${{ secrets.TF_VAR_LIBRELINK_EMAIL }}
+  TF_VAR_librelink_password:   ${{ secrets.TF_VAR_LIBRELINK_PASSWORD }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
