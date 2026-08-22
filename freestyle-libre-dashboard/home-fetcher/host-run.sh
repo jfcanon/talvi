@@ -23,7 +23,16 @@ TOKEN_ITEM="${LEONCITO_BW_TOKEN_ITEM:-Leoncito ingest token}"
 INGEST_URL="${LEONCITO_INGEST_URL:-https://app.ygdcbtmc4u.uk/api/ingest}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"   # talvi repo root
+# Source files live either next to this script (durable install in
+# ~/.leoncito-fetcher/bin) or in a repo checkout (running from a clone).
+if [ -f "$SCRIPT_DIR/fetch_glucose.py" ]; then
+  SRC_DIR="$SCRIPT_DIR"
+elif [ -f "$HOME/.leoncito-fetcher/bin/fetch_glucose.py" ]; then
+  SRC_DIR="$HOME/.leoncito-fetcher/bin"
+else
+  SRC_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/freestyle-libre-dashboard"
+fi
+[ -f "$SRC_DIR/fetch_glucose.py" ] || { echo "fetch_glucose.py not found (looked in $SCRIPT_DIR, ~/.leoncito-fetcher/bin, repo)" >&2; exit 4; }
 VM_STATE="$HOME/.leoncito-fetcher"
 mkdir -p "$VM_STATE"
 LOG="$VM_STATE/host.log"
@@ -35,43 +44,85 @@ trap 'log "FAILED (exit $?)"' ERR
 
 # ---------------------------------------------------------------------------
 # 1. Resolve an unlocked Bitwarden session (in-memory only).
-#    Order: existing BW_SESSION → macOS Keychain master pw → BW_PASSWORD env.
+#    Order: existing BW_SESSION env → cached session in Keychain → full
+#    unlock (Keychain master pw → BW_PASSWORD env). A valid bw session key
+#    stays valid for a long time, so the cached path avoids the flaky
+#    headless unlock on every tick.
 # ---------------------------------------------------------------------------
-if [ -z "${BW_SESSION:-}" ] || ! bw status --session "$BW_SESSION" 2>/dev/null | grep -q '"status":"unlocked"'; then
+session_valid() { bw status --session "$1" 2>/dev/null | grep -q '"status":"unlocked"'; }
+
+if [ -z "${BW_SESSION:-}" ] || ! session_valid "$BW_SESSION"; then
+  BW_SESSION=""
+  if security find-generic-password -s leoncito-bw-session >/dev/null 2>&1; then
+    BW_SESSION="$(security find-generic-password -s leoncito-bw-session -w || true)"
+  fi
+fi
+
+if [ -z "$BW_SESSION" ] || ! session_valid "$BW_SESSION"; then
   BW_SESSION=""
   if security find-generic-password -s leoncito-bitwarden >/dev/null 2>&1; then
     BW_PASSWORD="$(security find-generic-password -s leoncito-bitwarden -w)"
     # script(1) gives bw a pseudo-TTY: under launchd/cron stdin is not a TTY
-    # and bw's interactive unlock aborts (rc=1, empty key). Clean the pty
-    # noise (CR, ANSI, backspaces) off the captured session key.
-    BW_SESSION="$(script -q /dev/null bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null \
-      | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr -d '\b\n')"
+    # and bw's interactive unlock aborts (rc=1, empty key). The pty also
+    # pads/echoes noise around the session key — extract just the base64
+    # token (last long run) rather than joining everything. The unlock is
+    # occasionally flaky headless → retry.
+    for _ in 1 2 3; do
+      # '|| true': an empty capture makes grep exit 1, which would otherwise
+      # kill the script via set -e before the retry ever runs.
+      BW_SESSION="$(script -q /dev/null bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null \
+        | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr -d '\b' \
+        | grep -Eo '[A-Za-z0-9+/=]{40,}' | tail -1 || true)"
+      if [ -n "$BW_SESSION" ] && session_valid "$BW_SESSION"; then break; fi
+      BW_SESSION=""
+      sleep 2
+    done
     unset BW_PASSWORD
   elif [ -n "${BW_PASSWORD:-}" ]; then
-    BW_SESSION="$(bw unlock --passwordenv BW_PASSWORD --raw)"
+    BW_SESSION="$(bw unlock --passwordenv BW_PASSWORD --raw || true)"
+  fi
+  # Refresh the cached session so subsequent ticks skip unlocking entirely.
+  if [ -n "$BW_SESSION" ]; then
+    security delete-generic-password -s leoncito-bw-session >/dev/null 2>&1 || true
+    security add-generic-password -s leoncito-bw-session -a "$USER" -w "$BW_SESSION" -A
   fi
 fi
+
 [ -n "$BW_SESSION" ] || { log "no unlocked Bitwarden session available"; exit 4; }
 # This bw build exits 0 with empty output even on an invalid session —
 # verify the session actually unlocked (a mistyped Keychain password
 # surfaces here as 'decryption operation failed').
-if ! bw status --session "$BW_SESSION" 2>/dev/null | grep -q '"status":"unlocked"'; then
-  log "keychain password rejected by Bitwarden — run ~/.leoncito-fetcher/finish-keychain.sh"
+if ! session_valid "$BW_SESSION"; then
+  log "Bitwarden session invalid and unlock failed — run ~/.leoncito-fetcher/finish-keychain.sh"
   exit 4
 fi
 
-# The CLI serves a local cache — sync before any get, every run.
+# The CLI serves a local cache — sync before any read, every run.
 bw sync --session "$BW_SESSION" >/dev/null
 
-bwget() { # bwget <field> <item>
-  bw get "$1" "$2" --session "$BW_SESSION"
+# NOTE: this bw build's `bw get <field> <item>` name-lookup can answer
+# "Not found." for items that `bw list items` clearly shows — so resolve
+# everything from one list call via jq instead.
+ITEMS_JSON="$(bw list items --session "$BW_SESSION")"
+jget() { # jget <item-name> <login-field>
+  printf '%s' "$ITEMS_JSON" \
+    | jq -r --arg n "$1" --arg f "$2" \
+        '.[] | select(.name == $n) | .login[$f] // empty' | head -1
+}
+# Some vault items keep the value in the other login field — accept either.
+jfirst() { # jfirst <item-name> <preferred-field> <fallback-field>
+  local v
+  v="$(jget "$1" "$2")"
+  if [ -z "$v" ] && [ -n "${3:-}" ]; then v="$(jget "$1" "$3")"; fi
+  printf '%s' "$v"
 }
 
 # Round-trip sanity: all three items must resolve before touching the VM.
-EMAIL="$(bwget username "$LIBRE_EMAIL_ITEM")"   || { log "bw item missing: $LIBRE_EMAIL_ITEM"; exit 4; }
-PASS="$(bwget password "$LIBRE_PASSWORD_ITEM")" || { log "bw item missing: $LIBRE_PASSWORD_ITEM"; exit 4; }
-TOKEN="$(bwget password "$TOKEN_ITEM")"         || { log "bw item missing: $TOKEN_ITEM"; exit 4; }
+EMAIL="$(jfirst "$LIBRE_EMAIL_ITEM" username password)"     || { log "bw item missing: $LIBRE_EMAIL_ITEM"; exit 4; }
+PASS="$(jfirst "$LIBRE_PASSWORD_ITEM" password username)"   || { log "bw item missing: $LIBRE_PASSWORD_ITEM"; exit 4; }
+TOKEN="$(jget "$TOKEN_ITEM" password)"                      || { log "bw item missing: $TOKEN_ITEM"; exit 4; }
 [ -n "$EMAIL" ] && [ -n "$PASS" ] && [ -n "$TOKEN" ] || { log "empty credential(s) from Bitwarden"; exit 4; }
+unset ITEMS_JSON
 
 # ---------------------------------------------------------------------------
 # 2. Ensure the Lima VM is running (idempotent).
@@ -83,10 +134,9 @@ fi
 # ---------------------------------------------------------------------------
 # 3. Sync code + ensure Python venv inside the VM (cheap no-ops when current).
 # ---------------------------------------------------------------------------
-limactl shell "$VM_NAME" -- mkdir -p ~/leoncito-fetcher/state
-for f in scripts/fetch_glucose.py requirements.txt home-fetcher/vm-job.sh; do
-  limactl cp "$REPO_DIR/freestyle-libre-dashboard/$f" \
-    "$VM_NAME:leoncito-fetcher/$(basename "$f")"
+limactl shell "$VM_NAME" -- sh -c 'mkdir -p ~/leoncito-fetcher/state'
+for f in fetch_glucose.py vm-job.sh; do
+  limactl cp "$SRC_DIR/$f" "$VM_NAME:leoncito-fetcher/$f"
 done
 limactl shell "$VM_NAME" -- bash -c '
   set -e
@@ -106,7 +156,7 @@ log "running fetch+ingest in VM $VM_NAME"
 set +e
 printf 'LIBRELINK_EMAIL=%s\nLIBRELINK_PASSWORD=%s\nINGEST_TOKEN=%s\nINGEST_URL=%s\n' \
   "$EMAIL" "$PASS" "$TOKEN" "$INGEST_URL" \
-| limactl shell "$VM_NAME" -- bash ~/leoncito-fetcher/vm-job.sh
+| limactl shell "$VM_NAME" -- bash -c 'cd ~/leoncito-fetcher && exec bash vm-job.sh'
 RC=$?
 set -e
 

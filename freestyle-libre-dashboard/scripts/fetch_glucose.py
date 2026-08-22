@@ -42,10 +42,11 @@ import json
 import logging
 import os
 import random
+import re
 import sys
 import tempfile
-import urllib.error
-import urllib.request
+
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -174,6 +175,10 @@ def push_to_ingest(url: str, token_env: str, payload: dict[str, Any]) -> int:
     fresh readings are sent — no authoritative copy lives on this machine.
     HTTPS-only: the payload is authenticated but not something to send in
     the clear.
+
+    Transport is curl, not urllib: Cloudflare Bot Fight Mode scores TLS
+    fingerprints and serves error 1010 to CPython's OpenSSL handshake
+    (verified live), while curl's passes.
     """
     if not url.startswith("https://"):
         log.error("--ingest-url must be https:// (got %r)", url)
@@ -184,29 +189,38 @@ def push_to_ingest(url: str, token_env: str, payload: dict[str, Any]) -> int:
         return 3
 
     body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    cmd = [
+        "curl", "-sS", "--max-time", "30", "-X", "POST", url,
+        "-H", f"Authorization: Bearer {token}",
+        "-H", "Content-Type: application/json",
+        "-A", "leoncito-fetcher/1.0",
+        "--data-binary", "@-", "-w", "\nLEONCITO_HTTP:%{http_code}",
+    ]
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            log.info("ingest %s: %s", resp.status,
-                     {k: result.get(k) for k in ("total_readings", "accepted_readings",
-                                                 "dropped_readings") if k in result})
-            return 0
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:300]
-        log.error("ingest failed: HTTP %s: %s", e.code, detail)
-        return 3
+        proc = subprocess.run(cmd, input=body, capture_output=True, timeout=45)
     except Exception as e:  # pylint: disable=broad-except
-        log.error("ingest failed: %s", e)
+        log.error("ingest failed (curl): %s", e)
         return 3
+    out = proc.stdout.decode("utf-8", errors="replace")
+    if proc.returncode != 0:
+        log.error("ingest failed: curl rc=%s %s",
+                  proc.returncode, proc.stderr.decode("utf-8", errors="replace")[:200])
+        return 3
+    m = re.search(r"LEONCITO_HTTP:(\d+)\s*$", out)
+    code = m.group(1) if m else "?"
+    resp_body = out[:m.start()] if m else out
+    try:
+        result = json.loads(resp_body or "{}")
+    except json.JSONDecodeError:
+        result = {}
+    if code == "200":
+        log.info("ingest 200: %s",
+                 {k: result.get(k) for k in ("total_readings", "accepted_readings",
+                                             "dropped_readings") if k in result})
+        return 0
+    log.error("ingest failed: HTTP %s: %s", code,
+              (resp_body or proc.stderr.decode("utf-8", errors="replace"))[:300])
+    return 3
 
 
 def reading_dict(value: float, timestamp: datetime) -> dict[str, Any]:

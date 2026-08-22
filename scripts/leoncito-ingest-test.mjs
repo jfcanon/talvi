@@ -141,7 +141,7 @@ test('ingest: invalid JSON body → 400; oversized Content-Length → 413', asyn
   assert.equal(res.status, 413);
 });
 
-test('regression: /api/glucose serves and normalizes a legacy UTC store', async () => {
+test('regression: /api/glucose is Clerk-gated (401 without a session) since #199', async () => {
   const env = envWith({
     'glucose.json': JSON.stringify({
       readings: [{ timestamp: '2026-08-21T12:00:00Z', glucose: 140, unit: 'mg/dL' }],
@@ -152,9 +152,7 @@ test('regression: /api/glucose serves and normalizes a legacy UTC store', async 
     }),
   });
   const res = await worker.fetch(req('/api/glucose'), env);
-  assert.equal(res.status, 200);
-  const data = await res.json();
-  assert.equal(data.readings[0].timestamp, '2026-08-21T09:00:00-03:00');
+  assert.equal(res.status, 401); // signed-in browser supplies the session
 });
 
 test('regression: /health OK, unknown path 404', async () => {
