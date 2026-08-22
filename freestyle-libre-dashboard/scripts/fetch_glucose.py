@@ -223,6 +223,26 @@ def push_to_ingest(url: str, token_env: str, payload: dict[str, Any]) -> int:
     return 3
 
 
+# LibreLinkUp returns two clocks per measurement: `Timestamp` is the ACCOUNT's
+# local wall clock (naive, no tz — Buenos Aires for this account) and
+# `FactoryTimestamp` is UTC. pylibrelinkup only tz-tags factory_timestamp.
+# Treating the naive local `timestamp` as UTC shifted every reading 3 h early
+# (dashboard showed 06:51 PM for a 21:51 reading, and "today" stayed empty
+# until 03:00). Always derive UTC from factory_timestamp; if a model lacks it,
+# interpret the naive value as ART (fixed GMT-3, no DST).
+ACCOUNT_TZ = timezone(timedelta(hours=-3))
+
+
+def measurement_utc(m: Any) -> datetime:
+    ft = getattr(m, "factory_timestamp", None)
+    if isinstance(ft, datetime):
+        return (ft if ft.tzinfo else ft.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+    ts = m.timestamp
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=ACCOUNT_TZ)
+    return ts.astimezone(timezone.utc)
+
+
 def reading_dict(value: float, timestamp: datetime) -> dict[str, Any]:
     return {
         "timestamp": timestamp.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -327,23 +347,23 @@ def fetch_live(data_path: Path, region: str | None, max_days: int,
         return 2
 
     for m in graph:
-        ts = m.timestamp
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+        ts = measurement_utc(m)
         if validate_reading(float(m.value_in_mg_per_dl), ts.isoformat()):
             fresh.append(reading_dict(m.value_in_mg_per_dl, ts))
 
     if latest is not None and latest.value_in_mg_per_dl:
         latest_value = float(latest.value_in_mg_per_dl)
-        latest_ts = latest.timestamp
+        latest_ts = measurement_utc(latest)
+        # The graph endpoint is ~15-min resolution and lags; `latest` is the
+        # live sensor value. Include it so "Last reading" tracks the app.
+        if validate_reading(latest_value, latest_ts.isoformat()):
+            fresh.append(reading_dict(latest_value, latest_ts))
         if latest.trend is not None:
             trend = TREND_LABEL.get(latest.trend.name, latest.trend.name)
 
     # Process logbook events
     for e in logbook:
-        ts = e.timestamp
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+        ts = measurement_utc(e)
         event_type = EVENT_TYPE_LABEL.get(e.type.name if hasattr(e.type, 'name') else str(e.type), str(e.type).lower())
         events.append({
             "timestamp": ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
