@@ -61,18 +61,23 @@ fi
 if [ -z "$BW_SESSION" ] || ! session_valid "$BW_SESSION"; then
   BW_SESSION=""
   if security find-generic-password -s leoncito-bitwarden >/dev/null 2>&1; then
-    BW_PASSWORD="$(security find-generic-password -s leoncito-bitwarden -w)"
-    # script(1) gives bw a pseudo-TTY: under launchd/cron stdin is not a TTY
-    # and bw's interactive unlock aborts (rc=1, empty key). The pty also
-    # pads/echoes noise around the session key — extract just the base64
-    # token (last long run) rather than joining everything. The unlock is
-    # occasionally flaky headless → retry.
+    # export: --passwordenv reads it from the CHILD env; an unexported var is invisible to bw.
+    export BW_PASSWORD="$(security find-generic-password -s leoncito-bitwarden -w)"
+    # `bw unlock --passwordenv` is non-interactive and works with stdin
+    # closed (launchd/cron) — try it directly first. Fall back to a
+    # script(1) pseudo-TTY only if that yields nothing. NOTE: the pty path
+    # prints a literal "^D" right before the key; strip it BEFORE extracting
+    # the base64 run, otherwise the captured key gains a leading "D" and is
+    # silently invalid (this is what broke every tick after the cached
+    # session got locked on 2026-08-21 22:36).
     for _ in 1 2 3; do
+      BW_SESSION="$(bw unlock --passwordenv BW_PASSWORD --raw </dev/null 2>/dev/null || true)"
+      if [ -n "$BW_SESSION" ] && session_valid "$BW_SESSION"; then break; fi
       # '|| true': an empty capture makes grep exit 1, which would otherwise
       # kill the script via set -e before the retry ever runs.
       BW_SESSION="$(script -q /dev/null bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null \
-        | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr -d '\b' \
-        | grep -Eo '[A-Za-z0-9+/=]{40,}' | tail -1 || true)"
+        | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr -d '\b' | sed 's/\^D//g' \
+        | grep -Eo '[A-Za-z0-9+/]{60,}={0,2}' | tail -1 || true)"
       if [ -n "$BW_SESSION" ] && session_valid "$BW_SESSION"; then break; fi
       BW_SESSION=""
       sleep 2

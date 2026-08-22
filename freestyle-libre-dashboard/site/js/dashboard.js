@@ -117,10 +117,15 @@ function weekKey(d) {
 
 // Buenos Aires (GMT-3, fixed, no DST) start of today as epoch ms.
 // Timestamps in the store are ISO -03:00 wall-clock strings.
+// Must be computed purely in UTC arithmetic: the previous version shifted
+// Date.now() by -3 h and then read LOCAL getters, so on a device already in
+// GMT-3 the shift was applied twice and "today" pointed at yesterday between
+// 00:00 and 03:00 ART (and at wrong days on any other device timezone).
+const ART_OFFSET_MS = 3 * 60 * 60 * 1000;
 function startOfTodayArtMs() {
-  const nowUtc = Date.now();
-  const artNow = new Date(nowUtc - 3 * 60 * 60 * 1000); // UTC -> ART
-  return new Date(artNow.getFullYear(), artNow.getMonth(), artNow.getDate()).getTime();
+  const artWall = new Date(Date.now() - ART_OFFSET_MS); // ART wall clock, read via UTC getters
+  const midnightArtAsUtc = Date.UTC(artWall.getUTCFullYear(), artWall.getUTCMonth(), artWall.getUTCDate());
+  return midnightArtAsUtc + ART_OFFSET_MS; // 00:00 ART expressed as a real epoch
 }
 
 function accentRGB() {
