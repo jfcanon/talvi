@@ -48,15 +48,21 @@ if security find-generic-password -s leoncito-bitwarden >/dev/null 2>&1; then
 else
   echo "   Enter the Bitwarden MASTER PASSWORD (input hidden; stored in your login keychain):"
   read -rs BW_PW
-  printf '%s' "$BW_PW" | security add-generic-password \
-    -s leoncito-bitwarden -a "$USER" -w -U
+  # Verify BEFORE storing — a typo here silently breaks every scheduled run.
+  if ! BW_PASSWORD="$BW_PW" script -q /dev/null bw unlock --passwordenv BW_PASSWORD --raw >/dev/null 2>&1; then
+    echo "   ✗ that password did not unlock the vault — nothing stored"; exit 1
+  fi
+  # -w takes the password as an ARGUMENT (never pipe it); -A trusts all local
+  # apps so the launchd agent can read the item headlessly.
+  security add-generic-password -s leoncito-bitwarden -a "$USER" -w "$BW_PW" -A
   unset BW_PW
-  echo "   stored."
+  echo "   stored (verified)."
 fi
 
 echo "== 4/5 Required Bitwarden items present?"
 BW_PASSWORD="$(security find-generic-password -s leoncito-bitwarden -w)"
-BW_SESSION="$(bw unlock --passwordenv BW_PASSWORD --raw)"
+BW_SESSION="$(BW_PASSWORD="$(security find-generic-password -s leoncito-bitwarden -w)" \
+  script -q /dev/null bw unlock --passwordenv BW_PASSWORD --raw 2>/dev/null | tr -d '\r')"
 unset BW_PASSWORD
 bw sync --session "$BW_SESSION" >/dev/null
 while IFS='|' read -r field item; do

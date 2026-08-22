@@ -1,9 +1,7 @@
-# Blue release — DECOMMISSIONED 2026-08-10. talvi2.ygdcbtmc4u.uk is legacy and
-# deprecated; the serving surface (Worker + route + DNS) was removed when the
-# Clerk login re-accommodated onto app.ygdcbtmc4u.uk (s7/talvi-blue-auth-
-# handover.md). What remains here is the blue STORAGE (D1 talvi-blue-meta, R2
-# talvi-blue-drop + lifecycle), kept deliberately — see the note at the bottom
-# of this file. Green (talvi.ygdcbtmc4u.uk, root main.tf) is untouched.
+# DECOMMISSIONED 2026-08-21: talvi2.ygdcbtmc4u.uk (blue release) fully removed.
+# Storage (D1 talvi-blue-meta, R2 talvi-blue-drop) destroyed 2026-08-21.
+# Serving surface removed 2026-08-10; this file preserved for reference only.
+# Green (talvi.ygdcbtmc4u.uk, root main.tf) is untouched.
 terraform {
   required_providers {
     cloudflare = {
@@ -56,64 +54,10 @@ variable "clerk_jwt_key" {
   type = string
 }
 
-# ---------------------------------------------------------------------------
-# Blue storage — deliberately separate from green (blueprint L4). New names,
-# so nothing is renamed or replaced.
-# ---------------------------------------------------------------------------
-
-resource "cloudflare_d1_database" "talvi_blue_meta" {
-  account_id       = var.cloudflare_account_id
-  name             = "talvi-blue-meta"
-  read_replication = { mode = "disabled" }
-}
-
-resource "cloudflare_r2_bucket" "talvi_blue_drop" {
-  account_id = var.cloudflare_account_id
-  name       = "talvi-blue-drop"
-  location   = "enam"
-}
-
-# Same lifecycle shape as green (RUNBOOK §4): one rule per retention tier,
-# scoped by key prefix, declared in LEXICAL order (d1/, d30/, d7/, d90/) or
-# the provider produces a perpetual "1 to change" plan. max_age is in SECONDS.
-resource "cloudflare_r2_bucket_lifecycle" "talvi_blue_drop_expiry" {
-  account_id  = var.cloudflare_account_id
-  bucket_name = cloudflare_r2_bucket.talvi_blue_drop.name
-  rules = [
-    {
-      id         = "expire-d1"
-      enabled    = true
-      conditions = { prefix = "d1/" }
-      delete_objects_transition = {
-        condition = { max_age = 1 * 24 * 60 * 60, type = "Age" } # 86400
-      }
-    },
-    {
-      id         = "expire-d30"
-      enabled    = true
-      conditions = { prefix = "d30/" }
-      delete_objects_transition = {
-        condition = { max_age = 30 * 24 * 60 * 60, type = "Age" } # 2592000
-      }
-    },
-    {
-      id         = "expire-d7"
-      enabled    = true
-      conditions = { prefix = "d7/" }
-      delete_objects_transition = {
-        condition = { max_age = 7 * 24 * 60 * 60, type = "Age" } # 604800
-      }
-    },
-    {
-      id         = "expire-d90"
-      enabled    = true
-      conditions = { prefix = "d90/" }
-      delete_objects_transition = {
-        condition = { max_age = 90 * 24 * 60 * 60, type = "Age" } # 7776000 — hard cap
-      }
-    },
-  ]
-}
+# REMOVED 2026-08-21: Blue storage resources (D1 talvi-blue-meta, R2 talvi-blue-drop, lifecycle)
+# were destroyed as part of full blue decommissioning.
+# Data inventory: 7 expired drop metadata rows + empty R2 bucket.
+# Terraform apply destroys these resources via the state key talvi/blue/terraform.tfstate.
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

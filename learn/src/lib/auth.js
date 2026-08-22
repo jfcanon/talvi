@@ -1,5 +1,5 @@
 // Clerk auth for talvi learn — verbatim port of the relay/hub in-worker gate
-// (which itself ports the blue release, s7/talvi-blue-auth-handover.md).
+// (blue release pattern decommissioned 2026-08-21; this is the standard auth gate).
 //
 // PR3 (NID-98) is a serial dependency that had not merged when this PR was
 // opened; per the learn-6-ui precedent (#149) the gate is carried inside this
