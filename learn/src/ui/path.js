@@ -28,6 +28,33 @@ export function pathPage({ player, lessons, heartsEnabled }) {
   const next = rail.find((n) => n.status === "active");
   const nextLabel = next ? next.title : "all nodes mastered — the path is complete";
 
+  // Welcome modal (shown once via localStorage in client.js)
+  const welcomeModal = `
+    <div class="welcome-modal" id="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <div class="welcome-modal__content">
+        <h2 id="welcome-title">Welcome to Tribunal Learn</h2>
+        <p>Master the machinery of the Living Tribunal — one 2-minute lesson at a time.</p>
+        <ul class="welcome-modal__features">
+          <li>24 lessons, 4 units, 0 fluff</li>
+          <li>Every fact cited to source</li>
+          <li>XP, streaks, checkpoints</li>
+        </ul>
+        <button type="button" class="btn welcome-modal__cta" data-action="onboard-start">Start Learning</button>
+      </div>
+    </div>
+    <div class="welcome-modal__backdrop" id="welcome-backdrop" data-action="onboard-start"></div>
+  `;
+
+  // Guided tour: floating "Begin Lesson" button for first lesson
+  const guidedTourBtn = `
+    <button type="button" class="guided-tour__btn" id="guided-tour-btn" data-action="begin-lesson" data-href="${PREFIX}/lesson/u1l1" hidden>
+      Begin Lesson
+    </button>
+    <div class="guided-tour__tooltip" id="guided-tooltip" hidden>
+      Your first lesson: <strong>The 4 Core Terms You Need</strong>. Learn 4 terms, then quiz. ~2 min.
+    </div>
+  `;
+
   return (
     "<!doctype html><html lang=\"en\"><head>" +
     '<meta charset="utf-8">' +
@@ -41,6 +68,7 @@ export function pathPage({ player, lessons, heartsEnabled }) {
     "</head><body>" +
     '<div class="shell">' +
     header(player, xp, streak, heartsEnabled, "path") +
+    welcomeModal +
     '<main class="path" data-page="path">' +
     '<section class="path__intro">' +
     '<h1 class="path__title">Tribunal Learn</h1>' +
@@ -54,6 +82,7 @@ export function pathPage({ player, lessons, heartsEnabled }) {
     esc(nextLabel) +
     "</strong></p>" +
     "</main>" +
+    guidedTourBtn +
     "</div>" +
     '<script src="' +
     PREFIX +
@@ -120,6 +149,8 @@ function renderNode(node, activeId, seq) {
   }
 
   const cls = "node node--" + node.status + (node.id === activeId ? " node--front" : "");
+  // Add data attribute for guided tour targeting first lesson
+  const guidedAttr = node.id === "u1l1" ? ' data-guided="first-lesson"' : "";
   return (
     '<li class="node-wrap"><a class="' +
     cls +
@@ -127,7 +158,9 @@ function renderNode(node, activeId, seq) {
     href +
     '" aria-label="' +
     escAttr(node.title) +
-    '">' +
+    '"' +
+    guidedAttr +
+    ">" +
     inner +
     "</a></li>"
   );

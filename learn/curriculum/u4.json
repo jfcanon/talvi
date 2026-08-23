@@ -1,19 +1,19 @@
 {
   "unit": {
     "id": "u4",
-    "title": "Loop engineering",
-    "moc": "eval harness \u2014 instrumented gates & the seam \u2014 skills compounding \u2014 Multica: evaluate AND integrate \u2014 re-platform triggers"
+    "title": "Loop Engineering",
+    "moc": "eval harness \u2014 quality gates & the seam \u2014 skill compounding \u2014 the Multica test \u2014 when to rebuild vs extend"
   },
   "checkpoint": {
     "id": "c4",
     "title": "Checkpoint 4 \u2014 gate",
-    "prompt": "Order the top layers (eval harness before skills compounding) and name the re-platform triggers.",
+    "prompt": "Order the top layers (eval harness before skill compounding) and name the when-to-rebuild triggers.",
     "cite": "sidequests/harness-baseline/verdict.md:Top-5"
   },
   "lessons": [
     {
       "id": "u4l1",
-      "title": "The eval harness",
+      "title": "The Eval Harness: Auto-Testing Every AI Run",
       "skill": "eval-harness",
       "xp": 10,
       "facts": [
@@ -67,7 +67,7 @@
     },
     {
       "id": "u4l2",
-      "title": "Instrumented gates + the seam",
+      "title": "Quality Gates: Auto-Check Before You Ship",
       "skill": "gates",
       "xp": 10,
       "facts": [
@@ -111,12 +111,12 @@
     },
     {
       "id": "u4l3",
-      "title": "Skills compounding",
+      "title": "Skill Compounding: Turn Wins into Reusable Playbooks",
       "skill": "compounding",
       "xp": 10,
       "facts": [
         {
-          "text": "Skills compounding distills playbooks from the winning lanes' deliverable structure \u2014 but ONLY from \u22653 validated sittings per class, and only claims with confidence=verified + review_state=accepted feed it. Wrong lessons compound too, which is why the eval harness is sequenced BEFORE it.",
+          "text": "Skill compounding distills playbooks from the winning lanes' deliverable structure \u2014 but ONLY from \u22653 validated sittings per class, and only claims with confidence=verified + review_state=accepted feed it. Wrong lessons compound too, which is why the eval harness is sequenced BEFORE it.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 8"
         },
         {
@@ -124,7 +124,7 @@
           "cite": "sidequests/plan-convergence/verdict.md:Phase 3"
         },
         {
-          "text": "Skills compounding reads ONLY confidence=verified + review_state=accepted claims \u2014 the hard filter against compounding unvalidated lessons.",
+          "text": "Skill compounding reads ONLY confidence=verified + review_state=accepted claims \u2014 the hard filter against compounding unvalidated lessons.",
           "cite": "sidequests/_claims-schema.md:Lifecycle"
         }
       ],
@@ -143,7 +143,7 @@
         },
         {
           "type": "select",
-          "prompt": "Why is skills compounding sequenced AFTER the eval harness?",
+          "prompt": "Why is skill compounding sequenced AFTER the eval harness?",
           "options": [
             "it costs more",
             "wrong lessons compound too",
@@ -169,7 +169,7 @@
     },
     {
       "id": "u4l4",
-      "title": "Multica: evaluate AND integrate",
+      "title": "The Multica Test: Why We Evaluated It, What We Kept",
       "skill": "multica",
       "xp": 10,
       "facts": [
@@ -227,7 +227,7 @@
     },
     {
       "id": "u4l5",
-      "title": "Re-platform triggers",
+      "title": "When to Rebuild vs. When to Extend",
       "skill": "replatform",
       "xp": 10,
       "facts": [

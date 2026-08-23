@@ -215,3 +215,38 @@ export function completionPct(lessons) {
   }
   return total ? Math.round((done / total) * 100) : 0;
 }
+
+// Transform file-path citations to human-readable format
+export function formatCitation(cite) {
+  if (!cite) return "";
+  const map = {
+    "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary": "Tribunal Blueprint — Vocabulary",
+    "secondbrain/docs/HUB-BLUEPRINT.md:Thesis": "Tribunal Blueprint — Thesis",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a710 Verdict": "Tribunal Blueprint — \u00a710 Verdict",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope": "Tribunal Blueprint — Purpose & Scope",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop": "Tribunal Blueprint — Core Loop",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name": "Tribunal Blueprint — Name",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy": "Tribunal Blueprint — Routing Policy",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a76 Grounding": "Tribunal Blueprint — Grounding",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method": "Tribunal Blueprint — Convergence Method",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory": "Tribunal Blueprint — State & Memory",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state": "Tribunal Blueprint — Current State",
+    "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 8": "Tribunal Blueprint — \u00a79 Item 8",
+    "sidequests/harness-baseline/intake.md:Grounding": "Harness Baseline — Grounding",
+    "sidequests/harness-baseline/verdict.md:Component map": "Harness Baseline — Component Map",
+    "sidequests/harness-baseline/verdict.md:Live defects found": "Harness Baseline — Live Defects Found",
+    "sidequests/harness-baseline/verdict.md:Top-5": "Harness Baseline — Top-5",
+    "sidequests/harness-baseline/verdict.md:Ceiling": "Harness Baseline — Ceiling",
+    "sidequests/plan-convergence/verdict.md:Phase 0": "Plan Convergence — Phase 0",
+    "sidequests/plan-convergence/verdict.md:Phase 1": "Plan Convergence — Phase 1",
+    "sidequests/plan-convergence/verdict.md:Phase 2": "Plan Convergence — Phase 2",
+    "sidequests/plan-convergence/verdict.md:Phase 3": "Plan Convergence — Phase 3",
+    "sidequests/plan-convergence/verdict.md:Thread B": "Plan Convergence — Thread B",
+    "sidequests/plan-convergence/verdict.md:Dissents": "Plan Convergence — Dissents",
+    "sidequests/multica-eval/verdict.md:1. License gate": "Multica Eval — License Gate",
+    "sidequests/multica-eval/verdict.md:5. Recommendation": "Multica Eval — Recommendation",
+    "sidequests/_claims-schema.md:Record schema": "Claims Schema — Record Schema",
+    "sidequests/_claims-schema.md:Lifecycle": "Claims Schema — Lifecycle",
+  };
+  return map[cite] || cite;
+}
