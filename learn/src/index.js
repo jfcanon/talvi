@@ -37,12 +37,13 @@ const HEARTS_ENABLED = true;
 
 // Same header set the hub uses. The CSP has no inline allowances — which is
 // WHY css/js are files at /learn/s.css and /learn/s.js, never inlined.
+// Cloudflare Insights beacon is auto-injected; allow its domain (first-party analytics).
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "content-security-policy":
-    "default-src 'none'; style-src 'self'; script-src 'self'; " +
-    "img-src 'self' data:; connect-src 'self'; form-action 'none'; " +
-    "frame-ancestors 'none'; base-uri 'none'",
+    "default-src 'none'; style-src 'self'; script-src 'self' https://static.cloudflareinsights.com; " +
+    "img-src 'self' data:; connect-src 'self' https://static.cloudflareinsights.com; " +
+    "form-action 'none'; frame-ancestors 'none'; base-uri 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
   "cache-control": "no-store",
