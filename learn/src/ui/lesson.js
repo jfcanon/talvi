@@ -6,6 +6,7 @@
 import { ASSET_VERSION } from "../generated/assets.js";
 import { esc, escAttr, dataJson } from "./html.js";
 import { PREFIX } from "../prefix.js";
+import { formatCitation } from "../lib/curriculum.js";
 
 export function lessonPage({ lesson, player, heartsEnabled, position }) {
   const xp = typeof player.xp === "number" ? player.xp : 0;
@@ -19,7 +20,7 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
         '<article class="fact"><p>' +
         esc(f.text) +
         '</p><cite>' +
-        esc(f.cite) +
+        esc(formatCitation(f.cite)) +
         "</cite></article>",
     )
     .join("");

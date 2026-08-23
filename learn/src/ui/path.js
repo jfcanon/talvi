@@ -28,18 +28,23 @@ export function pathPage({ player, lessons, heartsEnabled }) {
   const next = rail.find((n) => n.status === "active");
   const nextLabel = next ? next.title : "all nodes mastered — the path is complete";
 
-  // Welcome modal (shown once via localStorage in client.js)
+// Welcome modal (shown once via localStorage in client.js) — visually striking, friendly
   const welcomeModal = `
     <div class="welcome-modal" id="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
       <div class="welcome-modal__content">
+        <div class="welcome-modal__icon" aria-hidden="true">⚖️</div>
         <h2 id="welcome-title">Welcome to Tribunal Learn</h2>
-        <p>Master the machinery of the Living Tribunal — one 2-minute lesson at a time.</p>
+        <p class="welcome-modal__tagline">Master the machinery of the Living Tribunal — one 2-minute lesson at a time.</p>
         <ul class="welcome-modal__features">
-          <li>24 lessons, 4 units, 0 fluff</li>
-          <li>Every fact cited to source</li>
-          <li>XP, streaks, checkpoints</li>
+          <li><span class="welcome-modal__feature-icon">📚</span><span>24 bite-sized lessons across 4 units</span></li>
+          <li><span class="welcome-modal__feature-icon">🔗</span><span>Every fact cited to its source</span></li>
+          <li><span class="welcome-modal__feature-icon">🏆</span><span>XP, streaks & checkpoints to track progress</span></li>
         </ul>
-        <button type="button" class="btn welcome-modal__cta" data-action="onboard-start">Start Learning</button>
+        <button type="button" class="btn welcome-modal__cta" data-action="onboard-start">
+          <span class="welcome-modal__cta-text">Start Learning</span>
+          <span class="welcome-modal__cta-arrow" aria-hidden="true">→</span>
+        </button>
+        <p class="welcome-modal__hint">No fluff. Just the machinery, explained.</p>
       </div>
     </div>
     <div class="welcome-modal__backdrop" id="welcome-backdrop" data-action="onboard-start"></div>
