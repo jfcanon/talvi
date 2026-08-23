@@ -14,10 +14,16 @@ import { createClerkClient } from "@clerk/backend";
 // session's authorizedParties rule, fixed 2026-08-09: bare hosts never match
 // the JWT's `azp` claim, which carries the scheme).
 //
-// MUST be full origins (scheme + host). The relay is the file drop on
-// app.ygdcbtmc4u.uk/relay; the hub worker owns `/*`, chat is session-free by
-// contract, and cinto keeps its own gate — so this list has exactly one entry.
-const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
+// MUST be full origins (scheme + host). Clerk session tokens carry the
+// instance home_url (https://talvi.ygdcbtmc4u.uk) or the auth domain
+// (https://accounts.ygdcbtmc4u.uk) in their `azp` claim — NOT the app host
+// the visitor lands on. All three origins must be accepted or every real
+// session bounces into the sign-in redirect loop (NID-410 root cause).
+const AUTHORIZED_PARTIES = [
+  "https://app.ygdcbtmc4u.uk",
+  "https://talvi.ygdcbtmc4u.uk",
+  "https://accounts.ygdcbtmc4u.uk",
+];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
 // open the write path. A misconfigured deploy should refuse uploads loudly,

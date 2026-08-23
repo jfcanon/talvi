@@ -10,10 +10,16 @@
 // learn page, no Clerk API call per request, no CSP change.
 import { createClerkClient } from "@clerk/backend";
 
-// The host this worker answers for. authenticateRequest rejects a session
-// cookie minted for any other party — the cookie-replay guard (the azp rule:
-// bare hosts never match the JWT's `azp` claim, which carries the scheme).
-const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
+// MUST be full origins (scheme + host). Clerk session tokens carry the
+// instance home_url (https://talvi.ygdcbtmc4u.uk) or the auth domain
+// (https://accounts.ygdcbtmc4u.uk) in their `azp` claim — NOT the app host
+// the visitor lands on. All three origins must be accepted or every real
+// session bounces into the sign-in redirect loop (NID-410 root cause).
+const AUTHORIZED_PARTIES = [
+  "https://app.ygdcbtmc4u.uk",
+  "https://talvi.ygdcbtmc4u.uk",
+  "https://accounts.ygdcbtmc4u.uk",
+];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
 // open anything. A misconfigured deploy refuses access loudly, never silently
