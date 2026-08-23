@@ -13,9 +13,16 @@
 // sign-in itself lives at the app root /sign-in).
 import { createClerkClient } from "@clerk/backend";
 
-// The host this worker answers for — the cookie-replay guard (azp must be an
-// allowed party). Chat mounts at app.ygdcbtmc4u.uk/chat.
-const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
+// MUST be full origins (scheme + host). Clerk session tokens carry the
+// instance home_url (https://talvi.ygdcbtmc4u.uk) or the auth domain
+// (https://accounts.ygdcbtmc4u.uk) in their `azp` claim — NOT the app host
+// the visitor lands on. All three origins must be accepted or every real
+// session bounces into the sign-in redirect loop (NID-410 root cause).
+const AUTHORIZED_PARTIES = [
+  "https://app.ygdcbtmc4u.uk",
+  "https://talvi.ygdcbtmc4u.uk",
+  "https://accounts.ygdcbtmc4u.uk",
+];
 
 function getClerkClient(env) {
   return createClerkClient({

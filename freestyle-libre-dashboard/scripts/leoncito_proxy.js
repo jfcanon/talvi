@@ -13,7 +13,15 @@
 // (encodeURIComponent preserves the original path+query for post-login bounce).
 // The routes (app.ygdcbtmc4u.uk/leoncito and /leoncito/*) are more specific
 // than the hub's `/*` fallback, so they win without touching the hub.
-const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
+// Clerk session tokens carry the instance home_url (https://talvi.ygdcbtmc4u.uk)
+// or the auth domain (https://accounts.ygdcbtmc4u.uk) in their `azp` claim —
+// NOT the app host the visitor lands on. All three origins must be accepted
+// (NID-410 root cause of sign-in redirect loop).
+const AUTHORIZED_PARTIES = [
+  "https://app.ygdcbtmc4u.uk",
+  "https://talvi.ygdcbtmc4u.uk",
+  "https://accounts.ygdcbtmc4u.uk",
+];
 
 function b64urlToBytes(s) {
   const b64 = s.replace(/-/g, "+").replace(/_/g, "/");

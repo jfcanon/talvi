@@ -26,7 +26,15 @@ const MAX_INGEST_EVENTS = 2000;
 // binds), plus the azp/exp checks authenticateRequest would do. Fail-closed:
 // a missing binding or any verification error reads as unauthenticated.
 // NID-400 owns gating /api/glucose + /api/status; they can reuse this helper.
-const AUTHORIZED_PARTIES = ['https://app.ygdcbtmc4u.uk'];
+// Clerk session tokens carry the instance home_url (https://talvi.ygdcbtmc4u.uk)
+// or the auth domain (https://accounts.ygdcbtmc4u.uk) in their `azp` claim —
+// NOT the app host the visitor lands on. All three origins must be accepted
+// (NID-410 root cause of sign-in redirect loop).
+const AUTHORIZED_PARTIES = [
+  'https://app.ygdcbtmc4u.uk',
+  'https://talvi.ygdcbtmc4u.uk',
+  'https://accounts.ygdcbtmc4u.uk',
+];
 
 function b64urlToBytes(s) {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
