@@ -1,5 +1,5 @@
-// Clerk auth for the relay — ported from the blue release (talvi-blue-auth-
-// handover.md, s7). Server-side session verification only: the __session
+// Clerk auth for the relay — in-worker session verification (blue pattern origin,
+// decommissioned 2026-08-21). Server-side session verification only: the __session
 // cookie is a Clerk JWT, verified locally with @clerk/backend — no clerk-js on
 // any page, no Clerk API call per request, no CSP change anywhere. The sign-in
 // itself lives at the app ROOT (the hub worker serves /sign-in); this worker
@@ -14,10 +14,16 @@ import { createClerkClient } from "@clerk/backend";
 // session's authorizedParties rule, fixed 2026-08-09: bare hosts never match
 // the JWT's `azp` claim, which carries the scheme).
 //
-// MUST be full origins (scheme + host). The relay is the file drop on
-// app.ygdcbtmc4u.uk/relay; the hub worker owns `/*`, chat is session-free by
-// contract, and cinto keeps its own gate — so this list has exactly one entry.
-const AUTHORIZED_PARTIES = ["https://app.ygdcbtmc4u.uk"];
+// MUST be full origins (scheme + host). Clerk session tokens carry the
+// instance home_url (https://talvi.ygdcbtmc4u.uk) or the auth domain
+// (https://accounts.ygdcbtmc4u.uk) in their `azp` claim — NOT the app host
+// the visitor lands on. All three origins must be accepted or every real
+// session bounces into the sign-in redirect loop (NID-410 root cause).
+const AUTHORIZED_PARTIES = [
+  "https://app.ygdcbtmc4u.uk",
+  "https://talvi.ygdcbtmc4u.uk",
+  "https://accounts.ygdcbtmc4u.uk",
+];
 
 // Fail-closed: if the Clerk bindings are missing the app must NOT silently
 // open the write path. A misconfigured deploy should refuse uploads loudly,

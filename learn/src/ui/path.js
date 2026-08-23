@@ -28,7 +28,7 @@ export function pathPage({ player, lessons, heartsEnabled }) {
   const next = rail.find((n) => n.status === "active");
   const nextLabel = next ? next.title : "all nodes mastered — the path is complete";
 
-  // Welcome modal (shown once via localStorage in client.js) — visually striking, friendly
+// Welcome modal (shown once via localStorage in client.js) — visually striking, friendly
   const welcomeModal = `
     <div class="welcome-modal" id="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
       <div class="welcome-modal__content">

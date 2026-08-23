@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Leoncito's live glucose dashboard — Freestyle Libre 2 sensor data for a diabetic cat.">
+  <!-- Glucose API endpoint - override via meta tag for Worker deployment -->
+  <meta name="glucose-api" content="https://app.ygdcbtmc4u.uk/api/glucose">
+  <!-- Insulin tracker API (NID-402) - same Worker, Clerk-gated -->
+  <meta name="insulin-api" content="https://app.ygdcbtmc4u.uk/api/insulin">
+  <!-- Base path: the app lives at app.ygdcbtmc4u.uk/leoncito/, so relative
+       asset URLs (css/, js/, data/) must resolve under /leoncito/ — not the
+       origin root. The proxy Worker also 302s bare /leoncito → /leoncito/,
+       but the <base> makes the page work even before that redirect lands. -->
+  <base href="/leoncito/">
+  <title>Leoncito's Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Date adapter required by Chart.js v4 time scale — without it the chart
+       throws "This method is not implemented: Check that a complete date
+       adapter is provided". Bundle includes date-fns. -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>Leoncito's Dashboard</h1>
+    <p class="tagline">Freestyle Libre 2 &middot; diabetic cat glucose monitor</p>
+  </header>
+
+  <main>
+    <section class="metrics" aria-label="Current glucose metrics">
+      <div class="card metric-current">
+        <span class="metric-label">Current glucose</span>
+        <span class="metric-value" id="current-glucose" aria-live="polite">—</span>
+        <span class="metric-unit" id="current-unit">mg/dL</span>
+        <span class="metric-status" id="current-status"></span>
+      </div>
+      <div class="card">
+        <span class="metric-label">Trend</span>
+        <span class="metric-value metric-value--sm" id="current-trend">—</span>
+      </div>
+      <div class="card">
+        <span class="metric-label">Sensor</span>
+        <span class="metric-value metric-value--sm" id="sensor-id">—</span>
+      </div>
+      <div class="card">
+        <span class="metric-label">Last reading</span>
+        <span class="metric-value metric-value--sm" id="last-updated">—</span>
+      </div>
+      <!-- F1: Rate of Change -->
+      <div class="card">
+        <span class="metric-label">Rate of Change</span>
+        <span class="metric-value metric-value--sm" id="roc-value">—</span>
+        <span class="metric-unit" id="roc-unit">mg/dL/hr</span>
+        <span class="metric-value metric-value--sm" id="roc-arrow">—</span>
+      </div>
+    </section>
+
+    <!-- F2: Time in Range Summary -->
+    <section class="card tir-summary" aria-label="Time in range summary">
+      <h2>Time in Range (today)</h2>
+      <div class="tir-grid">
+        <div class="tir-item">
+          <span class="tir-label">Target (90–270)</span>
+          <span class="tir-value" id="tir-target">—</span>
+        </div>
+        <div class="tir-item">
+          <span class="tir-label">Low (70–90)</span>
+          <span class="tir-value" id="tir-low">—</span>
+        </div>
+        <div class="tir-item">
+          <span class="tir-label">Hypo (<70)</span>
+          <span class="tir-value" id="tir-hypo">—</span>
+        </div>
+        <div class="tir-item">
+          <span class="tir-label">High (>270)</span>
+          <span class="tir-value" id="tir-high">—</span>
+        </div>
+      </div>
+      <div class="tir-stats">
+        <div class="tir-stat">
+          <span class="tir-stat-label">Hypo events</span>
+          <span class="tir-stat-value" id="tir-hypo-count">—</span>
+        </div>
+        <div class="tir-stat">
+          <span class="tir-stat-label">Hyper events</span>
+          <span class="tir-stat-value" id="tir-hyper-count">—</span>
+        </div>
+        <div class="tir-stat">
+          <span class="tir-stat-label">Min</span>
+          <span class="tir-stat-value" id="tir-min">—</span>
+        </div>
+        <div class="tir-stat">
+          <span class="tir-stat-label">Max</span>
+          <span class="tir-stat-value" id="tir-max">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- F3: Sensor Life Countdown -->
+    <section class="card sensor-life" aria-label="Sensor life countdown">
+      <h2>Sensor Life</h2>
+      <div class="sensor-life-grid">
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Elapsed</span>
+          <span class="sensor-life-value" id="sensor-life-elapsed">—</span>
+        </div>
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Remaining</span>
+          <span class="sensor-life-value" id="sensor-life-left">—</span>
+        </div>
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Expires</span>
+          <span class="sensor-life-value" id="sensor-life-expires">—</span>
+        </div>
+        <div class="sensor-life-item">
+          <span class="sensor-life-label">Status</span>
+          <span class="sensor-life-value metric-status" id="sensor-life-status">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Insulin-shot tracker (NID-402): calendar + save, markers on the chart -->
+    <section class="card insulin-card" aria-label="Insulin shot tracker">
+      <div class="insulin-header">
+        <h2>Insulin Shots</h2>
+        <div class="insulin-actions">
+          <button class="btn" id="insulin-add-now" type="button" title="Record a shot right now">💉 Add now</button>
+          <button class="btn btn-primary" id="insulin-save" type="button" disabled>Save</button>
+        </div>
+      </div>
+      <div class="calendar-nav">
+        <button class="btn" id="cal-prev" type="button" aria-label="Previous month">‹</button>
+        <span class="cal-month" id="cal-month-label" aria-live="polite"></span>
+        <button class="btn" id="cal-next" type="button" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-weekdays" aria-hidden="true">
+        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+      </div>
+      <div class="cal-grid" id="cal-grid" role="grid" aria-label="Injection calendar"></div>
+      <div class="insulin-day">
+        <h3 id="insulin-day-title">Select a day</h3>
+        <ul class="shot-list" id="shot-list"></ul>
+        <div class="shot-form">
+          <label for="shot-time">Time</label>
+          <input type="time" id="shot-time" step="300">
+          <label for="shot-note" class="visually-hidden">Note (optional)</label>
+          <input type="text" id="shot-note" placeholder="Note (optional)" maxlength="80">
+          <button class="btn" id="shot-add" type="button">Add shot</button>
+        </div>
+      </div>
+      <p class="insulin-status" id="insulin-status"></p>
+    </section>
+
+    <section class="card chart-card" aria-label="Glucose history chart">
+      <div class="chart-toolbar">
+<div class="tabs" role="tablist" aria-label="Chart time range">
+        <button class="tab" role="tab" id="tab-today" aria-selected="true" aria-controls="glucose-chart">TODAY</button>
+        <button class="tab" role="tab" id="tab-7d" aria-selected="false" aria-controls="glucose-chart">7d</button>
+        <button class="tab" role="tab" id="tab-30d" aria-selected="false" aria-controls="glucose-chart">30d</button>
+        <button class="tab" role="tab" id="tab-all" aria-selected="false" aria-controls="glucose-chart">All time</button>
+      </div>
+        <button class="btn" id="export-csv" type="button">Export CSV</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="glucose-chart" role="img" aria-label="Line chart of glucose readings over time">
+          Your browser does not support the HTML canvas element.
+        </canvas>
+        <p class="chart-empty" id="chart-empty" hidden>No glucose data yet.</p>
+      </div>
+      <div class="legend" aria-label="Glucose ranges legend">
+        <span class="legend-item legend-hypo">Hypo <70</span>
+        <span class="legend-item legend-low">Low 70&ndash;90</span>
+        <span class="legend-item legend-target">Target 90&ndash;270</span>
+        <span class="legend-item legend-high">High >270</span>
+      </div>
+      <!-- F4: Event legend -->
+      <div class="event-legend" aria-label="Event markers legend" hidden>
+        <span class="legend-title">Events:</span>
+        <span class="legend-item event-food">● Food</span>
+        <span class="legend-item event-insulin">● Insulin</span>
+        <span class="legend-item event-note">● Note</span>
+      </div>
+      <!-- NID-402: tracker-shot marker legend -->
+      <div class="event-legend" aria-label="Injection markers legend">
+        <span class="legend-title">Shots:</span>
+        <span class="legend-item event-tracker-shot">💉 recorded insulin injection</span>
+      </div>
+    </section>
+
+    <section class="card status-card" aria-label="Data status">
+      <p id="sync-status">Last sync: —</p>
+      <p class="disclaimer">
+        Readings come from the Freestyle LibreLinkUp cloud service and reflect the
+        sensor's last scan. Data can lag by up to 8&nbsp;hours — this is normal and
+        does not affect long-term trends. Not a medical device; consult your vet.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Leoncito &middot; made with Chart.js &middot; <span id="footer-time"></span></p>
+  </footer>
+
+  <script src="js/dashboard.js" defer></script>
+</body>
+</html>

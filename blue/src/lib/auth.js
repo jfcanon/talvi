@@ -1,15 +1,12 @@
-// Clerk auth for the blue release (PR 3). Server-side session verification
+// DEPRECATED: Blue release (talvi2) decommissioned 2026-08-21.
+// This file is preserved for reference only and is no longer executed.
+//
+// Previously: Clerk auth for the blue release (PR 3). Server-side session verification
 // only: the __session cookie is a Clerk JWT, verified locally with
 // @clerk/backend — no clerk-js on any page except /sign-in, no Clerk API call
 // per request, no CSP change anywhere except the sign-in page's own headers.
 //
-// The browser-side sign-in (custom UI) lives on /sign-in; this module is the
-// server side of the same contract. It mirrors the verified pattern from
-// green's Step 8 (branch clerk-custom-signin-clean) with one deliberate
-// change: green redirected to the hosted portal, which session3/11 §3 records
-// as a dead end (the portal cannot complete a session in a backend-only app).
-// Blue instead runs the custom client-side flow on /sign-in and verifies the
-// resulting __session cookie here.
+// The Clerk auth pattern ported from blue to relay/learn is the production auth gate.
 import { createClerkClient } from "@clerk/backend";
 
 // The hosts this worker answers for. authenticateRequest rejects a session

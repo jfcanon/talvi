@@ -1,4 +1,4 @@
-// talvi hub — the constellation front door (v6.0).
+// talvi hub — the constellation front door (v8.0).
 //
 // Server-rendered markup; the world boots from /h.js (scene modules bundled by
 // build-assets.mjs) and /h.css is linked, never inlined — CSP default-src
@@ -94,7 +94,7 @@ export function hubPage({ authed } = {}) {
     : '<a class="blade__login" href="/sign-in?redirect=/" aria-label="sign in">⏻</a>';
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">' +
     '<meta name="color-scheme" content="dark">' +
     '<meta name="robots" content="noindex, nofollow">' +
     "<title>talvi</title>" +
@@ -129,6 +129,7 @@ export function hubPage({ authed } = {}) {
     '<span class="prompt__caret" aria-hidden="true">_</span>' +
     "</p>" +
     '<p class="hint" aria-hidden="true">drag to look · scroll to zoom · click a star</p>' +
+    '<button class="view-reset" id="view-reset" type="button" aria-label="reset view">reset</button>' +
     "</div>" +
     // The agent panel (PR2) — the agent's chat front door. Hidden by default;
     // the MORE blade button toggles it (client.js). Sits above the world but

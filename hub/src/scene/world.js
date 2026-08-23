@@ -1,27 +1,10 @@
-// talvi hub — the constellation front door (v6.0).
+// talvi hub — the constellation front door (v9.0).
 //
-// Design direction (frontend-design + talvi-design): the launcher is a
-// CONSTELLATION. The four tiles — relay ▣, chat ▤, cinto ◈, a dim future ＋ —
-// are stars connected by faint phosphor lines that LIVE with the physics
-// (they stretch as the tiles drift and bounce), and the "talvi" wordmark is a
-// bright pole star above. One front door = the apps are connected. The lines
-// are the signature; everything else stays quiet.
-//
-// What changed from v4.3.2:
-//   - the rigid 2×2 grid became a constellation arrangement;
-//   - faint constellation lines connect the tiles (updated each frame to the
-//     live physics positions) and reach up to the wordmark pole star;
-//   - the floor grid and the sonar pulse rings are gone — a soft light pool
-//     glows on the ground beneath the constellation instead;
-//   - a quiet arrival: the tiles scale in staggered, the lines fade in
-//     (instant under prefers-reduced-motion);
-//   - the fog leans cool blue-violet so the night isn't flat black.
-//
-// Kept: the physics (drift + bounce, never phase), orbit/dolly camera,
-// raycast click, hover highlight, the `>_` prompt echo, the blade.
+// Green phosphor world. Cubes at the local launcher layout. No floor — open
+// deep space. Sky is the HYG dome + Stellarium Aquarius.
 import * as THREE from "three";
-import { createRain } from "./rain.js";
 import { makeGlow } from "./glow.js";
+import { makeSky } from "./sky.js";
 
 const SIDE = 2.3; // tile edge.
 
@@ -31,19 +14,15 @@ const SPRING = 1.3;
 const DAMP = 0.985;
 const REST = 0.35;
 
-// The constellation: four apps + a dim future star. Positions form a
-// connected pattern, spaced comfortably above 2*BODY_R so the stars rest
-// apart and only collide when a gust pushes them together.
 const TILE_CFG = [
-  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.2, z: 0.6 },
-  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.2, z: 0.6 },
-  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.4, z: -0.8 },
-  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.2, z: 1.2 },
-  { key: "future", glyph: "＋", href: null, x: 0, baseY: 7.2, z: 0.2 },
+  { key: "relay", glyph: "▣", href: "https://app.ygdcbtmc4u.uk/relay", x: -2.6, baseY: 5.98, z: 0.6 },
+  { key: "chat", glyph: "▤", href: "https://app.ygdcbtmc4u.uk/chat", x: 2.6, baseY: 5.98, z: 0.6 },
+  { key: "cinto", glyph: "◈", href: "/cinto", x: 0, baseY: 3.91, z: -0.8 },
+  { key: "learn", glyph: "◆", href: "/learn", x: -2.0, baseY: 2.53, z: 1.2 },
+  { key: "future", glyph: "＋", href: null, x: 0, baseY: 8.28, z: 0.2 },
 ];
 
-// The pole star — the wordmark, floating above the constellation.
-const WORD_POS = new THREE.Vector3(0, 9.6, 0);
+const WORD_POS = new THREE.Vector3(0, 11.04, 0);
 
 // Which stars the constellation lines connect. "word" is the pole star.
 const LINES = [
@@ -56,34 +35,39 @@ const LINES = [
 ];
 
 // Where the camera orbits around, and how far out it starts.
-export const FOCAL = new THREE.Vector3(0, 5.2, 0);
-export const DEFAULT_RADIUS = 16;
+export const FOCAL = new THREE.Vector3(0, 5.98, 0);
+export const DEFAULT_RADIUS = 12;
 
 const DISPLAY_STACK =
   '"Bahnschrift", "DIN Alternate", "Oswald", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
 
-export function buildWorld(scene) {
+export function buildWorld(scene, dustCount = 160) {
 
-  scene.background = new THREE.Color(0x070a14);
-  scene.fog = new THREE.FogExp2(0x0a0e1f, 0.024);
+  scene.background = new THREE.Color(0x0a0a0c);
+  scene.fog = new THREE.FogExp2(0x0a0a0c, 0.008);
 
   // --- lights --------------------------------------------------------------
-  scene.add(new THREE.AmbientLight(0x8a6, 0.5));
-  const key = new THREE.PointLight(0x7dffc4, 1.1, 42);
-  key.position.set(9, 15, 14);
+  scene.add(new THREE.AmbientLight(0x6a8, 0.22));
+  const key = new THREE.DirectionalLight(0xd8f0e4, 1.35);
+  key.position.set(12, 18, 10);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 2;
+  key.shadow.camera.far = 70;
+  key.shadow.camera.left = -18;
+  key.shadow.camera.right = 18;
+  key.shadow.camera.top = 18;
+  key.shadow.camera.bottom = -18;
+  key.shadow.bias = -0.0008;
   scene.add(key);
-  const rim = new THREE.PointLight(0xff2e88, 0.7, 42);
-  rim.position.set(-9, 7, -16);
-  scene.add(rim);
-  const fill = new THREE.PointLight(0x22e8ff, 0.35, 30);
-  fill.position.set(0, 2, -9);
+  scene.add(key.target);
+  key.target.position.copy(FOCAL);
+  const fill = new THREE.PointLight(0x8ab8a0, 0.28, 36);
+  fill.position.set(-6, 8, 8);
   scene.add(fill);
 
-  scene.add(makeGround());
-  scene.add(makeLightPool());
-
-  const rain = createRain(900);
-  scene.add(rain.lines);
+  const sky = makeSky(dustCount);
+  scene.add(sky.group);
 
   // --- the constellation ---------------------------------------------------
   const tiles = TILE_CFG.map((cfg) => makeTile(cfg));
@@ -110,7 +94,6 @@ export function buildWorld(scene) {
     update(dt) {
       // Only called when motion is allowed (main.js) — under reduced motion
       // the world is static: tiles at anchors, lines drawn, everything visible.
-      rain.update(dt);
       stepPhysics(tiles, dt);
       lines.update(tiles, pole);
       const t = performance.now() / 1000;
@@ -118,49 +101,12 @@ export function buildWorld(scene) {
       // The signature shimmers faintly — a slow breath on the lines.
       lines.mesh.material.opacity = (0.2 + 0.05 * Math.sin(t * 0.7)) * p;
     },
+    updateDust: sky.updateDust,
     setHighlight(b, on) {
-      b.mat.emissiveIntensity = on ? 1.15 : 0.55;
-      b.glow.material.opacity = on ? 0.55 : 0.3;
+      b.mat.emissiveIntensity = on ? 0.22 : 0.06;
+      b.glow.material.opacity = on ? 0.16 : 0.06;
     },
   };
-}
-
-function makeGround() {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(70, 70),
-    new THREE.MeshStandardMaterial({ color: 0x070a12, roughness: 0.9 }),
-  );
-  mesh.rotation.x = -Math.PI / 2;
-  return mesh;
-}
-
-// A soft green light pool on the ground beneath the constellation — replaces
-// the old floor grid (a digital default) with quiet light on the night.
-function makeLightPool() {
-  const c = document.createElement("canvas");
-  c.width = 256;
-  c.height = 256;
-  const ctx = c.getContext("2d");
-  const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 124);
-  g.addColorStop(0, "rgba(125,255,196,0.5)");
-  g.addColorStop(0.5, "rgba(125,255,196,0.16)");
-  g.addColorStop(1, "rgba(125,255,196,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(18, 18),
-    new THREE.MeshBasicMaterial({
-      map: new THREE.CanvasTexture(c),
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    }),
-  );
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 0.02;
-  return mesh;
 }
 
 // A tile = a star: a solid lit cube with the app's 2D glyph icon, a soft
@@ -170,43 +116,34 @@ function makeTile(cfg) {
   const group = new THREE.Group();
 
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x0f1728,
-    roughness: 0.42,
-    metalness: 0.18,
-    transparent: true,
-    opacity: 0.96,
-    emissive: 0x0a3a2c,
-    emissiveIntensity: 0.55,
+    color: 0x121a22,
+    roughness: 0.86,
+    metalness: 0.04,
+    emissive: 0x061410,
+    emissiveIntensity: 0.06,
   });
   const body = new THREE.Mesh(new THREE.BoxGeometry(SIDE, SIDE, SIDE), mat);
+  body.castShadow = true;
+  body.receiveShadow = true;
   group.add(body);
 
   group.add(
     new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(SIDE, SIDE, SIDE)),
       new THREE.LineBasicMaterial({
-        color: 0x7dffc4,
+        color: 0x4a7a68,
         transparent: true,
-        opacity: 0.14,
-        blending: THREE.AdditiveBlending,
+        opacity: 0.22,
         depthWrite: false,
       }),
     ),
   );
 
-  const iconZ = makeIcon(cfg.glyph, 1.55);
-  iconZ.position.z = half + 0.02;
-  group.add(iconZ);
-  const iconX = iconZ.clone();
-  iconX.position.set(half + 0.02, 0, 0);
-  iconX.rotation.y = Math.PI / 2;
-  group.add(iconX);
-  const iconY = iconZ.clone();
-  iconY.position.set(0, half + 0.02, 0);
-  iconY.rotation.x = -Math.PI / 2;
-  group.add(iconY);
+  const icon = makeIcon(cfg.glyph, 1.55);
+  icon.position.z = half + 0.02;
+  group.add(icon);
 
-  const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.3 : 0.16);
+  const glow = makeGlow(0x7dffc4, SIDE * 2.1, cfg.href ? 0.06 : 0.03);
   group.add(glow);
 
   let hit = null;
@@ -261,28 +198,20 @@ function makePoleStar() {
   ctx.font = "700 150px " + DISPLAY_STACK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.9)";
-  ctx.shadowBlur = 60;
-  ctx.fillStyle = "#7dffc4";
-  ctx.fillText("talvi", c.width / 2, c.height / 2 + 8);
-  ctx.shadowBlur = 16;
-  ctx.fillStyle = "#eafff5";
+  ctx.fillStyle = "#d8f5e8";
   ctx.fillText("talvi", c.width / 2, c.height / 2 + 8);
 
   const word = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: new THREE.CanvasTexture(c),
       transparent: true,
-      opacity: 0.95,
+      opacity: 1,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      toneMapped: false,
     }),
   );
   word.scale.set(5.5, 1.4, 1);
   group.add(word);
-
-  const halo = makeGlow(0x9dffb0, 7, 0.4);
-  group.add(halo);
 
   return { group, sprite: word };
 }
@@ -335,8 +264,7 @@ function arrival(t, tiles, lines, pole) {
     tile.group.scale.setScalar(s);
   }
   const p = Math.min(1, Math.max(0, t / 1.2));
-  pole.group.children[0].material.opacity = 0.95 * p;
-  pole.group.children[1].material.opacity = 0.4 * p;
+  pole.group.children[0].material.opacity = p;
   lines.mesh.material.opacity = 0.2 * p;
   return p;
 }
@@ -419,16 +347,14 @@ function makeIcon(glyph, size) {
   ctx.font = "700 150px " + DISPLAY_STACK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(125,255,196,0.9)";
-  ctx.shadowBlur = 40;
-  ctx.fillStyle = "#7dffc4";
+  ctx.fillStyle = "#c8f5e0";
   ctx.fillText(glyph, c.width / 2, c.height / 2 + 4);
   const mat = new THREE.MeshBasicMaterial({
     map: new THREE.CanvasTexture(c),
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+    toneMapped: false,
   });
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
 }

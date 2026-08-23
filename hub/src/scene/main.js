@@ -1,4 +1,4 @@
-// talvi hub — the explorable world (v6.0, constellation + orbit/dolly).
+// talvi hub — the explorable world (v9.0).
 //
 // The scroll narrative is gone. This is a small world you move through like
 // Google Earth:
@@ -21,18 +21,25 @@ export function bootScene() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = window.matchMedia("(pointer: fine)").matches;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setClearColor(0x05060b, 1);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  canvas.style.touchAction = "none";
+
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  renderer.setClearColor(0x0a0a0c, 1);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.95;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05060b);
-  scene.fog = new THREE.FogExp2(0x05060b, 0.018);
+  scene.background = new THREE.Color(0x0a0a0c);
+  scene.fog = new THREE.FogExp2(0x0a0a0c, 0.008);
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 240);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 520);
 
-  const world = buildWorld(scene);
+  const world = buildWorld(scene, isMobile ? 80 : 160);
   const orbit = new OrbitController(camera, world.focal, world.radius);
 
   // --- pointer / raycast ---------------------------------------------------
@@ -63,8 +70,27 @@ export function bootScene() {
     }
   }
 
+  function eat(e) {
+    e.preventDefault();
+  }
+  canvas.addEventListener("touchstart", eat, { passive: false });
+  canvas.addEventListener("touchmove", eat, { passive: false });
+  canvas.addEventListener("touchend", eat, { passive: false });
+  for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+    canvas.addEventListener(type, eat, { passive: false });
+    document.addEventListener(type, eat, { passive: false });
+  }
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length > 1) e.preventDefault();
+    },
+    { passive: false },
+  );
+
   // --- drag = orbit, tap = open, hover = highlight -------------------------
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch") e.preventDefault();
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {
@@ -80,6 +106,7 @@ export function bootScene() {
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") e.preventDefault();
     const prev = pointers.get(e.pointerId);
     if (prev) {
       const dx = e.clientX - prev.x;
@@ -91,7 +118,10 @@ export function bootScene() {
       if (pointers.size === 2) {
         const pts = [...pointers.values()];
         const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        if (prev._d && d > 0 && prev._d > 0) orbit.dolly(d / prev._d);
+        if (prev._d && d > 0 && prev._d > 0) {
+          orbit.dolly(d / prev._d);
+          poke();
+        }
         for (const p of pts) p._d = d;
         return;
       }
@@ -101,11 +131,15 @@ export function bootScene() {
           const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
           if (moved > 5) dragging = true;
         }
-        if (dragging) orbit.orbit(dx, dy);
+        if (dragging) {
+          orbit.orbit(dx, dy);
+          poke();
+        }
       }
     } else if (finePointer && pointers.size === 0 && !dragging) {
       // Hover: only for a fine pointer, when nothing is being dragged.
       setHover(pick(e.clientX, e.clientY));
+      poke();
     }
   });
 
@@ -137,6 +171,7 @@ export function bootScene() {
     (e) => {
       e.preventDefault();
       orbit.dolly(Math.exp(e.deltaY * 0.0012));
+      poke();
     },
     { passive: false },
   );
@@ -147,39 +182,52 @@ export function bootScene() {
       case "ArrowLeft":
         e.preventDefault();
         orbit.orbit(0.14, 0);
+        poke();
         break;
       case "ArrowRight":
         e.preventDefault();
         orbit.orbit(-0.14, 0);
+        poke();
         break;
       case "ArrowUp":
         e.preventDefault();
         orbit.orbit(0, 0.1);
+        poke();
         break;
       case "ArrowDown":
         e.preventDefault();
         orbit.orbit(0, -0.1);
+        poke();
         break;
       case "+":
       case "=":
         orbit.dolly(1 / 1.18);
+        poke();
         break;
       case "-":
       case "_":
         orbit.dolly(1.18);
+        poke();
         break;
     }
   });
 
-  // --- resize / loop -------------------------------------------------------
   function resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
+    poke();
   }
   window.addEventListener("resize", resize);
+
+  const resetBtn = document.getElementById("view-reset");
+  if (resetBtn) resetBtn.addEventListener("click", () => {
+    orbit.reset();
+    poke();
+  });
 
   // Test probe: exposes each building's current screen position so the browser
   // test can click a cube and assert orbit/zoom without depending on the DOM
@@ -202,13 +250,41 @@ export function bootScene() {
     });
   };
 
+  let raf = 0;
   let last = performance.now();
-  function frame(now) {
+  let liveUntil = last + 2200;
+  let dustAcc = 0;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
+
+  function draw(now) {
+    raf = 0;
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
-    if (!reduceMotion) world.update(dt);
+    const live = now < liveUntil;
+    if (!reduceMotion && live) world.update(dt);
+    dustAcc += dt;
+    if (!reduceMotion && (live || dustAcc >= 0.125)) {
+      world.updateDust(dustAcc);
+      dustAcc = 0;
+    }
     renderer.render(scene, camera);
-    requestAnimationFrame(frame);
+    renderer.shadowMap.needsUpdate = live;
+    if (live && !reduceMotion) schedule();
   }
-  requestAnimationFrame(frame);
+
+  function schedule() {
+    if (!raf) raf = requestAnimationFrame(draw);
+  }
+
+  function poke() {
+    liveUntil = performance.now() + 450;
+    schedule();
+  }
+
+  if (!reduceMotion) setInterval(() => {
+    if (performance.now() >= liveUntil) schedule();
+  }, 125);
+
+  schedule();
 }

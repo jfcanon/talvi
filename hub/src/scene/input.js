@@ -1,4 +1,4 @@
-// talvi hub — orbit/dolly controller (v4, idea #2: Google-Earth navigation).
+// talvi hub — orbit/dolly controller (v8.0).
 //
 // The camera orbits a focal point: drag = yaw/pitch (look around), wheel /
 // pinch / +/- = dolly (zoom toward the world), always clamped so the camera
@@ -15,18 +15,23 @@ export class OrbitController {
     this.yaw = 0.5;
     this.pitch = 0.42;
     this.radius = radius;
-    this.minRadius = 5;
-    this.maxRadius = 32;
+    this.homeRadius = radius;
+    this.minRadius = 6;
+    this.maxRadius = 56;
     this.apply();
   }
 
+  floorPitch() {
+    const s = (0.4 - this.target.y) / this.radius;
+    return Math.asin(clamp(s, -0.999, 0.999));
+  }
+
   apply() {
+    this.pitch = clamp(this.pitch, this.floorPitch(), Math.PI / 2 - 0.04);
     const cp = Math.cos(this.pitch);
     const sp = Math.sin(this.pitch);
     this.camera.position.set(
       this.target.x + this.radius * cp * Math.sin(this.yaw),
-      // pitch is clamped so sin(pitch) never pushes the camera below the
-      // ground even at max zoom-out.
       this.target.y + this.radius * sp,
       this.target.z + this.radius * cp * Math.cos(this.yaw),
     );
@@ -35,12 +40,19 @@ export class OrbitController {
 
   orbit(dx, dy) {
     this.yaw -= dx * 0.0052;
-    this.pitch = clamp(this.pitch + dy * 0.0038, -0.03, 1.15);
+    this.pitch = clamp(this.pitch + dy * 0.0038, this.floorPitch(), Math.PI / 2 - 0.04);
     this.apply();
   }
 
   dolly(factor) {
     this.radius = clamp(this.radius * factor, this.minRadius, this.maxRadius);
+    this.apply();
+  }
+
+  reset() {
+    this.yaw = 0.5;
+    this.pitch = 0.42;
+    this.radius = this.homeRadius;
     this.apply();
   }
 }
