@@ -7,6 +7,7 @@
 //   - the checkpoint gate form
 //   - gamification wiring: XP/streak HUD + lesson completion
 //   - hearts (optional-off) + celebrations (class-toggle, never inline)
+//   - onboarding: welcome modal, guided tour, pre-read gate, progress ring
 //
 // The server is truth for gamification. The client NEVER computes XP or streak:
 // it POSTs completion to /learn/api/complete and renders the numbers the server
@@ -44,7 +45,130 @@ document.addEventListener("click", (event) => {
   if (action === "check") return onCheck(btn);
   if (action === "continue") return onContinue(btn);
   if (action === "gate-submit") return onGateSubmit(event, btn);
+  if (action === "onboard-start") return onOnboardStart(btn);
+  if (action === "ready") return onReady(btn);
+  if (action === "begin-lesson") return onBeginLesson(btn);
 });
+
+// Initialize onboarding features
+function initOnboarding() {
+  // Welcome modal: show once per browser
+  const modal = document.getElementById("welcome-modal");
+  const backdrop = document.getElementById("welcome-backdrop");
+  if (modal && backdrop) {
+    const onboarded = localStorage.getItem("tl_onboarded");
+    if (!onboarded) {
+      modal.hidden = false;
+      backdrop.hidden = false;
+      modal.querySelector("[data-action='onboard-start']").focus();
+    } else {
+      modal.remove();
+      backdrop.remove();
+    }
+  }
+
+  // Guided tour: spotlight first lesson on path page
+  const guidedBtn = document.getElementById("guided-tour-btn");
+  const tooltip = document.getElementById("guided-tooltip");
+  const firstLessonNode = document.querySelector('[data-guided="first-lesson"]');
+  if (guidedBtn && tooltip && firstLessonNode) {
+    const onboarded = localStorage.getItem("tl_onboarded");
+    if (!onboarded) {
+      guidedBtn.hidden = false;
+      tooltip.hidden = false;
+      // Position tooltip near the first lesson node
+      positionTooltip(firstLessonNode, tooltip);
+    } else {
+      guidedBtn.remove();
+      tooltip.remove();
+    }
+  }
+
+  // Pre-read gate: blur exercises until "I'm Ready"
+  const prereadGate = document.querySelector(".preread-gate");
+  const exercisesSection = document.querySelector(".exercises[data-gated='true']");
+  if (prereadGate && exercisesSection) {
+    prereadGate.hidden = false;
+    exercisesSection.style.opacity = "0.4";
+    exercisesSection.style.pointerEvents = "none";
+  }
+
+  // Progress ring: initialize
+  updateProgressRing(0);
+
+  // Pre-fetch next lesson on completion screen
+  const nextBtn = document.querySelector("#next-btn[data-prefetch]");
+  if (nextBtn) {
+    const href = nextBtn.href;
+    if (href) {
+      const link = document.createElement("link");
+      link.rel = "prefetch";
+      link.href = href;
+      document.head.appendChild(link);
+    }
+  }
+}
+
+function onOnboardStart(btn) {
+  const modal = document.getElementById("welcome-modal");
+  const backdrop = document.getElementById("welcome-backdrop");
+  const guidedBtn = document.getElementById("guided-tour-btn");
+  const tooltip = document.getElementById("guided-tooltip");
+
+  localStorage.setItem("tl_onboarded", "true");
+
+  if (modal) modal.hidden = true;
+  if (backdrop) backdrop.hidden = true;
+  if (guidedBtn) guidedBtn.hidden = false;
+  if (tooltip) tooltip.hidden = false;
+
+  // If on path page, navigate to first lesson after brief delay
+  if (window.location.pathname === PREFIX + "/") {
+    setTimeout(() => {
+      window.location.href = btn.dataset.href || (PREFIX + "/lesson/u1l1");
+    }, 300);
+  }
+}
+
+function onBeginLesson(btn) {
+  onOnboardStart(btn);
+}
+
+function onReady(btn) {
+  const prereadGate = btn.closest(".preread-gate");
+  const exercisesSection = document.querySelector(".exercises[data-gated='true']");
+  if (prereadGate) prereadGate.hidden = true;
+  if (exercisesSection) {
+    exercisesSection.style.opacity = "1";
+    exercisesSection.style.pointerEvents = "auto";
+  }
+  // Focus first exercise
+  const firstChoice = document.querySelector(".exercise .choice, .exercise .chip, .exercise .match__item");
+  if (firstChoice) firstChoice.focus();
+}
+
+function positionTooltip(target, tooltip) {
+  const rect = target.getBoundingClientRect();
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
+  tooltip.style.top = (rect.bottom + scrollY + 8) + "px";
+  tooltip.style.left = (rect.left + rect.width / 2) + "px";
+  tooltip.style.transform = "translateX(-50%)";
+}
+
+function updateProgressRing(completedCount) {
+  const ring = document.querySelector(".progress-ring__fill");
+  const svg = document.querySelector(".progress-ring");
+  if (!ring || !svg) return;
+  const segments = parseInt(svg.dataset.segments) || 3;
+  const circumference = 2 * Math.PI * 26; // ~163.4
+  const perSegment = circumference / segments;
+  const offset = circumference - (completedCount * perSegment);
+  ring.style.strokeDashoffset = offset;
+}
+
+function readEx(exercise) {
+  return JSON.parse(exercise.dataset.ex);
+}
 
 // ---- Exercise widgets ----
 
@@ -245,17 +369,22 @@ function settle(exercise, res, ok) {
   // Lock the wrong choice visual and reveal the right one.
   if (!ok) revealAnswer(exercise);
 
-  // Advance when every exercise has been answered (correct OR wrong — a wrong
-  // answer costs a heart and the lesson still completes; the streak/XP come
-  // from the server). This is the Duolingo model: you finish the lesson, not
-  // every answer perfectly.
+  // Update progress ring
   const section = exercise.closest(".exercises");
-  if (!section) return;
-  const all = [...section.querySelectorAll(".exercise")];
-  const allAnswered = all.every((e) => e.dataset.state);
-  if (allAnswered) {
-    const cont = section.querySelector("[data-action='continue']");
-    if (cont) cont.hidden = false;
+  if (section) {
+    const all = [...section.querySelectorAll(".exercise")];
+    const answered = all.filter((e) => e.dataset.state).length;
+    updateProgressRing(answered);
+
+    // Advance when every exercise has been answered (correct OR wrong — a wrong
+    // answer costs a heart and the lesson still completes; the streak/XP come
+    // from the server). This is the Duolingo model: you finish the lesson, not
+    // every answer perfectly.
+    const allAnswered = all.every((e) => e.dataset.state);
+    if (allAnswered) {
+      const cont = section.querySelector("[data-action='continue']");
+      if (cont) cont.hidden = false;
+    }
   }
 }
 
@@ -409,3 +538,4 @@ function readEx(exercise) {
 }
 
 seedHearts();
+initOnboarding();

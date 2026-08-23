@@ -1,19 +1,19 @@
 {
   "unit": {
     "id": "u3",
-    "title": "The tribunal's own architecture",
-    "moc": "files are the only state \u2014 the hub CLI \u2014 lanes & the family rule \u2014 routing \u2014 grounding \u2014 convergence \u2014 state layout \u2014 claim ledger & MoC"
+    "title": "The Tribunal's Own Architecture",
+    "moc": "files only state \u2014 hub CLI \u2014 lanes & family rule \u2014 which AI for which job \u2014 grounding = proof \u2014 how disagreements become decisions \u2014 state layout \u2014 claim ledger & map"
   },
   "checkpoint": {
     "id": "c3",
     "title": "Checkpoint 3 \u2014 gate (the core one)",
-    "prompt": "Describe the whole machinery \u2014 fanout \u2192 convergence \u2192 verify \u2192 record \u2014 and where the claim ledger and the MoC sit in it.",
+    "prompt": "Describe the whole machinery \u2014 fanout \u2192 convergence \u2192 verify \u2192 record \u2014 and where the claim ledger and the map sit in it.",
     "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
   },
   "lessons": [
     {
       "id": "u3l1",
-      "title": "Files are the only state",
+      "title": "Files Are the Only State",
       "skill": "state",
       "xp": 10,
       "facts": [
@@ -102,7 +102,7 @@
     },
     {
       "id": "u3l3",
-      "title": "Lanes & the family rule",
+      "title": "Model Lanes: Why We Use Different AIs (and Limit Same-Family)",
       "skill": "lanes",
       "xp": 10,
       "facts": [
@@ -146,7 +146,7 @@
     },
     {
       "id": "u3l4",
-      "title": "Routing policy",
+      "title": "Which AI for Which Job?",
       "skill": "routing",
       "xp": 10,
       "facts": [
@@ -181,7 +181,7 @@
     },
     {
       "id": "u3l5",
-      "title": "Grounding",
+      "title": "Grounding = Proof from Your Repo + Fresh Docs",
       "skill": "grounding",
       "xp": 10,
       "facts": [
@@ -232,7 +232,7 @@
     },
     {
       "id": "u3l6",
-      "title": "Convergence method",
+      "title": "How Disagreements Become Decisions",
       "skill": "convergence",
       "xp": 10,
       "facts": [
@@ -282,7 +282,7 @@
     },
     {
       "id": "u3l7",
-      "title": "State & memory layout",
+      "title": "State & Memory Layout",
       "skill": "state-layout",
       "xp": 10,
       "facts": [
@@ -327,7 +327,7 @@
     },
     {
       "id": "u3l8",
-      "title": "Claim ledger + MoC",
+      "title": "The Claim Ledger: Every Decision Tracked. The Map: How It All Connects.",
       "skill": "claims-moc",
       "xp": 10,
       "facts": [

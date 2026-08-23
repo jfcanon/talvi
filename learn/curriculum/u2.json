@@ -1,13 +1,13 @@
 {
   "unit": {
     "id": "u2",
-    "title": "Harness engineering fundamentals",
-    "moc": "agent = model + harness \u2014 the eight components \u2014 harness beats model \u2014 the failure statistics \u2014 the tribunal's map \u2014 sensors proven"
+    "title": "Harness Engineering Fundamentals",
+    "moc": "agent = model + harness \u2014 the 8 components \u2014 harness beats model \u2014 failure stats \u2014 tribunal's map \u2014 sensors proven"
   },
   "checkpoint": {
     "id": "c2",
     "title": "Checkpoint 2 \u2014 gate",
-    "prompt": "Classify a fictional system against the eight harness components and say which layer the tribunal itself was weakest in.",
+    "prompt": "Classify a fictional system against the 8 harness components and say which layer the tribunal itself was weakest in.",
     "cite": "sidequests/harness-baseline/verdict.md:Component map"
   },
   "lessons": [
@@ -57,12 +57,12 @@
     },
     {
       "id": "u2l2",
-      "title": "The eight harness components",
+      "title": "The 8 Harness Components",
       "skill": "components",
       "xp": 10,
       "facts": [
         {
-          "text": "The standard harness inventory: guides (feedforward: AGENTS.md, conventions) \u00b7 sensors (feedback: linters, type checks, LLM-as-judge) \u00b7 memory/state \u00b7 tool-execution layer \u00b7 guardrails (policy) \u00b7 loop controller (exit conditions, iteration bounds) \u00b7 verification layer \u00b7 failure handler / escalation.",
+          "text": "The standard harness inventory: guides (feedforward: AGENTS.md, conventions) \u00b7 sensors (feedback: linters, type checks, LLM-as-judge) \u00b7 memory/state \u00b7 tool-execution layer \u00b7 guardrails (policy) \u00b7 loop controller (exit conditions, iteration bounds) \u00b7 verification layer \u2014 the most-skipped layer \u00b7 failure handler / escalation.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         }
       ],
@@ -87,7 +87,7 @@
         },
         {
           "type": "complete",
-          "prompt": "The eight components: guides, sensors, ___, tool-execution, guardrails, loop controller, ___, failure handler.",
+          "prompt": "The 8 components: guides, sensors, ___, tool-execution, guardrails, loop controller, ___, failure handler.",
           "bank": ["memory/state", "verification", "caching", "routing"],
           "answer": ["memory/state", "verification"],
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
@@ -96,7 +96,7 @@
     },
     {
       "id": "u2l3",
-      "title": "Harness changes beat model changes",
+      "title": "Harness Changes Beat Model Changes",
       "skill": "harness-gains",
       "xp": 10,
       "facts": [
@@ -141,7 +141,7 @@
     },
     {
       "id": "u2l4",
-      "title": "The failure statistics",
+      "title": "The Failure Statistics",
       "skill": "statistics",
       "xp": 10,
       "facts": [
@@ -176,7 +176,7 @@
     },
     {
       "id": "u2l5",
-      "title": "The tribunal's component map",
+      "title": "The Tribunal's Component Map",
       "skill": "tribunal-map",
       "xp": 10,
       "facts": [
@@ -226,7 +226,7 @@
     },
     {
       "id": "u2l6",
-      "title": "Sensors, proven",
+      "title": "Sensors, Proven by Live Defects",
       "skill": "sensors",
       "xp": 10,
       "facts": [

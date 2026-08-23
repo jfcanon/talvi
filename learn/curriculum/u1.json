@@ -1,39 +1,39 @@
 {
   "unit": {
     "id": "u1",
-    "title": "Inception & \u201cformalize thinly\u201d",
-    "moc": "the tribunal's vocabulary \u2014 the thesis \u2014 what it is/is not \u2014 the core loop \u2014 the name"
+    "title": "Inception & \u201cBuild Just Enough Process\u201d",
+    "moc": "the 4 core terms \u2014 the core principle \u2014 what it does/doesn't \u2014 the 7-step loop \u2014 the name"
   },
   "checkpoint": {
     "id": "c1",
     "title": "Checkpoint 1 \u2014 gate",
-    "prompt": "Reproduce the vocabulary and the thesis, and name the thing the tribunal is NOT. Write a short verdict.",
+    "prompt": "Reproduce the 4 core terms and the core principle, and name what the tribunal is NOT. Write a short verdict.",
     "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
   },
   "lessons": [
     {
       "id": "u1l1",
-      "title": "The tribunal's vocabulary",
+      "title": "The 4 Core Terms You Need",
       "skill": "vocabulary",
       "xp": 10,
       "facts": [
         {
-          "text": "The vocabulary runs: *the Living Tribunal* (the system) \u2192 *sitting* (one problem) \u2192 *quorum* (the multi-model vote) \u2192 *convergence* (the verdict). The `hub` CLI is the machinery; the name is the model.",
+          "text": "The 4 core terms: **the Living Tribunal** (the system) \u2192 **A Sitting** = One Problem Run \u2192 **Quorum** = The Vote (3\u20135 Models) \u2192 **Convergence** = The Final Verdict. The `hub` CLI runs the process; the model is just the engine.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         }
       ],
       "exercises": [
         {
           "type": "select",
-          "prompt": "One problem run through the tribunal is called a:",
-          "options": ["quorum", "sitting", "convergence", "ledger"],
+          "prompt": "One problem run through the tribunal is called:",
+          "options": ["Quorum", "A Sitting", "Convergence", "Ledger"],
           "answer": 1,
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         },
         {
           "type": "select",
-          "prompt": "The multi-model vote over that problem is the:",
-          "options": ["sitting", "verdict", "quorum", "intake"],
+          "prompt": "The multi-model vote over that problem is:",
+          "options": ["A Sitting", "The Final Verdict", "Quorum", "Intake"],
           "answer": 2,
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         },
@@ -42,9 +42,9 @@
           "prompt": "Match each term to its meaning.",
           "pairs": [
             { "left": "the Living Tribunal", "right": "the system" },
-            { "left": "sitting", "right": "one problem" },
-            { "left": "quorum", "right": "the multi-model vote" },
-            { "left": "convergence", "right": "the verdict" }
+            { "left": "A Sitting", "right": "one problem run" },
+            { "left": "Quorum", "right": "the vote (3\u20135 models)" },
+            { "left": "Convergence", "right": "the final verdict" }
           ],
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         }
@@ -52,12 +52,12 @@
     },
     {
       "id": "u1l2",
-      "title": "The thesis: formalize thinly",
+      "title": "Core Principle: Build Just Enough Process",
       "skill": "thesis",
       "xp": 10,
       "facts": [
         {
-          "text": "Formalize THINLY: the value is discipline (independence, grounding, recorded dissent), not machinery. This document + the intake template + the ledger + the `hub` CLI = the whole system.",
+          "text": "Formalize Thinly = Build Just Enough Process: the value is discipline (independence, grounding, recorded dissent), not machinery. This document + the intake template + the ledger + the `hub` CLI = the whole system.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
         },
         {
@@ -68,7 +68,7 @@
       "exercises": [
         {
           "type": "select",
-          "prompt": "Formalize thinly means the value is the ___ , not the machinery.",
+          "prompt": "Formalize Thinly means the value is ___ , not the machinery.",
           "options": ["models", "discipline", "interface", "language"],
           "answer": 1,
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
@@ -95,7 +95,7 @@
     },
     {
       "id": "u1l3",
-      "title": "What it is / is NOT",
+      "title": "What the Tribunal Does (and Doesn't Do)",
       "skill": "scope",
       "xp": 10,
       "facts": [
@@ -150,12 +150,12 @@
     },
     {
       "id": "u1l4",
-      "title": "The core loop",
+      "title": "The 7-Step Loop: Intake \u2192 Triage \u2192 Ground \u2192 Route \u2192 Converge \u2192 Verify \u2192 Record",
       "skill": "core-loop",
       "xp": 10,
       "facts": [
         {
-          "text": "The core loop: Intake \u2192 Triage \u2192 Ground \u2192 Route (blind) \u2192 Converge \u2192 Verify \u2192 Record. Independence is the product: each lane sees the SAME brief and no lane sees another's output until convergence.",
+          "text": "The 7-step loop: Intake \u2192 Triage \u2192 Ground \u2192 Route (blind) \u2192 Converge \u2192 Verify \u2192 Record. Independence is the product: each lane sees the SAME brief and no lane sees another's output until convergence.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
         },
         {
@@ -166,7 +166,7 @@
       "exercises": [
         {
           "type": "order",
-          "prompt": "Put the core loop steps in order.",
+          "prompt": "Put the 7 loop steps in order.",
           "options": ["Converge", "Ground", "Intake", "Verify", "Route", "Triage", "Record"],
           "answer": ["Intake", "Triage", "Ground", "Route", "Converge", "Verify", "Record"],
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
@@ -199,7 +199,7 @@
     },
     {
       "id": "u1l5",
-      "title": "Naming & the Quorum recommendation",
+      "title": "The Name: Quorum \u2014 Why It Was Chosen",
       "skill": "naming",
       "xp": 10,
       "facts": [

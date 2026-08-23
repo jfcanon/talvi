@@ -24,14 +24,37 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
     )
     .join("");
 
+  // Progress ring SVG (3 segments = 3 exercises)
+  // No inline styles — stroke-dasharray/dashoffset computed per segment count
+  const exerciseCount = (lesson.exercises || []).length;
+  const circumference = 2 * Math.PI * 26; // ~163.4
+  const perSegment = circumference / exerciseCount;
+  const dash = perSegment * exerciseCount;
+  const progressRing = exerciseCount > 0
+    ? `<svg class="progress-ring" viewBox="0 0 60 60" aria-label="Lesson progress" data-segments="${exerciseCount}">
+         <circle class="progress-ring__bg" cx="30" cy="30" r="26" stroke-width="4" fill="none"/>
+         <circle class="progress-ring__fill" cx="30" cy="30" r="26" stroke-width="4" fill="none"
+           stroke-dasharray="${dash}" stroke-dashoffset="${dash}"/>
+       </svg>`
+    : "";
+
   const body = isGate
     ? gateForm(lesson)
     : '<section class="exercises" data-total="' +
-      esc(String((lesson.exercises || []).length)) +
-      '">' +
+      esc(String(exerciseCount)) +
+      '" data-gated="true">' +  // pre-read gate: exercises blurred until ready
+      '<div class="preread-gate" hidden>' +
+      '<p class="preread-gate__prompt">Read the fact above. Tap <strong>I\'m Ready</strong> when you understand it.</p>' +
+      '<button type="button" class="btn" data-action="ready">I\'m Ready</button>' +
+      '</div>' +
       exercises +
       '<button type="button" class="btn continue-btn" data-action="continue" hidden>continue</button>' +
       "</section>";
+
+  // Completion screen with next lesson pre-fetch
+  const nextLessonId = getNextLessonId(lesson.id);
+  const nextLessonHref = nextLessonId ? `${PREFIX}/lesson/${nextLessonId}` : `${PREFIX}/`;
+  const nextLessonLabel = nextLessonId ? "Next Lesson" : "Back to Path";
 
   return (
     "<!doctype html><html lang=\"en\"><head>" +
@@ -56,18 +79,24 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
     escAttr(String(lesson.xp || 0)) +
     '" data-is-gate="' +
     (isGate ? "true" : "false") +
+    '" data-next-lesson="' +
+    escAttr(nextLessonId || "") +
     '">' +
     lessonHeading(lesson, position) +
+    progressRing +
     factsBlock(facts, isGate) +
     body +
     '<div class="feedback" role="status" aria-live="polite" hidden></div>' +
     '<section class="complete" hidden>' +
-    "<h2>Lesson complete</h2>" +
+    "<h2>Lesson Complete!</h2>" +
     '<p class="complete__xp">+<span data-gain>0</span> XP</p>' +
     '<p class="complete__streak">streak <strong data-streak>0</strong>d</p>' +
-    '<div class="complete__actions"><a class="btn" id="next-btn" href="' +
+    '<div class="complete__actions">' +
+    (nextLessonId ? `<a class="btn" id="next-btn" href="${nextLessonHref}" data-prefetch>${nextLessonLabel}</a>` : '') +
+    '<a class="btn" id="path-btn" href="' +
     PREFIX +
-    '/">back to path</a></div>' +
+    '/">Back to Path</a>' +
+    "</div>" +
     "</section>" +
     "</main>" +
     "</div>" +
@@ -78,6 +107,19 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
     '"></script>' +
     "</body></html>"
   );
+}
+
+// Determine next lesson ID for pre-fetch
+function getNextLessonId(currentId) {
+  // Simple sequential mapping for MVP
+  const sequence = [
+    "u1l1", "u1l2", "u1l3", "u1l4", "u1l5",
+    "u2l1", "u2l2", "u2l3", "u2l4", "u2l5", "u2l6",
+    "u3l1", "u3l2", "u3l3", "u3l4", "u3l5", "u3l6", "u3l7", "u3l8",
+    "u4l1", "u4l2", "u4l3", "u4l4", "u4l5"
+  ];
+  const idx = sequence.indexOf(currentId);
+  return idx >= 0 && idx < sequence.length - 1 ? sequence[idx + 1] : null;
 }
 
 function lessonHeading(lesson, position) {
