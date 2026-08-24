@@ -84,14 +84,9 @@ function initOnboarding() {
     }
   }
 
-  // Pre-read gate: blur exercises until "I'm Ready"
-  const prereadGate = document.querySelector(".preread-gate");
-  const exercisesSection = document.querySelector(".exercises[data-gated='true']");
-  if (prereadGate && exercisesSection) {
-    prereadGate.hidden = false;
-    exercisesSection.style.opacity = "0.4";
-    exercisesSection.style.pointerEvents = "none";
-  }
+  // Pre-read gate: the server renders the gate visible and the exercises
+  // section locked (data-locked → CSS dims it and blocks pointer events);
+  // onReady() is the only transition. Nothing to do at init.
 
   // Progress ring: initialize
   updateProgressRing(0);
@@ -138,10 +133,7 @@ function onReady(btn) {
   const prereadGate = btn.closest(".preread-gate");
   const exercisesSection = document.querySelector(".exercises[data-gated='true']");
   if (prereadGate) prereadGate.hidden = true;
-  if (exercisesSection) {
-    exercisesSection.style.opacity = "1";
-    exercisesSection.style.pointerEvents = "auto";
-  }
+  if (exercisesSection) exercisesSection.removeAttribute("data-locked");
   // Focus first exercise
   const firstChoice = document.querySelector(".exercise .choice, .exercise .chip, .exercise .match__item");
   if (firstChoice) firstChoice.focus();

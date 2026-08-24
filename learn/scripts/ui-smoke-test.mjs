@@ -167,6 +167,19 @@ check("lesson has data-ex answers", lessonBody.includes("data-ex="), "");
 check("lesson has HUD pills", lessonBody.includes("pill--xp") && lessonBody.includes("pill--streak"), "");
 check("lesson loads versioned css", lessonBody.includes("/learn/s.css?v="), "");
 check("lesson has no inline style", !/style="/.test(lessonBody), "");
+// Pre-read gate regression (NID-100 "I'm Ready unclickable"): the gate must
+// sit OUTSIDE the locked exercises section, the section must ship locked, and
+// the fact text must be readable (bold markers rendered, not raw asterisks).
+const gateIdx = lessonBody.indexOf('class="preread-gate"');
+const exIdx = lessonBody.indexOf('class="exercises"');
+check("preread gate rendered visible (no hidden attr)", gateIdx > 0 && !/class="preread-gate" hidden/.test(lessonBody), "");
+check("preread gate precedes the exercises section", gateIdx > 0 && exIdx > gateIdx, gateIdx + " vs " + exIdx);
+check("exercises section ships locked", /class="exercises"[^>]*data-locked="true"/.test(lessonBody), "");
+check("fact renders **bold** as <strong>", lessonBody.includes("<strong>the Living Tribunal</strong>"), "");
+check("fact does not leak raw ** markers", !/class="fact"><p>[^<]*\*\*/.test(lessonBody), "");
+const cssText = await (await worker.fetch(req(BASE + "/learn/s.css?v=abc"), env)).text();
+check("css sizes the progress ring", /\.progress-ring\s*\{[^}]*width:/.test(cssText), "");
+check("css locks exercises via data-locked", cssText.includes('.exercises[data-locked="true"]'), "");
 check("lesson has no inline script", !/<script>/.test(lessonBody), "");
 
 // ---- locked lesson redirects to the path ----
