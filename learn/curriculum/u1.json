@@ -1,12 +1,12 @@
 {
   "unit": {
     "id": "u1",
-    "title": "Inception & \u201cBuild Just Enough Process\u201d",
-    "moc": "the 4 core terms \u2014 the core principle \u2014 what it does/doesn't \u2014 the 7-step loop \u2014 the name"
+    "title": "Inception & “Build Just Enough Process”",
+    "moc": "the 4 core terms — the core principle — what it does/doesn't — the 7-step loop — the name"
   },
   "checkpoint": {
     "id": "c1",
-    "title": "Checkpoint 1 \u2014 gate",
+    "title": "Checkpoint 1 — gate",
     "prompt": "Reproduce the 4 core terms and the core principle, and name what the tribunal is NOT. Write a short verdict.",
     "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
   },
@@ -18,19 +18,19 @@
       "xp": 10,
       "facts": [
         {
-          "text": "**the Living Tribunal** is a system for answering one hard question by running several independent AI models against it. A sitting opens with a single problem and closes with a single verdict.",
+          "text": "**the Living Tribunal** is the whole system for getting one hard question answered by several independent AI models. You open it with a single problem and it closes with a single verdict — a courtroom where the models are witnesses, not the judge.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         },
         {
-          "text": "The four names exist so every stage has one unambiguous word: **A Sitting** is one problem run, **Quorum** is the vote (3 to 5 models), **Convergence** is the final verdict. Mixing up 'the vote' with 'the answer' is the classic beginner error.",
+          "text": "The four terms exist so anyone can describe a run without ambiguity: `the Living Tribunal` is the system, `A Sitting` is one problem run, `Quorum` is the multi-model vote, `Convergence` is the final verdict. Naming each stage stops people from mixing up 'the vote' with 'the answer'.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         },
         {
-          "text": "In practice the `hub` CLI drives the whole run: hand it one brief and it routes the brief to independent lanes, collects their votes, and records the Convergence. The model is just the engine inside one lane.",
+          "text": "In practice the `hub` CLI drives the whole thing: you hand it one brief and it farms that brief out to the lanes, collects their votes, and writes the Convergence. The model is only the engine doing the reasoning inside one lane.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         },
         {
-          "text": "A common slip is calling the model 'the tribunal'. The model is one witness doing the reasoning; the tribunal is the courtroom around it - lanes, votes, and the converged verdict.",
+          "text": "A common slip is calling the model 'the tribunal'. It is not — the model is one lane's engine. The tribunal is the system of lanes, votes, and the converged verdict, run by the `hub` CLI.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
         }
       ],
@@ -55,7 +55,7 @@
           "pairs": [
             { "left": "the Living Tribunal", "right": "the system" },
             { "left": "A Sitting", "right": "one problem run" },
-            { "left": "Quorum", "right": "the vote (3\u20135 models)" },
+            { "left": "Quorum", "right": "the vote (3–5 models)" },
             { "left": "Convergence", "right": "the final verdict" }
           ],
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Vocabulary"
@@ -69,23 +69,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "**Formalize Thinly** means writing down just enough process to enforce three habits: independence, grounding, and a recorded dissent. Anything past that is machinery, not value.",
+          "text": "Formalize Thinly means write down just enough process to keep the discipline — independence, grounding, and a recorded dissent — and no more. The point is the discipline, not a pile of machinery.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
         },
         {
-          "text": "Discipline is the point because it survives model swaps: a thin process lets you change lanes or models without rebuilding a bureaucracy. The habit of challenging and citing carries the value.",
+          "text": "Discipline is the product because it survives model swaps. When the process is thin you can change lanes or models without rewriting a bureaucracy; the value is the habit of challenging and citing, not the tooling.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
         },
         {
-          "text": "The whole system fits in four artifacts: this document, the intake template, the ledger, and the `hub` CLI. If it is not one of those four, it is not part of the system.",
+          "text": "The 'whole system' is just four artifacts: this document, the intake template, the ledger, and the `hub` CLI. There is no hidden server or special environment — if it is not one of those four, it is not the system.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
         },
         {
-          "text": "The habit already paid real dividends: it caught an AI's wrong Cloudflare/Prisma/Neon claims, audited a session report, and shipped a migration blueprint. Few tools get that much real-world validation.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a710 Verdict"
+          "text": "The habit has already paid off: it caught an AI's wrong Cloudflare/Prisma/Neon claims, audited a session report, and shipped a migration blueprint. That is more real validation than most tools ever get.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§10 Verdict"
         },
         {
-          "text": "'Just enough' does not mean 'less rigor': the rigor lives in gates instead of heavy build-out. The checkpoint at the end of this unit is exactly such a gate.",
+          "text": "Players often read 'just enough process' as 'less rigor'. It is not — it means the rigor is enforced by gates, not by a heavy build. The learn checkpoint at the end of this unit is exactly one of those gates.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Thesis"
         }
       ],
@@ -99,7 +99,7 @@
         },
         {
           "type": "select",
-          "prompt": "Which of these is NOT part of \u201cthe whole system\u201d?",
+          "prompt": "Which of these is NOT part of “the whole system”?",
           "options": [
             "this document",
             "the intake template",
@@ -113,7 +113,7 @@
           "type": "tf",
           "prompt": "The tribunal's habit has already caught a wrong model claim and audited a session report.",
           "answer": true,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a710 Verdict"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§10 Verdict"
         }
       ]
     },
@@ -124,20 +124,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The tribunal takes a problem from any session and returns ONE converged, evidence-cited answer. That single artifact is the whole product.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "text": "The tribunal takes one problem from any session and returns ONE converged, evidence-cited answer. It is a decision service, not a workshop.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         },
         {
-          "text": "It routes the SAME brief through 2 to 5 independent model lanes, forces them to challenge each other, and grounds the result in the second brain plus fresh docs. Independence plus grounding is what turns opinion into something you can defend.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "text": "It routes the SAME brief through 2–5 independent lanes and grounds the result in the second brain plus fresh docs, because independence plus grounding is what turns opinion into a verdict you can defend.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         },
         {
-          "text": "What comes back is a verdict or a blueprint, not commits: citation-backed text that a human then acts on in the real repo.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "text": "What comes back is citation-backed text a human then acts on in the real repo: a verdict or a blueprint, never a chat log and never a git commit.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         },
         {
-          "text": "It is deliberately NOT a build environment, a chat playground, an agent orchestrator for long-running work, a replacement for reading primary docs, or a destination for lab data or secrets.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "text": "It is deliberately NOT a build environment, a chat playground, an agent orchestrator, a replacement for reading primary docs, or a place to park lab data or secrets. Treating it as any of those breaks the contract.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         }
       ],
       "exercises": [
@@ -151,7 +151,7 @@
             "a git commit"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         },
         {
           "type": "select",
@@ -163,7 +163,7 @@
             "a way to force lanes to challenge each other"
           ],
           "answer": 2,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         },
         {
           "type": "spot",
@@ -176,31 +176,31 @@
             "returning one evidence-cited answer"
           ],
           "answer": 2,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a72 Purpose & scope"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§2 Purpose & scope"
         }
       ]
     },
     {
       "id": "u1l4",
-      "title": "The 7-Step Loop: Intake \u2192 Triage \u2192 Ground \u2192 Route \u2192 Converge \u2192 Verify \u2192 Record",
+      "title": "The 7-Step Loop: Intake → Triage → Ground → Route → Converge → Verify → Record",
       "skill": "core-loop",
       "xp": 10,
       "facts": [
         {
-          "text": "Every run walks seven steps in order: Intake, Triage, Ground, Route, Converge, Verify, Record. Intake is the problem arriving; Record is the verdict filed.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "text": "Every run walks seven steps: Intake → Triage → Ground → Route → Converge → Verify → Record. Intake is the problem arriving and Record is the verdict filed.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         },
         {
-          "text": "Independence is the product of the loop: each lane sees the SAME brief, and no lane sees another's output until convergence. Blind routing is what makes the vote honest.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "text": "Independence is the product. Each lane sees the SAME brief and no lane sees another's output until convergence — that blindness is what makes the Quorum a real vote instead of groupthink.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         },
         {
-          "text": "Verify means checking against the artifact the user actually runs: run it, grep the repo, read the vendor doc. Model agreement alone never counts.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "text": "In the Verify step you check the artifact the user actually runs: run it, grep the repo, read the vendor doc — never just 'the models agreed'. Record then writes the verdict to the ledger so it stays auditable.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         },
         {
-          "text": "Record closes the loop by writing down what was decided. In the learn path, clearing this unit's checkpoint is that step made visible: your verdict becomes permanent.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "text": "Players sometimes think Route is where lanes 'talk'. It is not — Route is blind dispatch; the lanes only meet at Converge. In the learn path, clearing the unit checkpoint is the Record step made visible.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         }
       ],
       "exercises": [
@@ -209,7 +209,7 @@
           "prompt": "Put the 7 loop steps in order.",
           "options": ["Converge", "Ground", "Intake", "Verify", "Route", "Triage", "Record"],
           "answer": ["Intake", "Triage", "Ground", "Route", "Converge", "Verify", "Record"],
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         },
         {
           "type": "select",
@@ -221,11 +221,11 @@
             "to speed up convergence"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         },
         {
           "type": "select",
-          "prompt": "What does \u201cverify\u201d mean in the loop?",
+          "prompt": "What does “verify” mean in the loop?",
           "options": [
             "model agreement",
             "a second blind vote",
@@ -233,31 +233,31 @@
             "reading the verdict twice"
           ],
           "answer": 2,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a73 The core loop"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§3 The core loop"
         }
       ]
     },
     {
       "id": "u1l5",
-      "title": "The Name: Quorum \u2014 Why It Was Chosen",
+      "title": "The Name: Quorum — Why It Was Chosen",
       "skill": "naming",
       "xp": 10,
       "facts": [
         {
-          "text": "`Quorum` is the name because a quorum of independent voices - not one model - is the property that makes the hub work.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "text": "`Quorum` is the name of the hub, chosen to name the one property that makes it work: you need a quorum of independent voices, not a single one.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         },
         {
-          "text": "Real Claude proposed it precisely for that reason: the word names a decision rule, not a vibe. Enough independent agreement is what lets a verdict count.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "text": "Real Claude proposed it precisely because it points at independence. A name like `Sounding Board` would have suggested a chat; `Quorum` names a decision rule.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         },
         {
-          "text": "`Crossbench` was the runner-up in the same naming round.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "text": "The runner-up was `Crossbench` — another strong name, but it reads as a place rather than a rule. `Quorum` won because it states the mechanism in one word.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         },
         {
-          "text": "Do not read 'quorum' as a headcount feature of the CLI. It is the principle that a verdict only counts when several independent lanes converge on it.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "text": "A common slip is hearing 'quorum' as a headcount feature of the CLI. It is a principle: the verdict only counts because several independent lanes agreed.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         }
       ],
       "exercises": [
@@ -265,26 +265,26 @@
           "type": "select",
           "prompt": "Which name was recommended, and why?",
           "options": [
-            "PolyModel Hub \u2014 because it is generic",
-            "Crossbench \u2014 because it is short",
-            "Quorum \u2014 because it names the independence property",
-            "Sounding Board \u2014 because it is evocative"
+            "PolyModel Hub — because it is generic",
+            "Crossbench — because it is short",
+            "Quorum — because it names the independence property",
+            "Sounding Board — because it is evocative"
           ],
           "answer": 2,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         },
         {
           "type": "select",
           "prompt": "The runner-up name was:",
           "options": ["Quorum", "Crossbench", "Sounding Board", "PolyModel Hub"],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         },
         {
           "type": "tf",
-          "prompt": "The name \u201cQuorum\u201d was proposed by real Claude.",
+          "prompt": "The name “Quorum” was proposed by real Claude.",
           "answer": true,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a71 Name"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§1 Name"
         }
       ]
     }

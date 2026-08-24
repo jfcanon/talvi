@@ -2,11 +2,11 @@
   "unit": {
     "id": "u2",
     "title": "Harness Engineering Fundamentals",
-    "moc": "agent = model + harness \u2014 the 8 components \u2014 harness beats model \u2014 failure stats \u2014 tribunal's map \u2014 sensors proven"
+    "moc": "agent = model + harness — the 8 components — harness beats model — failure stats — tribunal's map — sensors proven"
   },
   "checkpoint": {
     "id": "c2",
-    "title": "Checkpoint 2 \u2014 gate",
+    "title": "Checkpoint 2 — gate",
     "prompt": "Classify a fictional system against the 8 harness components and say which layer the tribunal itself was weakest in.",
     "cite": "sidequests/harness-baseline/verdict.md:Component map"
   },
@@ -18,19 +18,19 @@
       "xp": 10,
       "facts": [
         {
-          "text": "An agent is two parts: the **model** that reasons, and the **harness**, everything wrapped around it - what the model sees, what it can do, how it recovers.",
+          "text": "An agent is two parts: the model that reasons, and the harness — everything wrapped around it. The harness decides what the model sees, what it can do, and how it recovers from mistakes.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Harness engineering is its own discipline, distinct from prompt engineering and model selection. Keep the model fixed and behavior still changes completely when the wrapper changes.",
+          "text": "This split matters because harness engineering is its own discipline, separate from prompt engineering and model selection. Keep the same model and you still get very different behavior by changing the harness.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Same model, different harness: swap the guides and sensors and the engine starts catching errors it used to ship. Same brain, different agent.",
+          "text": "Same model, different harness: swap the guides and sensors and the same reasoning engine will refuse a bad edit it used to make, or catch its own error before Record.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Saying 'the model is the agent' misses half the machine: the model is one component among many. In the learn path, the checkpoint gating this unit is the verification layer turned into a quiz.",
+          "text": "Learners often say 'the model is the agent'. It is not — the model is one component. In the learn path, the checkpoint that gates this unit is the harness's verification layer turned into a quiz.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         }
       ],
@@ -40,7 +40,7 @@
           "prompt": "What is the harness?",
           "options": [
             "the reasoning model",
-            "everything around the model \u2014 what it sees, what it can do, how it recovers",
+            "everything around the model — what it sees, what it can do, how it recovers",
             "the training data",
             "the user interface only"
           ],
@@ -74,23 +74,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "A standard harness inventories into eight components: guides, sensors, memory/state, tool-execution, guardrails, loop controller, verification, and failure handler. Each owns one job in the agent's life cycle.",
+          "text": "A harness is inventoried in eight components: guides, sensors, memory/state, tool-execution, guardrails, loop controller, verification, and failure handler. Each owns a job in the agent's life cycle.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Guides are the feedforward layer: `AGENTS.md` and conventions shape behavior before the model acts. Sensors are the feedback layer: linters, type checks, and LLM-as-judge report how it did.",
+          "text": "Guides are the feedforward layer (`AGENTS.md`, conventions) — they tell the model how to behave before it acts. Sensors are the feedback layer (linters, type checks, LLM-as-judge) — they tell it how it did after.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Guardrails encode policy the model cannot overrule. The tribunal's own examples are structural rules like `DeepSeek-once` and `MAX_LANES=4`.",
+          "text": "Guardrails encode policy — for example the tribunal's structural rules like `DeepSeek-once` and `MAX_LANES=4`. They are the 'no' the model cannot overrule, distinct from a sensor that merely reports.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         },
         {
-          "text": "Verification is the most-skipped layer: a sensor that only confirms output is non-empty passes trivially. Real verification proves the thing actually works.",
+          "text": "Verification is the most-skipped layer. Teams ship sensors that only confirm output is non-empty and call it done — but non-empty is a trivial check; real verification proves the thing actually works.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "The inventory is hands-on here: the complete exercise below fills in memory/state and verification, and the unit checkpoint maps a fictional system onto all eight components.",
+          "text": "In the learn path, the `complete` exercise where you fill in memory/state and verification is exactly this inventory — and the checkpoint asks you to map a fictional system onto these eight components.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         }
       ],
@@ -129,19 +129,19 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Improving the harness beats swapping the model: better guides, sensors, guardrails, and loops make the same engine markedly more capable.",
+          "text": "Improving the harness around a model beats swapping the model. Same engine, better guardrails, sensors, and loops, and the agent gets markedly better.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "The cited evidence: harness changes delivered 5 to 14 benchmark points and -20% tokens while the model stayed the same. The gain came from the wrapper, not a bigger brain.",
+          "text": "Cited literature: harness changes delivered 5–14 benchmark points and ~20% fewer tokens on the SAME model. The gain comes from the wrapper, not a bigger brain.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Manus rewrote its harness five times in six months on one unchanged model - treating the harness as the product.",
+          "text": "Manus rewrote its harness 5 times in 6 months while keeping the same model — proof that the harness, not the model version, is the lever.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "The tempting move is 'just buy a bigger model'. The literature argues the opposite: invest in the layers around whichever model you already run.",
+          "text": "The tempting move is to 'just buy a bigger model'. The literature says that spends tokens without the discipline a good harness gives you for free.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         }
       ],
@@ -150,8 +150,8 @@
           "type": "select",
           "prompt": "Harness changes reportedly delivered:",
           "options": [
-            "5\u201314 benchmark points and \u221220% tokens on the same model",
-            "1\u20132 points at double the cost",
+            "5–14 benchmark points and −20% tokens on the same model",
+            "1–2 points at double the cost",
             "no measurable change",
             "a larger model requirement"
           ],
@@ -186,19 +186,19 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The base rate is brutal: about 88% of agent projects never reach production. Building a demo is easy; operating reliably is the hard part.",
+          "text": "The field is brutal: ~88% of agent projects never reach production. Building an agent is easy; operating one reliably is not.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "About 27% of failures trace to data quality: the agent reasons over bad or unverified inputs, so even a perfect model produces wrong answers.",
+          "text": "~27% of failures trace to data quality — the agent reasons on bad or unverified inputs, so even a perfect model produces a wrong result.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "Weak verification is the most-skipped layer: models say done when they're not done, and a sensor that only checks for non-empty output passes trivially.",
+          "text": "The most-skipped layer is verification: 'models say done when they're not done', and a sensor that only checks for non-empty output passes trivially. That gap is why projects stall right after the demo.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         },
         {
-          "text": "These numbers are not an argument for a bigger model. They are an argument for the layers teams skip: verification and data quality.",
+          "text": "A common misread is that these numbers argue for a bigger model. They do not — they argue for verification and data quality, the harness layers teams skip.",
           "cite": "sidequests/harness-baseline/intake.md:Grounding"
         }
       ],
@@ -233,23 +233,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Mapped against the eight components, the tribunal splits cleanly: strong in memory/state and guardrails, weak in sensors, and verification held as doctrine rather than machinery.",
+          "text": "Mapped against the eight components, the tribunal is strong in some layers and weak in others: strong in memory/state and guardrails, weak in sensors and verification.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         },
         {
-          "text": "Memory/state is strong because it is files-only with a proven clean-session bootstrap: nothing depends on a hidden service remembering state between runs.",
+          "text": "Memory/state is strong because it is files-only with a proven clean-session bootstrap; guardrails are strong because they are structural rules like `DeepSeek-once` and `MAX_LANES=4` the model cannot override.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         },
         {
-          "text": "Guardrails are strong because they are structural: `DeepSeek-once` and `MAX_LANES=4` bind every lane no matter what any model prefers.",
+          "text": "Sensors are weak because they lean on byte counts — exactly the 'trivial check' the literature warns about. They confirm size, not correctness.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         },
         {
-          "text": "Sensors are weak because they lean on byte counts - the 'trivial check' the literature warns about. Size confirmed is not correctness proven.",
+          "text": "Verification is described as 'doctrine, not machinery' — the most-skipped layer. The tribunal relies on the habit of challenging and citing rather than an automated gate, which is both its strength and its gap.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         },
         {
-          "text": "Verification is 'doctrine, not machinery': the habit of challenging and citing stands in for an automated gate. The unit checkpoint asks you to name this weakest layer yourself.",
+          "text": "In the learn path, the checkpoint asks you to name which layer the tribunal is weakest in — it is verification, the layer real agents skip.",
           "cite": "sidequests/harness-baseline/verdict.md:Component map"
         }
       ],
@@ -271,7 +271,7 @@
           "prompt": "The tribunal's sensors are weak because:",
           "options": [
             "they are too expensive",
-            "byte count is the \u201ctrivial check\u201d the literature warns about",
+            "byte count is the 'trivial check' the literature warns about",
             "there are too many of them",
             "they run on the wrong lane"
           ],
@@ -299,19 +299,19 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The sensor gap from the statistics is not theoretical: two live defects slipped through the hub's shallow checks.",
+          "text": "The sensor gap is not theoretical — two live defects in the hub proved it. Sensors are the feedback layer, and these bugs slipped past because the checks were too shallow.",
           "cite": "sidequests/harness-baseline/verdict.md:Live defects found"
         },
         {
-          "text": "Defect 1: `class: lane-benchmark` auto-picked 5 lanes, blowing past `MAX_LANES=4` and violating the `DeepSeek-once` guard. No sensor checked the lane count against the guardrail.",
+          "text": "Defect 1: `class: lane-benchmark` auto-picked 5 lanes, blowing past `MAX_LANES=4` AND breaking the `DeepSeek-once` guard. The sensor never validated lane count against the guardrail.",
           "cite": "sidequests/harness-baseline/verdict.md:Live defects found"
         },
         {
-          "text": "Defect 2: `hub verdict` matched slugs by substring, so a slug contained inside another silently rewrote the wrong ledger row. An exact-match sensor would have caught it.",
+          "text": "Defect 2: `hub verdict` used substring match, so a slug that is a substring of another silently rewrote the wrong ledger row. A better sensor (exact match) would have caught it.",
           "cite": "sidequests/harness-baseline/verdict.md:Live defects found"
         },
         {
-          "text": "Neither bug is cosmetic: both are exactly the shallow-sensor pattern the failure statistics warned about, caught live inside the tribunal's own harness.",
+          "text": "These look like cosmetic bugs, but both are precisely the sensor gap the statistics lesson warned about: shallow checks that pass while real harm slips through.",
           "cite": "sidequests/harness-baseline/verdict.md:Live defects found"
         }
       ],
