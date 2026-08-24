@@ -320,7 +320,7 @@ function onCheck(btn) {
 function grade(ex, answer) {
   if (ex.type === "tf") return { ok: answer === ex.answer, correct: ex.answer ? "true" : "false" };
   if (ex.type === "select" || ex.type === "spot") {
-    return { ok: answer === ex.answer, correct: String(ex.options[ex.answer] ?? "") };
+    return { ok: answer === ex.answer, correct: String((ex.options || [])[ex.answer] ?? "") };
   }
   if (ex.type === "order") {
     return { ok: sameArr(answer, ex.answer), correct: ex.answer.join(" → ") };
