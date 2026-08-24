@@ -4,6 +4,7 @@
 #include "wifi_link.h"
 #include "llu_client.h"
 #include "ble_watch.h"
+#include "display.h"
 
 // main.cpp exposes these for `run`/`status`.
 extern void requestImmediateCycle();
@@ -25,6 +26,7 @@ static void help() {
     "  status                  link/session/cycle state\n"
     "  ble                     last passive BLE scan report\n"
     "  llu-reset               drop cached LLU session (forces re-login)\n"
+    "  screen-test             fill colours + text on the AMOLED\n"
     "  portal                  forget Wi-Fi and reboot into the setup hotspot\n"
     "  reboot");
 }
@@ -68,6 +70,7 @@ static void handle(String line) {
   }
   if (cmd == "ble") { Serial.print(ble_watch::lastReport()); return; }
   if (cmd == "llu-reset") { llu::forgetSession(); Serial.println("ok: LLU session dropped"); return; }
+  if (cmd == "screen-test") { display::selfTest(); return; }
   if (cmd == "portal") {
     settings.clearKey("wifi_ssid"); settings.clearKey("wifi_pass");
     Serial.println("wifi cleared, rebooting into setup portal..."); delay(200); ESP.restart(); return;

@@ -38,9 +38,10 @@ IngestResult push(const LluWindow& w) {
   http.addHeader("Authorization", "Bearer " + settings.ingest_token);
   r.http_code = http.POST(payload);
 
-  JsonDocument resp;
-  deserializeJson(resp, http.getStream());
+  String body = http.getString();
   http.end();
+  JsonDocument resp;
+  deserializeJson(resp, body);
   if (r.http_code == 200 && (resp["success"] | false)) {
     r.ok = true;
     r.total_readings = resp["total_readings"] | 0;

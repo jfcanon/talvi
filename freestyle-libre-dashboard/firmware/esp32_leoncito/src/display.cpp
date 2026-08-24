@@ -38,7 +38,7 @@ bool begin() {
   s_bus = new Arduino_ESP32QSPI(pins::LCD_CS, pins::LCD_SCLK, pins::LCD_SDIO0,
                                 pins::LCD_SDIO1, pins::LCD_SDIO2, pins::LCD_SDIO3);
   s_gfx = new Arduino_SH8601(s_bus, GFX_NOT_DEFINED, 0, pins::LCD_WIDTH, pins::LCD_HEIGHT);
-  if (!s_gfx->begin()) {
+  if (!s_gfx->begin(40000000)) {  // Waveshare's patched bus defaults to 40 MHz; upstream 1.4.9 is 80
     Serial.println("[display] SH8601 init failed — running headless");
     return false;
   }
@@ -87,6 +87,17 @@ void showConnecting(const String& ssid) {
   header("Connecting", RGB565_CYAN);
   line(100, "Joining Wi-Fi:");
   line(130, ssid, 3, RGB565_WHITE);
+}
+
+void selfTest() {
+  if (!s_ok) { Serial.println("[display] not initialised"); return; }
+  const uint16_t colors[] = {RGB565_RED, RGB565_GREEN, RGB565_BLUE, RGB565_WHITE};
+  for (uint16_t c : colors) { s_gfx->fillScreen(c); delay(700); }
+  s_gfx->setBrightness(255);
+  header("Screen test", RGB565_YELLOW);
+  line(120, "If you can read this,", 2);
+  line(150, "the panel works.", 2);
+  Serial.println("[display] self-test drawn (red/green/blue/white, then text)");
 }
 
 void showMessage(const String& title, const String& body) {

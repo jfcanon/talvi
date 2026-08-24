@@ -100,9 +100,13 @@ static String loginOnce(bool& redirected) {
   int code = http.POST(payload);
   if (code != 200) { http.end(); return "login HTTP " + String(code); }
 
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, http.getStream());
+  // getString() de-chunks Transfer-Encoding: chunked; a raw getStream()
+  // would hand ArduinoJson the hex chunk-size line first (parses as a bare
+  // number -> silently empty document).
+  String resp_body = http.getString();
   http.end();
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, resp_body);
   if (err) return String("login parse: ") + err.c_str();
 
   JsonObject data = doc["data"];
@@ -146,9 +150,10 @@ static String resolvePatient() {
   int code = http.GET();
   if (code == 401 || code == 403) { http.end(); return "AUTH"; }
   if (code != 200) { http.end(); return "connections HTTP " + String(code); }
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, http.getStream());
+  String body = http.getString();
   http.end();
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, body);
   if (err) return String("connections parse: ") + err.c_str();
   if (!doc["data"].is<JsonArray>()) return "connections: unexpected shape (version gate?)";
   JsonArray arr = doc["data"].as<JsonArray>();
@@ -182,11 +187,22 @@ static String fetchGraphInto(LluWindow& w) {
   filter["data"]["connection"]["glucoseMeasurement"]["TrendArrow"] = true;
   filter["data"]["graphData"][0]["FactoryTimestamp"] = true;
   filter["data"]["graphData"][0]["ValueInMgPerDl"] = true;
-  JsonDocument doc;
-  DeserializationError err =
-      deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+  String body = http.getString();
   http.end();
+  Serial.printf("[llu] graph body %u bytes\n", body.length());
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, body, DeserializationOption::Filter(filter));
+  body = String();
   if (err) return String("graph parse: ") + err.c_str();
+  Serial.printf("[llu] graph parsed: overflowed=%d graphData=%u gm=%s\n",
+                (int)doc.overflowed(), (unsigned)doc["data"]["graphData"].size(),
+                doc["data"]["connection"]["glucoseMeasurement"].isNull() ? "null" : "ok");
+  if (doc["data"]["graphData"].size() > 0) {
+    const char* ts0 = doc["data"]["graphData"][0]["FactoryTimestamp"];
+    Serial.printf("[llu] first point ts='%s' val=%d -> iso='%s'\n", ts0 ? ts0 : "(null)",
+                  (int)(doc["data"]["graphData"][0]["ValueInMgPerDl"] | 0),
+                  lluFactoryToIso(ts0).c_str());
+  }
 
   for (JsonObject pt : doc["data"]["graphData"].as<JsonArray>()) {
     float v = pt["ValueInMgPerDl"] | 0.0f;

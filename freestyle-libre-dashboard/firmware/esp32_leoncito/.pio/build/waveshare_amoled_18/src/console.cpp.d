@@ -180,4 +180,5 @@
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include/soc/esp32/spiram.h \
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- src/settings.h src/wifi_link.h src/llu_client.h src/ble_watch.h
+ src/settings.h src/wifi_link.h src/llu_client.h src/ble_watch.h \
+ src/display.h
