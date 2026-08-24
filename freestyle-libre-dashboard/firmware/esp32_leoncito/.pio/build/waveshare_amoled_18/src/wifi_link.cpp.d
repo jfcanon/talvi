@@ -200,4 +200,23 @@
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiUdp.h \
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/Udp.h \
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/cbuf.h \
- src/settings.h src/config.h
+ .pio/libdeps/waveshare_amoled_18/WiFiManager/WiFiManager.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi_types.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_private/esp_wifi_private.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi_crypto_types.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_private/wifi_os_adapter.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi_default.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/Update/src/Update.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/MD5Builder.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_rom/include/esp_rom_md5.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/WebServer.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/HTTP_Method.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/nghttp/port/include/http_parser.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/Uri.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/detail/RequestHandler.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/DNSServer/src/DNSServer.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiUdp.h \
+ .pio/libdeps/waveshare_amoled_18/WiFiManager/wm_strings_en.h \
+ .pio/libdeps/waveshare_amoled_18/WiFiManager/wm_consts_en.h \
+ src/settings.h src/config.h src/display.h

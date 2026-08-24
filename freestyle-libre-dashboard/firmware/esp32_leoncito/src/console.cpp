@@ -25,6 +25,7 @@ static void help() {
     "  status                  link/session/cycle state\n"
     "  ble                     last passive BLE scan report\n"
     "  llu-reset               drop cached LLU session (forces re-login)\n"
+    "  portal                  forget Wi-Fi and reboot into the setup hotspot\n"
     "  reboot");
 }
 
@@ -67,6 +68,10 @@ static void handle(String line) {
   }
   if (cmd == "ble") { Serial.print(ble_watch::lastReport()); return; }
   if (cmd == "llu-reset") { llu::forgetSession(); Serial.println("ok: LLU session dropped"); return; }
+  if (cmd == "portal") {
+    settings.clearKey("wifi_ssid"); settings.clearKey("wifi_pass");
+    Serial.println("wifi cleared, rebooting into setup portal..."); delay(200); ESP.restart(); return;
+  }
   if (cmd == "reboot") { Serial.println("rebooting..."); delay(200); ESP.restart(); return; }
   Serial.println("unknown command (try `help`)");
 }

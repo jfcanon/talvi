@@ -20,7 +20,8 @@ static const KeyDef STR_KEYS[] = {
 
 void Settings::load() {
   prefs.begin(NS, true);
-  for (auto& k : STR_KEYS) this->*(k.sfield) = prefs.getString(k.name, "");
+  for (auto& k : STR_KEYS)
+    this->*(k.sfield) = prefs.isKey(k.name) ? prefs.getString(k.name, "") : String("");
   poll_s = prefs.getUInt("poll_s", cfg::DEFAULT_POLL_SECONDS);
   tls_insecure = prefs.getBool("tls_insecure", false);
   prefs.end();

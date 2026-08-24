@@ -181,4 +181,4 @@
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_system/include/esp_task_wdt.h \
  src/config.h src/settings.h src/console.h src/wifi_link.h \
- src/llu_client.h src/ingest_client.h src/ble_watch.h
+ src/llu_client.h src/ingest_client.h src/ble_watch.h src/display.h

@@ -49,9 +49,32 @@ authenticated GATT session.
   window, so any outage shorter than ~12 h loses nothing
 - 3-min hardware watchdog + reboot after 24 consecutive failed cycles
 
-## Provisioning (no secrets in git or in the binary)
+## Wi-Fi setup — on-device captive portal (no computer needed)
 
-Secrets live in device NVS, written over USB serial:
+With no Wi-Fi saved (or if the saved network won't connect for 25 s) the
+board turns into a setup hotspot and the AMOLED shows the steps:
+
+1. On a phone, join Wi-Fi **`Leoncito-Setup`** (password **`leoncito1`**).
+2. The setup page opens automatically (or browse to `192.168.4.1`).
+3. *Configure WiFi* → the board lists the networks it sees → pick one →
+   type its password → Save.
+
+The board joins, stores SSID + password in its own NVS (nothing leaves the
+device — not the repo, not a vault), and switches to the status screen
+(latest glucose, link, last push). Portal times out after 15 min and reboots
+to retry. `portal` on the console forgets Wi-Fi and re-enters setup.
+Everything else (console, BLE watch) keeps running while the portal is up.
+
+## Screen
+
+Headless-safe: if the panel or TCA9554 expander don't answer, the firmware
+logs it and runs without a display. Driver: Waveshare's `Arduino_SH8601`
+(+ `Arduino_OLED` base) vendored into `src/` — upstream Arduino_GFX (pinned
+1.4.9 for the ESP32 core 2.x) has no SH8601 driver. Touch is not used yet.
+
+## Provisioning the rest (no secrets in git or in the binary)
+
+LLU credentials + ingest token live in device NVS, written over USB serial:
 
 ```bash
 # interactive
@@ -86,8 +109,8 @@ chains today. If a chain rotates off GTS the fetch fails loudly;
   zone blocks it: add a WAF skip rule for `/api/ingest` (main.tf). If
   libreview.io blocks it: revisit (e.g. fetch via worker proxy is NOT possible
   — LLU blocks CF egress — so a small LAN relay or UA/TLS tuning would be next).
-- Display is intentionally dark (headless v1). On-screen glucose + battery
-  needs the SH8601/FT3168 drivers — nice follow-up.
+- Touch keyboard on the panel (FT3168) is a possible follow-up; the phone
+  captive portal covers Wi-Fi entry today.
 - Events (`food`/`insulin` logbook) are not fetched by the ESP32; the Mac
   fetcher still covers them.
 

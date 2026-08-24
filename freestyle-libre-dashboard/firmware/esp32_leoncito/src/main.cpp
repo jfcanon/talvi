@@ -19,10 +19,14 @@
 #include "llu_client.h"
 #include "ingest_client.h"
 #include "ble_watch.h"
+#include "display.h"
 
 static unsigned long s_next_cycle_ms = 0;
 static unsigned s_consecutive_failures = 0;
 static String s_last_cycle = "never ran";
+static float s_latest_mgdl = 0;
+static String s_latest_trend, s_latest_iso;
+static unsigned long s_next_screen_ms = 0;
 
 void requestImmediateCycle() { s_next_cycle_ms = 0; }
 String cycleStatus() {
@@ -45,6 +49,11 @@ static void runCycle() {
   }
   Serial.printf("[cycle] got %u readings, trend=%s\n",
                 (unsigned)w.readings.size(), w.trend_enum.c_str());
+  if (!w.readings.empty()) {
+    s_latest_mgdl = w.readings.back().mgdl;
+    s_latest_iso = w.latest_iso;
+    s_latest_trend = w.trend_enum;
+  }
   IngestResult r = ingest::push(w);
   if (r.ok) {
     s_consecutive_failures = 0;
@@ -66,7 +75,8 @@ void setup() {
   settings.load();
   llu::loadSession();
   console::begin();
-  wifi_link::begin();
+  display::begin();          // re-inits the panel (clears any frozen factory image)
+  wifi_link::begin();        // stored creds, else captive portal (blocking)
   ble_watch::begin();
 
   esp_task_wdt_init(180, true);   // hard watchdog: any 3-min stall reboots
@@ -88,6 +98,11 @@ void loop() {
       s_last_cycle = "waiting for wifi/time";
     }
     s_next_cycle_ms = millis() + settings.poll_s * 1000UL;
+  }
+
+  if (millis() >= s_next_screen_ms && !wifi_link::portalActive()) {
+    s_next_screen_ms = millis() + cfg::SCREEN_REFRESH_SECONDS * 1000UL;
+    display::showStatus(wifi_link::status(), s_last_cycle, s_latest_mgdl, s_latest_trend, s_latest_iso);
   }
 
   if (s_consecutive_failures >= cfg::MAX_CONSECUTIVE_FAILURES) {
