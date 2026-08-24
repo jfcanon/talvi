@@ -465,11 +465,64 @@ body {
   letter-spacing: 0.02em;
 }
 
+.fact strong {
+  color: var(--accent-xp);
+  font-weight: 600;
+}
+.fact code {
+  font-family: var(--font-console);
+  font-size: 0.86em;
+  color: var(--text-hi);
+  background: var(--deep);
+  padding: 0 0.3em;
+}
+
+/* Progress ring: an unsized SVG with a viewBox fills the whole column, which
+   rendered as a giant empty square above the fact. Pin it small. */
+.progress-ring {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: block;
+  margin: 0 0 0.8rem;
+}
+.progress-ring__bg {
+  stroke: var(--hud-line-soft);
+}
+.progress-ring__fill {
+  stroke: var(--accent-xp);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset var(--speed);
+}
+
+/* Pre-read gate: sits between the fact and the exercises, outside the locked
+   section so the button stays clickable. */
+.preread-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0 0 1.1rem;
+}
+.preread-gate__prompt {
+  margin: 0;
+  color: var(--text-lo);
+}
+.preread-gate[hidden] {
+  display: none;
+}
+
 /* ---- Exercises ---- */
 .exercises {
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
+}
+.exercises[data-locked="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
 }
 
 .exercise {

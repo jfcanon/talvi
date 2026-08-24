@@ -18,7 +18,7 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
     .map(
       (f) =>
         '<article class="fact"><p>' +
-        esc(f.text) +
+        richText(f.text) +
         '</p><cite>' +
         esc(formatCitation(f.cite)) +
         "</cite></article>",
@@ -41,13 +41,16 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
 
   const body = isGate
     ? gateForm(lesson)
-    : '<section class="exercises" data-total="' +
-      esc(String(exerciseCount)) +
-      '" data-gated="true">' +  // pre-read gate: exercises blurred until ready
-      '<div class="preread-gate" hidden>' +
+    : // Pre-read gate: rendered OUTSIDE the exercises section (the section is
+      // locked with pointer-events:none until "I'm Ready", so the button must
+      // not live inside it) and visible without JS — client.js only unlocks.
+      '<div class="preread-gate">' +
       '<p class="preread-gate__prompt">Read the fact above. Tap <strong>I\'m Ready</strong> when you understand it.</p>' +
       '<button type="button" class="btn" data-action="ready">I\'m Ready</button>' +
       '</div>' +
+      '<section class="exercises" data-total="' +
+      esc(String(exerciseCount)) +
+      '" data-gated="true" data-locked="true">' +
       exercises +
       '<button type="button" class="btn continue-btn" data-action="continue" hidden>continue</button>' +
       "</section>";
@@ -144,6 +147,15 @@ function lessonHeading(lesson, position) {
       : "") +
     "</div>"
   );
+}
+
+// Minimal safe rich text for lesson facts: escape first, then map the two
+// markdown-ish markers the curriculum uses (**bold**, `code`) to elements.
+// No raw HTML from content ever reaches the page.
+export function richText(text) {
+  return esc(text)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
 function factsBlock(facts, isGate) {
