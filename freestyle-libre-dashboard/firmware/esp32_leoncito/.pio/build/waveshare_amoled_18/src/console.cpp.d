@@ -181,4 +181,6 @@
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  src/settings.h src/wifi_link.h src/llu_client.h src/ble_watch.h \
- src/display.h
+ src/display.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
+ /Users/nahuelavalos/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h

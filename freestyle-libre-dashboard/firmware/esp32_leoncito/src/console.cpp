@@ -5,6 +5,7 @@
 #include "llu_client.h"
 #include "ble_watch.h"
 #include "display.h"
+#include <Wire.h>
 
 // main.cpp exposes these for `run`/`status`.
 extern void requestImmediateCycle();
@@ -26,6 +27,7 @@ static void help() {
     "  status                  link/session/cycle state\n"
     "  ble                     last passive BLE scan report\n"
     "  llu-reset               drop cached LLU session (forces re-login)\n"
+    "  i2c-scan                list I2C devices (board revision check)\n"
     "  screen-test             fill colours + text on the AMOLED\n"
     "  portal                  forget Wi-Fi and reboot into the setup hotspot\n"
     "  reboot");
@@ -70,6 +72,15 @@ static void handle(String line) {
   }
   if (cmd == "ble") { Serial.print(ble_watch::lastReport()); return; }
   if (cmd == "llu-reset") { llu::forgetSession(); Serial.println("ok: LLU session dropped"); return; }
+  if (cmd == "i2c-scan") {
+    Serial.println("[i2c] scanning 0x08..0x77");
+    for (uint8_t a = 8; a < 0x78; a++) {
+      Wire.beginTransmission(a);
+      if (Wire.endTransmission() == 0) Serial.printf("  found 0x%02X\n", a);
+    }
+    Serial.println("[i2c] done (0x38=FT3168 V1, 0x15=CST820 V2, 0x34=AXP2101, 0x20=TCA9554)");
+    return;
+  }
   if (cmd == "screen-test") { display::selfTest(); return; }
   if (cmd == "portal") {
     settings.clearKey("wifi_ssid"); settings.clearKey("wifi_pass");

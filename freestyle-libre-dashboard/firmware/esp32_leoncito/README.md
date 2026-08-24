@@ -67,10 +67,12 @@ Everything else (console, BLE watch) keeps running while the portal is up.
 
 ## Screen
 
-Headless-safe: if the panel or TCA9554 expander don't answer, the firmware
-logs it and runs without a display. Driver: Waveshare's `Arduino_SH8601`
-(+ `Arduino_OLED` base) vendored into `src/` — upstream Arduino_GFX (pinned
-1.4.9 for the ESP32 core 2.x) has no SH8601 driver. Touch is not used yet.
+The owner's board is **revision V2** (I2C scan: CST820 touch at 0x15 — V1
+has FT3168 at 0x38), so the panel is a **CO5300**, driven by upstream
+Arduino_GFX 1.4.9's `Arduino_CO5300` over QSPI (same pins as V1, column
+offset 16, 40 MHz). Headless-safe: if the TCA9554 expander doesn't answer,
+the firmware logs it and runs without a display. Console `i2c-scan` shows the
+revision; `screen-test` cycles colours + text. Touch is not used yet.
 
 ## Provisioning the rest (no secrets in git or in the binary)
 

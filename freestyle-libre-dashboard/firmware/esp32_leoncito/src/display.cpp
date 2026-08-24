@@ -1,14 +1,20 @@
 #include "display.h"
 #include <Wire.h>
 #include <Arduino_GFX_Library.h>
-#include "Arduino_SH8601.h"
 #include "board_pins.h"
 
 namespace display {
 
 static Arduino_DataBus* s_bus = nullptr;
-static Arduino_SH8601* s_gfx = nullptr;
+static Arduino_CO5300* s_gfx = nullptr;
 static bool s_ok = false;
+
+// CO5300 brightness register (0x51); upstream 1.4.9's Arduino_CO5300 has no setBrightness().
+static void setBrightness(uint8_t b) {
+  s_bus->beginWrite();
+  s_bus->writeC8D8(0x51, b);
+  s_bus->endWrite();
+}
 static constexpr uint8_t BRIGHTNESS = 120;  // AMOLED: modest, always-on device
 
 // TCA9554 registers: 0x01 output, 0x03 config (0 = output).
@@ -37,15 +43,18 @@ bool begin() {
   }
   s_bus = new Arduino_ESP32QSPI(pins::LCD_CS, pins::LCD_SCLK, pins::LCD_SDIO0,
                                 pins::LCD_SDIO1, pins::LCD_SDIO2, pins::LCD_SDIO3);
-  s_gfx = new Arduino_SH8601(s_bus, GFX_NOT_DEFINED, 0, pins::LCD_WIDTH, pins::LCD_HEIGHT);
-  if (!s_gfx->begin(40000000)) {  // Waveshare's patched bus defaults to 40 MHz; upstream 1.4.9 is 80
-    Serial.println("[display] SH8601 init failed — running headless");
+  // Board revision V2 (I2C scan: CST820 touch @0x15) => CO5300 panel.
+  // Waveshare arduino-v2 HelloWorld: Arduino_CO5300(bus, RST, 0, W, H, 16, 0, 0, 0).
+  s_gfx = new Arduino_CO5300(s_bus, GFX_NOT_DEFINED, 0, false, pins::LCD_WIDTH, pins::LCD_HEIGHT,
+                             pins::LCD_COL_OFFSET, 0, 0, 0);
+  if (!s_gfx->begin(40000000)) {
+    Serial.println("[display] CO5300 init failed — running headless");
     return false;
   }
   s_gfx->fillScreen(RGB565_BLACK);
-  s_gfx->setBrightness(BRIGHTNESS);
+  setBrightness(BRIGHTNESS);
   s_ok = true;
-  Serial.println("[display] SH8601 up");
+  Serial.println("[display] CO5300 up");
   return true;
 }
 
@@ -93,7 +102,7 @@ void selfTest() {
   if (!s_ok) { Serial.println("[display] not initialised"); return; }
   const uint16_t colors[] = {RGB565_RED, RGB565_GREEN, RGB565_BLUE, RGB565_WHITE};
   for (uint16_t c : colors) { s_gfx->fillScreen(c); delay(700); }
-  s_gfx->setBrightness(255);
+  setBrightness(255);
   header("Screen test", RGB565_YELLOW);
   line(120, "If you can read this,", 2);
   line(150, "the panel works.", 2);
