@@ -18,12 +18,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The eval harness replays past sittings per lane, per class \u2014 a read-only replay gated on DELIVERABLE-PRESENCE, not exit code. oc-ds exited 0 with no deliverable twice when sandbox-blocked \u2014 exit 0 proves nothing.",
+          "text": "An **eval harness** is an automatic grader for AI work: it replays past sittings, lane by lane and class by class, and applies one gate \u2014 is a real, non-trivial deliverable present? Exit codes are ignored completely.",
           "cite": "sidequests/plan-convergence/verdict.md:Phase 1"
         },
         {
-          "text": "The eval harness is the #1 next layer: it mechanizes the most-skipped layer (verification) and would have caught both live defects.",
+          "text": "Why grade on artifacts? Because **exit 0 proves nothing** \u2014 verification was the layer everyone skipped by hand, so the tribunal ranked mechanizing it #1: read-only replay, low risk, and it would have caught both live defects.",
           "cite": "sidequests/harness-baseline/verdict.md:Top-5"
+        },
+        {
+          "text": "Concrete case: replaying history flagged the **two oc-ds incidents**, where the lane exited 0 with an empty deliverable \u2014 and `hub eval <slug>` re-runs that exact check on demand today.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 1"
+        },
+        {
+          "text": "Common trap: **\u201cit printed OK, so it worked.\u201d** Under the harness, \u201cno error\u201d is never evidence \u2014 the only accepted proof is an artifact that exists and carries non-trivial content.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 1"
         }
       ],
       "exercises": [
@@ -72,7 +80,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Instrumented verification gates \u2014 a sitting won't close until exit + presence + class probe are recorded. Seam rule: gate logic stays a small script; past ~200 lines, stop and buy.",
+          "text": "**Verification gates** turn \u201ctrust me, it\u2019s done\u201d into machine-checked records: a sitting cannot close until exit status, deliverable presence, and a class probe have been recorded for every lane.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 2"
+        },
+        {
+          "text": "Why force records? Because sittings used to close on prose \u2014 a confident summary with nothing behind it. The phase\u2019s own exit criterion says it plainly: at least one sitting must close **by gates, not prose**.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 2"
+        },
+        {
+          "text": "Concrete proof the gate bites: the acceptance test forces a failure, and that forced-failure sitting **cannot close without a gate record** \u2014 the check holds even when nobody is watching.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 2"
+        },
+        {
+          "text": "The **seam rule** keeps this honest over time: gate logic stays a small script, and past ~200 lines you stop and buy rather than grow it into a framework.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 2"
+        },
+        {
+          "text": "You are living the mechanic right now: this unit ends in a **gate-enforced checkpoint** \u2014 a graded verdict you must pass before the path continues, just as a sitting closes only through its gate record.",
           "cite": "sidequests/plan-convergence/verdict.md:Phase 2"
         }
       ],
@@ -116,16 +140,24 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Skill compounding distills playbooks from the winning lanes' deliverable structure \u2014 but ONLY from \u22653 validated sittings per class, and only claims with confidence=verified + review_state=accepted feed it. Wrong lessons compound too, which is why the eval harness is sequenced BEFORE it.",
+          "text": "**Skill compounding** converts repeated wins into reusable playbooks: after enough validated runs of one class, the winning lanes\u2019 deliverable structure is distilled into a playbook that future prompts receive automatically.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 8"
         },
         {
-          "text": "The tightened rule: \u22653 validated sittings per class before distilling that class \u2014 6 same-day sittings is overfitting territory.",
+          "text": "Why the waiting room? One lucky sitting teaches flukes, so distillation waits for **at least 3 validated sittings per class** \u2014 six same-day sittings is called out as overfitting territory.",
           "cite": "sidequests/plan-convergence/verdict.md:Phase 3"
         },
         {
-          "text": "Skill compounding reads ONLY confidence=verified + review_state=accepted claims \u2014 the hard filter against compounding unvalidated lessons.",
+          "text": "The first playbook shipped live this way: the design-blueprint class distilled its winner\u2019s structure at **75% (3 of 4 sittings)**, injected into future lane prompts \u2014 and verified present in the output.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 8"
+        },
+        {
+          "text": "Not every claim gets in: compounding reads **only `confidence=verified` plus `review_state=accepted`** records \u2014 a hard filter against baking unvalidated lessons into doctrine.",
           "cite": "sidequests/_claims-schema.md:Lifecycle"
+        },
+        {
+          "text": "**Misconception:** capture lessons the moment they happen. Wrong lessons compound too \u2014 which is exactly why the eval harness is sequenced **before** compounding.",
+          "cite": "sidequests/harness-baseline/verdict.md:Top-5"
         }
       ],
       "exercises": [
@@ -174,15 +206,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The Multica evaluation REJECTED adoption on TWO gates: the license gate (condition 1b forbids removing/modifying displayed branding without a written waiver \u2014 the owner's exact plan) and the architecture gate (visible interactive board vs blind fanout; always-on = a re-platform trigger without a workload).",
+          "text": "Any outside tool faces **named gates** before adoption \u2014 license, fit, effort \u2014 and the verdict ships either way. Multica failed the license gate: its custom terms forbid removing or modifying displayed branding without a written waiver, and the plan was to rebrand it outright.",
           "cite": "sidequests/multica-eval/verdict.md:1. License gate"
         },
         {
-          "text": "The corrected license reading (1a internal single-org use OK; 1b only protects displayed branding) opens the legal gate but changes nothing on architecture \u2014 the rejection was two gates, and the architecture one stands.",
+          "text": "A corrected license reading later opened the legal side (internal single-org use is fine; only displayed branding is protected) \u2014 and changed nothing, because the **architecture gate stood on its own**: a visible interactive board fights blind fanout, and always-on operation is a re-platform trigger with no workload.",
           "cite": "sidequests/plan-convergence/verdict.md:Thread B"
         },
         {
-          "text": "What survives from the evaluation: ideas only \u2014 board-as-metaphor for the ledger, agents-as-teammates framing for the lane inventory, skills-as-playbooks. The later integration landed in THIS workspace and is labeled owner-confirmed-current (evidence: the workspace itself), not blueprint-derived \u2014 the lesson teaches the evaluation AND the integration.",
+          "text": "The killer detail was verbatim: condition 1b covers UI code even when modified or extracted, and **\u201cMultica now becomes the living tribunal\u201d is precisely the act it forbids** \u2014 no waiver, no adoption.",
+          "cite": "sidequests/multica-eval/verdict.md:1. License gate"
+        },
+        {
+          "text": "What survived was **ideas, not code**: board-as-metaphor for the ledger, agents-as-teammates framing for the lane inventory, skills-as-playbooks \u2014 ideas are not copyrightable; UI and code are.",
+          "cite": "sidequests/multica-eval/verdict.md:5. Recommendation"
+        },
+        {
+          "text": "**Misconception:** \u201crejected means wasted effort.\u201d The evaluation\u2019s own recommendation \u2014 a thin static board built only after the data exists \u2014 is what actually got built, and the integration living in this workspace is labeled owner-confirmed-current: the evidence is the workspace itself.",
           "cite": "sidequests/multica-eval/verdict.md:5. Recommendation"
         }
       ],
@@ -232,11 +272,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Re-platform triggers are workload-shaped, not maturity-shaped: concurrent mutation of the ledger, always-on / event-driven (a daemon, not cron), and trust-boundary crossing (multi-user, per-user auth). Nothing on the roadmap approaches them \u2014 buy-verdict: nothing.",
+          "text": "When do you throw away a working system and rebuild? The tribunal\u2019s rule: **triggers are workload-shaped, not maturity-shaped** \u2014 you re-platform for load realities, never because a newer tool looks nicer.",
           "cite": "sidequests/harness-baseline/verdict.md:Ceiling"
         },
         {
-          "text": "Adopting an orchestration framework now is re-platforming without a forcing trigger.",
+          "text": "Three triggers made the list: **concurrent mutation of the ledger** (locking or a database becomes unavoidable), **always-on event-driven operation** (a daemon, not cron), and a **crossed trust boundary** (multi-user, per-user auth).",
+          "cite": "sidequests/harness-baseline/verdict.md:Ceiling"
+        },
+        {
+          "text": "Measured against the roadmap, none of the three is near \u2014 so the buy-verdict is **nothing**: adopting an orchestration framework now is re-platforming without a forcing trigger.",
+          "cite": "sidequests/harness-baseline/verdict.md:Ceiling"
+        },
+        {
+          "text": "**Misconception:** \u201cmature frameworks beat homegrown scripts \u2014 migrate early.\u201d The ceiling review found files+CLI carries all six development items and the entire top-five layer list; the format tax is acknowledged but soft, not a wall.",
+          "cite": "sidequests/harness-baseline/verdict.md:Ceiling"
+        },
+        {
+          "text": "One honest edge case: multi-round convergence is a DAG, not a fanout \u2014 at round three or more the tribunal should **delegate that sitting to a bought execution engine** instead of growing into one.",
           "cite": "sidequests/harness-baseline/verdict.md:Ceiling"
         }
       ],
