@@ -99,12 +99,13 @@ function bootstrapScript(nonce, publishableKey, redirect) {
     "  var clerk = null;\n" +
     "  function loadClerk() {\n" +
     "    if (!clerk) clerk = new Promise(function (resolve, reject) {\n" +
+    "      var tries = 0;\n" +
     "      (function wait() {\n" +
     "        if (window.Clerk) {\n" +
     "          window.Clerk.load({ publishableKey: pub }).then(function () {\n" +
     "            resolve(window.Clerk);\n" +
     "          }, reject);\n" +
-    "        } else if (document.readyState === 'complete') {\n" +
+    "        } else if (++tries > 300) {\n" +
     "          reject(new Error('clerk-js did not load'));\n" +
     "        } else {\n" +
     "          setTimeout(wait, 100);\n" +
@@ -297,6 +298,13 @@ function bootstrapScript(nonce, publishableKey, redirect) {
 // finished. load clerk-js, let handleRedirectCallback swap the OAuth result for
 // a session, then send the browser home. On failure (user cancelled, no OAuth
 // app registered, etc.) fall back to the sign-in page.
+//
+// NID-410 fix: the readyState === 'complete' rejection caused a race on iOS
+// Chrome — clerk-js from clerk.ygdcbtmc4u.uk can take longer to load than the
+// page parse, so the promise rejected before Clerk was available, bouncing the
+// browser back to /sign-in in an infinite loop. Replaced with a generous
+// polling window (30 s) and a hard timeout fallback so the user is never stuck
+// on "COMPLETING SIGN-IN".
 function callbackScript(nonce, publishableKey, redirect) {
   return (
     '<script nonce="' + nonce + '">' +
@@ -306,21 +314,27 @@ function callbackScript(nonce, publishableKey, redirect) {
     "  var root = window.location.origin + " + JSON.stringify(PREFIX) + ";\n" +
     "  var target = " + JSON.stringify(redirect || "") + " || root + '/';\n" +
     "  if (target.charAt(0) !== '/') target = root + '/';\n" +
+    "  var fallback = root + '/sign-in?redirect=' + encodeURIComponent(target);\n" +
+    "  var timer = setTimeout(function () { window.location.href = fallback; }, 30000);\n" +
     "  try {\n" +
     "    var c = await new Promise(function (resolve, reject) {\n" +
+    "      var tries = 0;\n" +
     "      (function wait() {\n" +
-    "        if (window.Clerk) resolve(window.Clerk);\n" +
-    "        else if (document.readyState === 'complete') reject(new Error('clerk-js did not load'));\n" +
-    "        else setTimeout(wait, 100);\n" +
+    "        if (window.Clerk) { resolve(window.Clerk); return; }\n" +
+    "        if (++tries > 300) { reject(new Error('clerk-js did not load')); return; }\n" +
+    "        setTimeout(wait, 100);\n" +
     "      })();\n" +
     "    });\n" +
     "    await c.load({ publishableKey: pub });\n" +
     "    await c.handleRedirectCallback({\n" +
     "      signInFallbackRedirectUrl: target,\n" +
-    "      signUpFallbackRedirectUrl: target\n" +
+    "      signUpFallbackRedirectUrl: target,\n" +
+    "      forceRedirectUrl: target\n" +
     "    });\n" +
+    "    clearTimeout(timer);\n" +
     "  } catch (err) {\n" +
-    "    window.location.href = root + '/sign-in?redirect=' + encodeURIComponent(target);\n" +
+    "    clearTimeout(timer);\n" +
+    "    window.location.href = fallback;\n" +
     "  }\n" +
     "})();" +
     "</script>"
