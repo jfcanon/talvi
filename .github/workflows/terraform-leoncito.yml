@@ -28,6 +28,8 @@ env:
   # Clerk JWT verification key for /api/insulin auth (NID-402) — same repo
   # secret every sibling app's workflow already passes to its worker.
   TF_VAR_clerk_jwt_key:         ${{ secrets.CLERK_JWT_KEY }}
+  # PUBLIC_MODE: skip Clerk auth for demo/public sharing
+  TF_VAR_public_mode:           ${{ vars.PUBLIC_MODE }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
