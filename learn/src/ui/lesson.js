@@ -227,7 +227,10 @@ function renderExercise(ex) {
 }
 
 function exerciseAnswer(ex) {
-  if (ex.type === "select" || ex.type === "spot") return { answer: ex.answer };
+  // grade() renders the correct option text on a miss, so the options must
+  // ride along — without them every select click threw and the lesson could
+  // never complete (NID-100 live report).
+  if (ex.type === "select" || ex.type === "spot") return { answer: ex.answer, options: ex.options || [] };
   if (ex.type === "tf") return { answer: ex.answer };
   if (ex.type === "order") return { answer: ex.answer };
   if (ex.type === "match") return { pairs: ex.pairs };

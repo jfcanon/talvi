@@ -180,6 +180,13 @@ check("fact does not leak raw ** markers", !/class="fact"><p>[^<]*\*\*/.test(les
 const cssText = await (await worker.fetch(req(BASE + "/learn/s.css?v=abc"), env)).text();
 check("css sizes the progress ring", /\.progress-ring\s*\{[^}]*width:/.test(cssText), "");
 check("css locks exercises via data-locked", cssText.includes('.exercises[data-locked="true"]'), "");
+// Select exercises must ship their options in data-ex: client grade() reads
+// ex.options[ex.answer]; without it every select click threw (NID-100).
+const selectEx = [...lessonBody.matchAll(/data-ex="([^"]+)"/g)]
+  .map((m) => JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&")))
+  .filter((e) => e.type === "select" || e.type === "spot");
+check("select exercises present in u1l1", selectEx.length > 0, "");
+check("select data-ex carries options array", selectEx.every((e) => Array.isArray(e.options) && e.options.length > 0), JSON.stringify(selectEx[0]));
 check("lesson has no inline script", !/<script>/.test(lessonBody), "");
 
 // ---- locked lesson redirects to the path ----
