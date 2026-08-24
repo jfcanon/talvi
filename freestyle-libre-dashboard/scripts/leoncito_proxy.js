@@ -70,12 +70,18 @@ async function isAuthenticated(request, env) {
   }
 }
 
+// PUBLIC_MODE: when "true", skip Clerk auth for demo/public sharing.
+// Set via env var in main.tf (e.g., PUBLIC_MODE = "true" for recruiter demo).
+function isPublicMode(env) {
+  return env.PUBLIC_MODE === "true";
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Gate: require a valid Clerk __session cookie (host-wide).
-    if (!(await isAuthenticated(request, env))) {
+    // Gate: require a valid Clerk __session cookie (host-wide) — skip in PUBLIC_MODE.
+    if (!isPublicMode(env) && !(await isAuthenticated(request, env))) {
       const redirect = "/sign-in?redirect=" + encodeURIComponent(url.pathname + url.search);
       return Response.redirect(new URL(redirect, request.url).toString(), 302);
     }
