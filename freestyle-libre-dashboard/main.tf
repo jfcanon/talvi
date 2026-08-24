@@ -87,6 +87,13 @@ variable "clerk_jwt_key" {
   default   = null
 }
 
+# PUBLIC_MODE: when "true", skip Clerk auth for demo/public sharing.
+# Set via GitHub Actions variable (not secret) for easy toggle.
+variable "public_mode" {
+  type      = string
+  default   = "false"
+}
+
 # KV namespace for glucose data
 resource "cloudflare_workers_kv_namespace" "glucose_data" {
   account_id = var.cloudflare_account_id
@@ -135,6 +142,11 @@ resource "cloudflare_workers_script" "leoncito_proxy" {
       name = "CLERK_JWT_KEY"
       text = coalesce(var.clerk_jwt_key, "")
     },
+    {
+      type = "plain_text"
+      name = "PUBLIC_MODE"
+      text = var.public_mode
+    },
   ]
 }
 
@@ -171,6 +183,12 @@ resource "cloudflare_workers_script" "leoncito_glucose" {
         type = "plain_text"
         name = "CLERK_JWT_KEY"
         text = coalesce(var.clerk_jwt_key, "")
+      },
+      {
+        # PUBLIC_MODE: when "true", skip Clerk auth for demo/public sharing.
+        type = "plain_text"
+        name = "PUBLIC_MODE"
+        text = var.public_mode
       },
     ],
     # Bound only once the ingest token secret exists (see variable above).

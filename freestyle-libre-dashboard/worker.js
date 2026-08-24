@@ -84,6 +84,8 @@ async function readSessionClaims(request, env) {
 }
 
 async function requireSession(request, env) {
+  // Skip auth in PUBLIC_MODE (e.g., for recruiter demo)
+  if (isPublicMode(env)) return null;
   const claims = await readSessionClaims(request, env);
   if (!claims) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
@@ -183,6 +185,11 @@ const API_URLS = [
   'https://api-eu.libreview.io',  // EU
   'https://api.libreview.io',     // US/Global
 ];
+
+// PUBLIC_MODE: when "true", skip Clerk auth for demo/public sharing.
+function isPublicMode(env) {
+  return env.PUBLIC_MODE === "true";
+}
 
 async function authenticate(email, password, baseUrl) {
   const authUrl = `${baseUrl}/llu/auth/login`;
