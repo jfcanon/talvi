@@ -339,4 +339,4 @@
  .pio/libdeps/waveshare_amoled_18/GFX\ Library\ for\ Arduino/src/display/Arduino_ST77916.h \
  .pio/libdeps/waveshare_amoled_18/GFX\ Library\ for\ Arduino/src/display/Arduino_ST7796.h \
  .pio/libdeps/waveshare_amoled_18/GFX\ Library\ for\ Arduino/src/display/Arduino_WEA2012.h \
- src/board_pins.h
+ src/board_pins.h src/config.h

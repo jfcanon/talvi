@@ -27,6 +27,7 @@ constexpr const char* SETUP_AP_PASS = "leoncito1";      // WPA2 needs >= 8 chars
 constexpr unsigned SETUP_PORTAL_TIMEOUT_S = 900;      // then reboot & retry
 constexpr unsigned STORED_CREDS_WAIT_MS   = 25000;    // before falling back to the portal
 constexpr unsigned SCREEN_REFRESH_SECONDS = 30;
+constexpr int LOCAL_UTC_OFFSET_HOURS = -3;   // Argentina (ART), no DST
 
 // Bounds
 constexpr float MIN_GLUCOSE_MGDL = 40.0f;

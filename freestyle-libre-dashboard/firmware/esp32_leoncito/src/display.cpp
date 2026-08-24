@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <Arduino_GFX_Library.h>
 #include "board_pins.h"
+#include "config.h"
 
 namespace display {
 
@@ -56,6 +57,16 @@ bool begin() {
   s_ok = true;
   Serial.println("[display] CO5300 up");
   return true;
+}
+
+// "2026-08-24T23:33:12Z" -> "20:33 ART" (fixed GMT-3, no DST in Argentina).
+static String localClock(const String& iso) {
+  if (iso.length() < 16) return iso;
+  int h = iso.substring(11, 13).toInt();
+  h = (h + 24 + cfg::LOCAL_UTC_OFFSET_HOURS) % 24;
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%02d:%s ART", h, iso.substring(14, 16).c_str());
+  return String(buf);
 }
 
 static void header(const String& title, uint16_t color) {
@@ -125,7 +136,7 @@ void showStatus(const String& wifi_line, const String& cycle_line,
     s_gfx->setCursor(24, 100);
     s_gfx->print((int)latest_mgdl);
     line(180, "mg/dL  " + trend, 2, RGB565_LIGHTGREY);
-    line(206, latest_iso.length() >= 16 ? latest_iso.substring(11, 16) + " UTC" : latest_iso, 2, RGB565_DARKGREY);
+    line(206, localClock(latest_iso), 2, RGB565_DARKGREY);
   } else {
     line(110, "no reading yet", 3, RGB565_LIGHTGREY);
   }
