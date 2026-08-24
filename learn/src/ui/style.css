@@ -836,6 +836,119 @@ body {
   resize: vertical;
 }
 
+/* ---- Welcome modal (first-visit onboarding) ---- */
+.welcome-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.welcome-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 6, 11, 0.85);
+  backdrop-filter: blur(2px);
+}
+.welcome-modal__content {
+  position: relative;
+  width: 100%;
+  max-width: 24rem;
+  border: 1px solid var(--hud-line);
+  background:
+    linear-gradient(180deg, rgba(18, 43, 40, 0.3), rgba(5, 6, 11, 0.5) 60%),
+    var(--void);
+  padding: 2rem 1.5rem 1.5rem;
+  animation: modalIn 400ms ease-out;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(-1rem) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.welcome-modal__icon {
+  font-size: 3rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+.welcome-modal__content h2 {
+  font-family: var(--font-console);
+  font-size: clamp(1.3rem, 4vw, 1.6rem);
+  color: var(--phosphor);
+  margin: 0 0 0.35rem;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.welcome-modal__tagline {
+  color: var(--text-lo);
+  text-align: center;
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.welcome-modal__features {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.welcome-modal__features li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  color: var(--text-hi);
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+}
+.welcome-modal__feature-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.welcome-modal__cta {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-family: var(--font-console);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #04120c;
+  background: var(--phosphor);
+  border: 1px solid var(--phosphor);
+  padding: 0.75rem 1.1rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--speed), color var(--speed), transform var(--speed);
+}
+.welcome-modal__cta:hover,
+.welcome-modal__cta:active {
+  background: var(--phosphor-dim);
+  border-color: var(--phosphor-dim);
+  transform: translateY(-1px);
+}
+.welcome-modal__cta-arrow {
+  font-size: 1.1em;
+  line-height: 1;
+}
+.welcome-modal__hint {
+  font-family: var(--font-console);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 0.75rem 0 0;
+}
+
 /* ---- Focus: the one colour no resting state uses (cyan, locked mapping). ---- */
 :focus-visible {
   outline: 2px solid var(--accent-focus);
