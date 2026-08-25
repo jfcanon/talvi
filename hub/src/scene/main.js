@@ -231,7 +231,7 @@ export function bootScene() {
 
   // Test probe: exposes each building's current screen position so the browser
   // test can click a cube and assert orbit/zoom without depending on the DOM
-  // (v4.1: the labels are in-world now, not DOM elements). No secrets — just
+  // (the labels are in-world now, not DOM elements). No secrets — just
   // public building keys, hrefs and projected coordinates.
   window.talviProbe = function () {
     const v = new THREE.Vector3();
