@@ -76,12 +76,18 @@ function isPublicMode(env) {
   return env.PUBLIC_MODE === "true";
 }
 
+function isStaticAsset(pathname) {
+  // Allow static assets through without auth so the UI loads even in private mode
+  return /\.(css|js|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i.test(pathname);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     // Gate: require a valid Clerk __session cookie (host-wide) — skip in PUBLIC_MODE.
-    if (!isPublicMode(env) && !(await isAuthenticated(request, env))) {
+    // Also skip for static assets so the UI loads even when not authenticated.
+    if (!isPublicMode(env) && !isStaticAsset(url.pathname) && !(await isAuthenticated(request, env))) {
       const redirect = "/sign-in?redirect=" + encodeURIComponent(url.pathname + url.search);
       return Response.redirect(new URL(redirect, request.url).toString(), 302);
     }
