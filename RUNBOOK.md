@@ -2,11 +2,9 @@
 
 Operational guide.
 > **The front door (app.ygdcbtmc4u.uk) is separate from the legacy pages this
-> runbook describes.** The talvi welcome/home page is the 3D floating launcher
-> in `hub/`, at its production version (tag `production` = `talvi-3d-v4.3.2`).
-> For the full version history, the reusable 3D scene kit, and how to revert
-> or reuse it, read `s11/talvi-3d-frontdoor-HANDOVER.md` first. Its browser
-> test: `cd hub && node scripts/hub-browser-test.mjs`.
+> runbook describes.** The talvi welcome/home page is the v9.0 3D constellation
+> launcher in `hub/`. Design contract: `hub/DESIGN.md`. Browser test:
+> `cd hub && node scripts/hub-browser-test.mjs`.
 
  Written for someone who has **never seen this codebase**.
 If a procedure here needs knowledge that is not on this page, that is a bug in
@@ -803,13 +801,12 @@ Filter the apply by your own HEAD sha:
 
 ## 10. Hub — app.ygdcbtmc4u.uk (the power-app front door)
 
-The talvi power app (blueprints: `plans/talvi-hub-blueprint.md` +
-`plans/talvi-3d-hub-blueprint.md`). The hub is now **the 3D front door**: a
-fixed WebGL world (the talvi scene — sign, rain, fog, grid) with the flat
-blade rail on top and one glowing instrument per app, scroll through the
-world or jump from the blade. It lives in `hub/` — its own worker, own state
-key, own CI workflow — and owns the `/*` fallback route on `app.*`. The relay,
-chat, and cinto mount at more-specific paths (most-specific-pattern wins).
+The talvi power app. The hub is **the v9.0 3D constellation front door**: an
+orbit/dolly WebGL world of floating app cubes (dark body, teal/mint glow) with
+the flat blade rail on top. Design contract: `hub/DESIGN.md`. It lives in
+`hub/` — its own worker, own state key, own CI workflow — and owns the `/*`
+fallback route on `app.*`. The relay, chat, cinto, and learn mount at
+more-specific paths (most-specific-pattern wins).
 
 ### Live URL
 `https://app.ygdcbtmc4u.uk` — `/healthz` is the uptime check; `/` is the 3D
@@ -832,11 +829,11 @@ Access) — same scene module, two hosts (A6).
    below). Zero *own-page* CSP violations must hold.
 
 ### The scene
-The camera path is the two Catmull-Rom curves in `hub/src/scene/scroll.js`
-(five sections: SIGN, RELAY, CHAT, CINTO, END); the panels sit at the
-positions in `hub/src/scene/world.js`. `three` is pinned exact (0.185.1) and
-bundled into `/h.js` by `build-assets.mjs`. Keep the worker under the free-plan
-~3 MB gzip budget — it is ~140 KiB gzip today.
+Orbit/dolly camera around the cube cluster (`hub/src/scene/input.js`); tiles
+and glyphs live in `hub/src/scene/world.js` (RELAY ▣, CHAT ▤, CINTO ◈, LEARN ◆,
+plus a ＋ MORE slot). `three` is pinned exact (0.185.1) and bundled into `/h.js`
+by `build-assets.mjs`. Keep the worker under the free-plan ~3 MB gzip budget —
+it is ~140 KiB gzip today.
 
 ### The Cloudflare Browser Insights beacon
 The edge injects `static.cloudflareinsights.com/beacon.min.js` into HTML on
@@ -846,10 +843,10 @@ feature (Web Analytics / Browser Insights) in the Cloudflare dashboard — never
 add the host to `script-src`.** It is injected on `app.*` and `talvi.*` alike.
 
 ### Add a future app
-One row in `hub/src/ui/hubpage.js` (`APPS` for the blade, `INSTRUMENTS` for the
-world), a matching panel position in `hub/src/scene/world.js`, plus its own
-worker mounted at a more-specific route. When an app migrates to `app.*/<path>`,
-update its blade + instrument hrefs in the same PR.
+One row in `hub/src/ui/hubpage.js` (`APPS` for the blade) and a matching
+`TILE_CFG` entry in `hub/src/scene/world.js`, plus its own worker mounted at a
+more-specific route. When an app migrates to `app.*/<path>`, update its blade
++ tile hrefs in the same PR.
 
 ### CSP
 `default-src 'none'`; assets are self-hosted, versioned (`/h.css?v=`,

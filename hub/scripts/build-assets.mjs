@@ -16,7 +16,7 @@
 // bytes in, same hash out — no clock, no randomness, no filesystem ordering.
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,25 @@ for (const g of GLYPHS) {
   const cp = g.codePointAt(0).toString(16).toUpperCase();
   if (!js.includes(g) && !js.includes("\\u" + cp)) {
     throw new Error(`build-assets: missing cube glyph U+${cp} in bundled worker`);
+  }
+}
+
+const CANONICAL = "v9.0";
+const HEADER_VER = /^(?:\/\/|\/\*).*\((v\d+\.\d+)\)/;
+const STALE_VER = /\(v(?:4\.1|8\.0)\)/;
+for (const dir of ["src/scene", "src/ui"]) {
+  const names = await readdir(join(root, dir), { recursive: true });
+  for (const name of names) {
+    if (!/\.(js|css)$/.test(name)) continue;
+    const rel = `${dir}/${name}`;
+    const src = await readFile(join(root, rel), "utf8");
+    const hm = src.split("\n", 1)[0].match(HEADER_VER);
+    if (hm && hm[1] !== CANONICAL) {
+      throw new Error(`build-assets: ${rel} header is ${hm[1]}, want ${CANONICAL}`);
+    }
+    if (STALE_VER.test(src)) {
+      throw new Error(`build-assets: stale version stamp in ${rel} (want ${CANONICAL})`);
+    }
   }
 }
 

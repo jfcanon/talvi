@@ -1,4 +1,4 @@
-/* talvi hub — the explorable front door (v8.0).
+/* talvi hub — the explorable front door (v9.0).
  *
  * The power-app front door is a small 3D world you move through like Google
  * Earth: drag to look, scroll to zoom, click a building (or its floating
@@ -99,7 +99,7 @@ body {
   -ms-touch-action: none;
 }
 
-/* The cube nameplates are 3D objects in the world (v4.1) — fixed to their
+/* The cube nameplates are 3D objects in the world — fixed to their
    cubes, faced toward the world centre, so orbiting walks around them. No DOM
    labels here; the blade is the keyboard navigation path. */
 
