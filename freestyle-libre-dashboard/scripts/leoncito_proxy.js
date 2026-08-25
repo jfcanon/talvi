@@ -123,3 +123,4 @@ export default {
     return fetch("https://leoncito-dashboard.pages.dev" + rest, request);
   },
 };
+// force worker redeploy
