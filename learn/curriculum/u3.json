@@ -2,13 +2,13 @@
   "unit": {
     "id": "u3",
     "title": "The Tribunal's Own Architecture",
-    "moc": "files only state \u2014 hub CLI \u2014 lanes & family rule \u2014 which AI for which job \u2014 grounding = proof \u2014 how disagreements become decisions \u2014 state layout \u2014 claim ledger & map"
+    "moc": "files only state — hub CLI — lanes & family rule — which AI for which job — grounding = proof — how disagreements become decisions — state layout — claim ledger & map"
   },
   "checkpoint": {
     "id": "c3",
-    "title": "Checkpoint 3 \u2014 gate (the core one)",
-    "prompt": "Describe the whole machinery \u2014 fanout \u2192 convergence \u2192 verify \u2192 record \u2014 and where the claim ledger and the map sit in it.",
-    "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+    "title": "Checkpoint 3 — gate (the core one)",
+    "prompt": "Describe the whole machinery — fanout → convergence → verify → record — and where the claim ledger and the map sit in it.",
+    "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
   },
   "lessons": [
     {
@@ -18,8 +18,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Files are the only state; the session is disposable. A fresh session becomes the hub by reading THIS document + `ledger.md` \u2014 that pair is the entire bootstrap, and it kills the single-session dependency.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "text": "The tribunal keeps **files as the only state**. The AI session is disposable — when it ends, nothing about the tribunal is lost, because everything that matters lives as files in the repository, never in the model's memory.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
+        },
+        {
+          "text": "Why files instead of a database or memory? Any session can be thrown away and rebuilt. There is no single-session dependency: a crashed or fresh process just re-reads the files from disk and keeps working, so nothing takes the whole system down with it.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
+        },
+        {
+          "text": "Becoming the hub is pure file-reading: a fresh session reads **the blueprint document** and the ledger — that pair is the entire bootstrap. On 2026-08-12 a clean shell with zero inherited environment found `hub` and ran the whole loop from files alone.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
+        },
+        {
+          "text": "A common mistake is treating the chat log or the model's memory as the state. Those vanish between sessions — if a fact isn't written to a file, the tribunal treats it as gone.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         }
       ],
       "exercises": [
@@ -28,7 +40,7 @@
           "prompt": "What is the tribunal's only state?",
           "options": ["a database", "files", "in-memory objects", "an external service"],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         },
         {
           "type": "select",
@@ -40,13 +52,13 @@
             "the chat history"
           ],
           "answer": 0,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         },
         {
           "type": "tf",
-          "prompt": "The clean-session bootstrap was proven on 2026-08-12 \u2014 a fresh shell with zero inherited env found `hub` and ran the whole loop from files alone.",
+          "prompt": "The clean-session bootstrap was proven on 2026-08-12 — a fresh shell with zero inherited env found `hub` and ran the whole loop from files alone.",
           "answer": true,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
         }
       ]
     },
@@ -57,8 +69,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The `hub` CLI does `new`/`run`/`verdict`/`eval`/`gate`/`gate-backfill`/`winrate`/`playbook`/`cost`/`moc`/`status`/`log` \u2014 blind + parallel fanout, a self-rolled per-lane timeout watchdog (no GNU `timeout` on macOS), retry-once loop controller with keep-best, gate-enforced verdicts (`--force` = human override), and ledger-per-Quorum.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state"
+          "text": "**`hub`** is the command-line tool that runs the tribunal. It fans a brief out to the lanes **blindly and in parallel**, collects their answers, and drives the whole sitting from the terminal.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
+        },
+        {
+          "text": "Why a CLI? It makes the tribunal scriptable, re-runnable, and watchable without a UI. A self-rolled per-lane timeout watchdog — not GNU `timeout`, which macOS lacks — means no single slow lane can hang the whole run.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
+        },
+        {
+          "text": "Running `hub run` fans the brief to the lanes in parallel; `hub verdict` and `hub gate` apply **gate-enforced** verdicts where `--force` is the human override. Other subcommands cover `eval`, `winrate`, `playbook`, `cost`, `moc`, `status`, and `log`.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
+        },
+        {
+          "text": "A common mistake is thinking a verdict is just a vote tally. It isn't — the verdict is **gate-enforced**, and only a human `--force` can override the gate. The tool also keeps a ledger per Quorum.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
         }
       ],
       "exercises": [
@@ -72,7 +96,7 @@
             "logs you out"
           ],
           "answer": 0,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
         },
         {
           "type": "select",
@@ -84,7 +108,7 @@
             "a cloud function"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
         },
         {
           "type": "select",
@@ -96,7 +120,7 @@
             "the owner editing files"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a70 Current state"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§0 Current state"
         }
       ]
     },
@@ -107,8 +131,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The lane inventory is live-tested: cc-fable (Claude, strongest) \u00b7 cc-ds / oc-ds (DeepSeek flash) \u00b7 cc-pro / oc-pro (DeepSeek reasoning) \u00b7 oc-qw (local) \u00b7 oc-or / oc-light (nemotron) \u00b7 oc-nim (gpt-oss) \u00b7 crush-glm. Family rule: count DeepSeek once \u2014 cc-ds, oc-ds, cc-pro, oc-pro share the DeepSeek family, pick ONE per sitting; nemotron max 2.",
+          "text": "A **lane** is one AI model wired into the tribunal. The live inventory mixes families — `cc-fable` (Claude, strongest), DeepSeek flash/reasoning, `oc-qw` (local), `oc-or`/`oc-light` (nemotron), `oc-nim` (gpt-oss), and `crush-glm`.",
           "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Full lane inventory"
+        },
+        {
+          "text": "The tribunal limits **same-family** lanes because they share correlated errors — two DeepSeek models tend to hallucinate the *same* wrong 'fact'. So the DeepSeek family (`cc-ds`, `oc-ds`, `cc-pro`, `oc-pro`) is counted **once** per sitting: pick only one.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
+        },
+        {
+          "text": "In a real sitting you might run `cc-fable` + `oc-qw` + `oc-or` — but never two DeepSeek lanes together. Nemotron is capped at **2** (`oc-or`, `oc-light`), `oc-qw` stays local/private, and `oc-nim` is held back by a slow cold start.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:Full lane inventory"
+        },
+        {
+          "text": "A common mistake is assuming 'more lanes = smarter'. The lesson behind the family rule is **diversity**, not quantity: a panel of unrelated models beats a bigger panel of cousins. That is the tribunal's independence mechanic.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
         }
       ],
       "exercises": [
@@ -129,7 +165,7 @@
             "speed"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
         },
         {
           "type": "match",
@@ -151,8 +187,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Default panel = 2 lanes; 4 only for high stakes. Each problem class has a lane default: factcheck \u2192 cheap independent votes with cc-fable only to break ties; code debug \u2192 oc-ds + oc-qw; deep reasoning \u2192 oc-pro/cc-pro + oc-qw; secrets/client data \u2192 oc-qw ONLY (never leaves the machine).",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy"
+          "text": "**Routing** decides which lanes sit on a problem. The default panel is **2 lanes**; 4 lanes are reserved for high-stakes work only.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
+        },
+        {
+          "text": "Why route by class? Routing matches the problem to the cheapest lane that can still be trusted. Cheap independent votes handle fact-checks (with `cc-fable` only to break ties), while reasoning-heavy work gets the stronger reasoning lanes plus a local check.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
+        },
+        {
+          "text": "A code-debug sitting uses `oc-ds` + `oc-qw`; deep reasoning uses `oc-pro`/`cc-pro` + `oc-qw`. For **secrets or client data** the only allowed lane is `oc-qw` — it never leaves the machine.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
+        },
+        {
+          "text": "A common mistake is assuming the strongest model (`cc-fable`) should always lead. It doesn't: it is held in reserve to break ties, and sensitive data is routed to the local lane regardless of strength.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
         }
       ],
       "exercises": [
@@ -161,21 +209,21 @@
           "prompt": "The default panel is ___ lanes.",
           "options": ["1", "2", "4", "5"],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
         },
         {
           "type": "select",
           "prompt": "4 lanes are used only for:",
           "options": ["every sitting", "high stakes", "cheap work", "fast answers"],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
         },
         {
           "type": "select",
           "prompt": "For secrets/client data, the only lane is:",
           "options": ["cc-fable", "oc-qw", "oc-nim", "crush-glm"],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a74 Routing policy"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§4 Routing policy"
         }
       ]
     },
@@ -186,8 +234,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "`sb` answers \u201ctrue in MY repos\u201d; fresh docs answer \u201ctrue TODAY\u201d; lanes answer \u201cgenerally true.\u201d Every verdict cites at least one of the first two. Refuse or downgrade to opinion when there is no `sb` hit and no fetchable doc, or the question needs data the owner didn't provide.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a76 Grounding"
+          "text": "**Grounding** means a verdict is backed by proof, not vibes. `sb` answers 'true in MY repos', fresh docs answer 'true TODAY', and lanes answer only 'generally true'.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
+        },
+        {
+          "text": "Why ground every verdict? Without proof a verdict is just a confident guess. That is why every verdict must cite **at least one** of the first two sources — the repo or a fresh doc — so a reader can actually check the claim.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
+        },
+        {
+          "text": "A lane that writes a verdict citing only another lane's opinion — with no `sb` chunk and no fetched doc — is a **grounding violation**. Real sittings down-grade to 'opinion' when there is nothing to cite.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
+        },
+        {
+          "text": "A common mistake is treating a lane's agreement as proof. If there is no `sb` hit and no doc, the correct move is to **refuse or down-grade to opinion**, not to quote a fellow lane as if it were a source.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
         }
       ],
       "exercises": [
@@ -201,7 +261,7 @@
             "the model card"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a76 Grounding"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
         },
         {
           "type": "select",
@@ -213,7 +273,7 @@
             "quote a random source"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a76 Grounding"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
         },
         {
           "type": "spot",
@@ -226,7 +286,7 @@
             "down-grading to opinion when ungrounded"
           ],
           "answer": 2,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a76 Grounding"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§6 Grounding"
         }
       ]
     },
@@ -237,8 +297,24 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Facts decompose into atomic claims; accept ONLY if the claim survives a grounding source. Agreement without a source = \u201cprobable, unverified\u201d \u2014 label it. Majority alone is convergence theater: same-family models hallucinate the same \u201cfact\u201d together \u2014 3 of 4 lanes explicitly reject majority voting. Verifier: a FRESH lane armed with the evidence arbitrates; rotate it so Claude doesn't silently become ground truth.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+          "text": "**Convergence** turns disagreement into a decision by decomposing claims into atoms and accepting each **only if a grounding source survives**. Agreement without a source is labeled 'probable, unverified'.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
+        },
+        {
+          "text": "Why not just take the majority? Raw majority is **convergence theater**: same-family models hallucinate the same 'fact' together, so 3 of 4 lanes explicitly reject majority voting. Source-backed agreement is the only real signal.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
+        },
+        {
+          "text": "When lanes clash, a **fresh** lane — armed with the evidence and rotated so Claude doesn't silently become ground truth — arbitrates. It is never the strongest lane by default, and never the first to finish.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
+        },
+        {
+          "text": "A common mistake is reading '3 lanes agree' as 'verified'. Three agreeing lanes with no source are still 'probable, unverified'; the verifier's job is to find the source, not count heads.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
+        },
+        {
+          "text": "In the game this is the **checkpoint**: the gate the player must pass is the tribunal's gate-enforced verdict — a claim only becomes 'verified' when a grounding source, not a headcount, backs it.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
         }
       ],
       "exercises": [
@@ -252,19 +328,19 @@
             "contradicted"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
         },
         {
           "type": "select",
-          "prompt": "Why is majority alone \u201cconvergence theater\u201d?",
+          "prompt": "Why is majority alone \"convergence theater\"?",
           "options": [
             "lanes are lazy",
-            "same-family models hallucinate the same \u201cfact\u201d together",
+            "same-family models hallucinate the same \"fact\" together",
             "majority is always right",
             "the quorum is too small"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
         },
         {
           "type": "select",
@@ -276,7 +352,7 @@
             "the first lane to finish"
           ],
           "answer": 1,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a75 Convergence method"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§5 Convergence method"
         }
       ]
     },
@@ -287,8 +363,20 @@
       "xp": 10,
       "facts": [
         {
-          "text": "Per problem in `sidequests/<slug>/`: `intake.md` (problem + success criteria), `lanes/` (raw outputs, one file per lane), `verdict.md` (converged answer + dissents + citations). Plus ONE line in a global `ledger.md` \u2014 date, class, lanes used, winner, cost.",
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "text": "Every sitting gets a folder holding three things: the **intake** file (the problem plus its success criteria), the **lanes** folder (raw outputs, one file per lane), and the **verdict** file (the converged answer).",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
+        },
+        {
+          "text": "Why split them? Keeping intake, raw lanes, and verdict separate makes each role auditable. Anyone can later read *what was asked*, *what each lane said*, and *what was decided* — without the session that produced it.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
+        },
+        {
+          "text": "Alongside the folder, the global ledger gains **one line**: date, class, lanes used, winner, and cost. The verdict file itself records the converged answer plus **dissents and citations**.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
+        },
+        {
+          "text": "A common mistake is thinking the ledger holds the full outputs. It doesn't — it is a single summary line; the raw lane outputs stay in the lanes folder, and the decision with its dissents stays in the verdict file.",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         }
       ],
       "exercises": [
@@ -297,7 +385,7 @@
           "prompt": "The per-sitting layout: sidequests/<slug>/ = intake.md, ___, and verdict.md; plus one line in the global ___.",
           "bank": ["lanes/", "ledger.md", "answers/", "scores.md"],
           "answer": ["lanes/", "ledger.md"],
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         },
         {
           "type": "select",
@@ -309,7 +397,7 @@
             "the owner's notes"
           ],
           "answer": 0,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         },
         {
           "type": "select",
@@ -321,7 +409,7 @@
             "cost estimates only"
           ],
           "answer": 0,
-          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a77 State & memory"
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:§7 State & memory"
         }
       ]
     },
@@ -332,11 +420,23 @@
       "xp": 10,
       "facts": [
         {
-          "text": "The claim-ledger schema (borrowed from claude-obsidian): claim_id, sitting, class, claim, source, support, contradiction, confidence (probable|verified|contested), review_state (open|accepted|rejected|stale), added, reviewed. The ledger is generated by `hub eval`, never hand-maintained.",
+          "text": "The **claim ledger** is a structured table of every decision. Each record carries `claim_id`, `sitting`, `class`, `claim`, `source`, `support`, `contradiction`, `confidence`, `review_state`, `added`, and `reviewed`.",
           "cite": "sidequests/_claims-schema.md:Record schema"
         },
         {
-          "text": "The MoC is a single Mermaid map of contents \u2014 nodes = sittings, edges = frontmatter links (`relates:`/`supersedes:`/`depends_on:`) \u2014 regenerated by `hub moc`.",
+          "text": "Why records instead of prose? Tracking claims as records turns 'we decided X' into something reviewable. `confidence` is one of `probable` | `verified` | `contested`, and a claim is `accepted` only after a real-data re-check, not on agreement alone.",
+          "cite": "sidequests/_claims-schema.md:Record schema"
+        },
+        {
+          "text": "The ledger is generated by `hub eval`, never hand-maintained. A real convergence sitting regenerates the **MoC** — a single Mermaid map whose nodes are sittings and whose edges are frontmatter links like `relates:` / `supersedes:` / `depends_on:`.",
+          "cite": "sidequests/plan-convergence/verdict.md:Phase 0"
+        },
+        {
+          "text": "A common mistake is treating 'accepted' as 'everyone agreed'. It isn't — a claim is `accepted` only after **at least one** real-data re-check, regardless of how confident the sitting felt.",
+          "cite": "sidequests/_claims-schema.md:Record schema"
+        },
+        {
+          "text": "In the game, the claim ledger is the **XP ledger** — every verdict you earn is a tracked, reviewable record — and the MoC is the **path** (the map of contents) that connects each sitting to the next.",
           "cite": "sidequests/plan-convergence/verdict.md:Phase 0"
         }
       ],
@@ -353,7 +453,7 @@
           "prompt": "A claim is `accepted` only after:",
           "options": [
             "any lane agrees",
-            "a \u22651 real-data re-check",
+            "a ≥1 real-data re-check",
             "one week passes",
             "the owner writes it"
           ],
