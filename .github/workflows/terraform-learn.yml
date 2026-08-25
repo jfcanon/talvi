@@ -31,7 +31,11 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '22' }
-      - run: npm ci && npm test
+      - run: npm ci
+        working-directory: learn
+      - run: npx playwright install --with-deps chromium
+        working-directory: learn
+      - run: npm test
         working-directory: learn
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
       - run: terraform init -input=false
@@ -47,7 +51,11 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: '22' }
-      - run: npm ci && npm test
+      - run: npm ci
+        working-directory: learn
+      - run: npx playwright install --with-deps chromium
+        working-directory: learn
+      - run: npm test
         working-directory: learn
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
       - run: terraform init -input=false

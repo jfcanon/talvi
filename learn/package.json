@@ -8,10 +8,12 @@
     "test:data": "npm run build && node scripts/data-smoke-test.mjs",
     "test:ui": "npm run build && node scripts/ui-smoke-test.mjs",
     "test:curriculum": "node scripts/content-lint.mjs && node scripts/curriculum-test.mjs",
-    "test": "npm run build && node scripts/data-smoke-test.mjs && node scripts/ui-smoke-test.mjs && node scripts/curriculum-test.mjs"
+    "test:e2e": "node scripts/e2e-test.mjs",
+    "test": "npm run build && node scripts/data-smoke-test.mjs && node scripts/ui-smoke-test.mjs && node scripts/curriculum-test.mjs && node scripts/e2e-test.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.1",
+    "playwright": "1.57.0"
   },
   "dependencies": {
     "@clerk/backend": "^3.16.1"
