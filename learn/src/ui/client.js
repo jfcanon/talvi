@@ -402,6 +402,14 @@ function onContinue(btn) {
 // Complete the lesson: POST /learn/api/complete (server evaluates; response
 // carries authoritative player state) then celebrate. Idempotent per lesson
 // (double-POST does not double-XP — the store backs this at the storage layer).
+//
+// Transient POST failures (worker version swap mid-deploy, one-off D1 blip)
+// used to dead-end the lesson behind "completion failed". Retries ride the
+// server's idempotency — a replayed completion can never double-award XP —
+// so short backoff before surfacing the error is always safe (NID-411 live
+// report: u1l3 completion failed exactly once, inside a deploy window).
+const COMPLETE_RETRY_DELAYS_MS = [800, 2000];
+
 function completeLesson(main) {
   if (!main || main.dataset.completed) return;
   const lessonId = main.dataset.lesson;
@@ -410,6 +418,10 @@ function completeLesson(main) {
   if (isGate) return; // gates complete via their own submit
 
   main.dataset.completed = "1";
+  postComplete(main, lessonId, skill, 0);
+}
+
+function postComplete(main, lessonId, skill, attempt) {
   fetch(PREFIX + "/api/complete", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -433,11 +445,18 @@ function completeLesson(main) {
       celebrate(main);
     })
     .catch(() => {
+      if (attempt < COMPLETE_RETRY_DELAYS_MS.length) {
+        window.setTimeout(
+          () => postComplete(main, lessonId, skill, attempt + 1),
+          COMPLETE_RETRY_DELAYS_MS[attempt],
+        );
+        return;
+      }
       delete main.dataset.completed;
       const fb = main.querySelector(".feedback");
       if (fb) {
         fb.hidden = false;
-        fb.textContent = "completion failed — try again";
+        fb.textContent = "completion failed — click continue again to retry";
       }
     });
 }
