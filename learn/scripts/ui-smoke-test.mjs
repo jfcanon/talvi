@@ -132,6 +132,12 @@ check("s.js 200 public", js.status === 200, String(js.status));
 check("s.js immutable cache", (js.headers.get("cache-control") || "").includes("immutable"), js.headers.get("cache-control"));
 check("s.js is js", (js.headers.get("content-type") || "").includes("javascript"), js.headers.get("content-type"));
 
+const fav = await worker.fetch(req(BASE + "/learn/favicon.ico"), env);
+check("favicon not 404", fav.status !== 404, String(fav.status));
+check("favicon public 200", fav.status === 200, String(fav.status));
+check("favicon immutable cache", (fav.headers.get("cache-control") || "").includes("immutable"), fav.headers.get("cache-control"));
+check("favicon is svg", (fav.headers.get("content-type") || "").includes("image/svg+xml"), fav.headers.get("content-type"));
+
 // ---- deny-by-default ----
 const unauthPage = await worker.fetch(req(BASE + "/learn/"), env);
 check("unauth /learn/ → 302", unauthPage.status === 302, String(unauthPage.status));

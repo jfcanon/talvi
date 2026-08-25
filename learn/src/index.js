@@ -7,9 +7,10 @@
 // carries the PR2 skeleton, the PR3 Clerk gate (carried inside PR4), the PR4
 // store/API, and the PR5 curriculum/content-lint.
 //
-// Routes (all deny-by-default except healthz + the two assets):
+// Routes (all deny-by-default except healthz + the two assets + favicon):
 //   GET  /learn/healthz            public — the PR2/PR6 live-verify target
 //   GET  /learn/s.css, /learn/s.js public, versioned ?v=<hash>, immutable
+//   GET  /learn/favicon.ico        public — tiny SVG, same headers as s.css
 //   GET  /learn/                   Clerk-gated — the path-graph page
 //   GET  /learn/lesson/<id>        Clerk-gated — the lesson player
 //   GET  /learn/gate/<id>          Clerk-gated — the checkpoint gate
@@ -52,6 +53,7 @@ const HTML_HEADERS = {
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
+  "content-security-policy": HTML_HEADERS["content-security-policy"],
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
   "cache-control": "no-store",
@@ -69,11 +71,15 @@ function assetResponse(body, contentType) {
     headers: {
       "content-type": contentType,
       "cache-control": ASSET_CACHE,
+      "content-security-policy": HTML_HEADERS["content-security-policy"],
       "x-content-type-options": "nosniff",
       "x-robots-tag": ROBOTS_TAG,
     },
   });
 }
+
+const FAVICON_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#0b0f14"/><circle cx="8" cy="8" r="4" fill="#c9a227"/></svg>`;
 
 // One 404 for everything, byte-identical, so an observer cannot tell "never
 // existed" from "not yet built".
@@ -109,7 +115,10 @@ export default {
     if (path === "/healthz") {
       return new Response("ok", {
         status: 200,
-        headers: { "x-robots-tag": ROBOTS_TAG },
+        headers: {
+          "content-security-policy": HTML_HEADERS["content-security-policy"],
+          "x-robots-tag": ROBOTS_TAG,
+        },
       });
     }
 
@@ -117,6 +126,7 @@ export default {
     // files (a security decision driving a build decision, decision 2).
     if (path === "/s.css") return assetResponse(STYLE_CSS, "text/css; charset=utf-8");
     if (path === "/s.js") return assetResponse(CLIENT_JS, "text/javascript; charset=utf-8");
+    if (path === "/favicon.ico") return assetResponse(FAVICON_SVG, "image/svg+xml");
 
     // ---- Clerk-gated below ---- (deny-by-default, decision 2 / carried PR3)
     const userId = await getUserId(request, env);
@@ -126,7 +136,13 @@ export default {
       }
       const signIn = new URL("/sign-in", request.url);
       signIn.searchParams.set("redirect", pathname);
-      return Response.redirect(signIn.toString(), 302);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: signIn.toString(),
+          "content-security-policy": HTML_HEADERS["content-security-policy"],
+        },
+      });
     }
 
     // ---- API ----
