@@ -81,20 +81,6 @@ function isStaticAsset(pathname) {
   return /\.(css|js|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i.test(pathname);
 }
 
-// Static asset path prefixes that should be proxied to Pages deployment
-// even when requested from root domain (without /leoncito/ prefix).
-const ASSET_PREFIXES = [
-  "/css/",
-  "/js/",
-  "/data/",
-  "/fonts/",
-  "/favicon",
-];
-
-function isAssetPath(pathname) {
-  return ASSET_PREFIXES.some((p) => pathname.startsWith(p));
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -111,17 +97,9 @@ export default {
       return Response.redirect(new URL("/leoncito/", request.url), 302);
     }
 
-    // Map root-level asset paths (/css/*, /js/*, etc.) to /leoncito/ prefix
-    // so they proxy correctly to the Pages deployment which serves assets at root.
-    let rest = url.pathname;
-    if (isAssetPath(url.pathname)) {
-      rest = "/leoncito" + url.pathname;
-    } else {
-      rest = url.pathname.replace(/^\/leoncito\/?/, "/");
-    }
-    rest = rest + url.search;
+    // Strip the /leoncito prefix; index.html uses relative asset paths so
+    // /leoncito/css/x.css arrives here and maps to Pages' /css/x.css.
+    const rest = url.pathname.replace(/^\/leoncito\/?/, "/") + url.search;
     return fetch("https://leoncito-dashboard.pages.dev" + rest, request);
   },
 };
-// force worker redeploy
-// worker redeploy v2

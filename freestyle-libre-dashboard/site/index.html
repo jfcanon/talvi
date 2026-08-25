@@ -8,9 +8,12 @@
   <meta name="glucose-api" content="https://app.ygdcbtmc4u.uk/api/glucose">
   <!-- Insulin tracker API (NID-402) - same Worker, Clerk-gated -->
   <meta name="insulin-api" content="https://app.ygdcbtmc4u.uk/api/insulin">
-  <!-- Base path: Pages deployment at root (/), proxy worker at /leoncito/.
-       Using "/" works for both since assets are at root in Pages. -->
-  <base href="/">
+  <!-- NO <base href> on purpose. This page is served from two different
+       paths: leoncito-dashboard.pages.dev/ (root) and app.ygdcbtmc4u.uk/leoncito/
+       (proxy). The asset links below are RELATIVE (css/..., js/...), so the
+       browser resolves them against whichever directory the page loaded from
+       and both hosts work. A <base href="/"> breaks the proxy (/css/style.css
+       -> hub HTML -> MIME error); <base href="/leoncito/"> breaks Pages. -->
   <title>Leoncito's Dashboard</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>

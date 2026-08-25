@@ -225,38 +225,6 @@ resource "cloudflare_workers_route" "leoncito_root" {
   script  = cloudflare_workers_script.leoncito_proxy.script_name
 }
 
-# Static asset routes for proxy worker — handles assets requested from root
-# domain (e.g., /css/*, /js/*) when base href is /leoncito/ but browser
-# requests from root, or for direct asset access. Proxies to Pages deployment.
-resource "cloudflare_workers_route" "leoncito_css" {
-  zone_id = var.talvi_zone_id
-  pattern = "app.ygdcbtmc4u.uk/css/*"
-  script  = cloudflare_workers_script.leoncito_proxy.script_name
-}
-
-resource "cloudflare_workers_route" "leoncito_js" {
-  zone_id = var.talvi_zone_id
-  pattern = "app.ygdcbtmc4u.uk/js/*"
-  script  = cloudflare_workers_script.leoncito_proxy.script_name
-}
-
-resource "cloudflare_workers_route" "leoncito_data" {
-  zone_id = var.talvi_zone_id
-  pattern = "app.ygdcbtmc4u.uk/data/*"
-  script  = cloudflare_workers_script.leoncito_proxy.script_name
-}
-
-resource "cloudflare_workers_route" "leoncito_fonts" {
-  zone_id = var.talvi_zone_id
-  pattern = "app.ygdcbtmc4u.uk/fonts/*"
-  script  = cloudflare_workers_script.leoncito_proxy.script_name
-}
-
-resource "cloudflare_workers_route" "leoncito_favicons" {
-  zone_id = var.talvi_zone_id
-  pattern = "app.ygdcbtmc4u.uk/favicon*"
-  script  = cloudflare_workers_script.leoncito_proxy.script_name
-}
 
 # Glucose Worker route for API endpoint - exact match for /api/glucose
 resource "cloudflare_workers_route" "glucose_api_exact" {
