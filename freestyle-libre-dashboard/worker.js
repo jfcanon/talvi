@@ -36,6 +36,35 @@ const AUTHORIZED_PARTIES = [
   'https://accounts.ygdcbtmc4u.uk',
 ];
 
+// Allow the Pages deployment origin to access API without Clerk auth
+const PAGES_ORIGIN = 'https://leoncito-dashboard.pages.dev';
+
+function isPagesOrigin(request) {
+  const origin = request.headers.get('Origin');
+  return origin === PAGES_ORIGIN;
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+function corsResponse(body, init = {}) {
+  const headers = new Headers(init.headers || {});
+  for (const [k, v] of Object.entries(corsHeaders())) {
+    headers.set(k, v);
+  }
+  return new Response(body, { ...init, headers });
+}
+
+function corsErrorResponse(error, status = 401) {
+  return corsResponse(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
 function b64urlToBytes(s) {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
   const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
@@ -86,12 +115,11 @@ async function readSessionClaims(request, env) {
 async function requireSession(request, env) {
   // Skip auth in PUBLIC_MODE (e.g., for recruiter demo)
   if (isPublicMode(env)) return null;
+  // Allow Pages origin to access API without Clerk auth
+  if (isPagesOrigin(request)) return null;
   const claims = await readSessionClaims(request, env);
   if (!claims) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return corsErrorResponse('unauthorized', 401);
   }
   return null;
 }
@@ -505,7 +533,7 @@ function validateIngestPayload(payload) {
 async function handleIngest(request, env) {
   if (!env.INGEST_TOKEN) {
     // Not configured yet → refuse rather than run open.
-    return new Response(JSON.stringify({ success: false, error: 'ingest not configured' }), {
+    return corsResponse(JSON.stringify({ success: false, error: 'ingest not configured' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -513,14 +541,14 @@ async function handleIngest(request, env) {
   const auth = request.headers.get('Authorization') || '';
   const expected = `Bearer ${env.INGEST_TOKEN}`;
   if (!(await timingSafeEqual(auth, expected))) {
-    return new Response(JSON.stringify({ success: false, error: 'unauthorized' }), {
+    return corsResponse(JSON.stringify({ success: false, error: 'unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
   }
   const contentLength = Number(request.headers.get('Content-Length') || 0);
   if (contentLength > MAX_INGEST_BYTES) {
-    return new Response(JSON.stringify({ success: false, error: 'payload too large' }), {
+    return corsResponse(JSON.stringify({ success: false, error: 'payload too large' }), {
       status: 413,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -530,7 +558,7 @@ async function handleIngest(request, env) {
   try {
     payload = await request.json();
   } catch {
-    return new Response(JSON.stringify({ success: false, error: 'invalid JSON body' }), {
+    return corsResponse(JSON.stringify({ success: false, error: 'invalid JSON body' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -539,7 +567,7 @@ async function handleIngest(request, env) {
   const v = validateIngestPayload(payload);
   if (v.error) {
     await writeStatus(env, { ok: false, source: 'ingest', error: `rejected: ${v.error}` });
-    return new Response(JSON.stringify({ success: false, error: v.error }), {
+    return corsResponse(JSON.stringify({ success: false, error: v.error }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -564,7 +592,7 @@ async function handleIngest(request, env) {
       dropped_readings: v.dropped,
       total_events: data.events.length,
     });
-    return new Response(JSON.stringify({
+    return corsResponse(JSON.stringify({
       success: true,
       total_readings: data.readings.length,
       accepted_readings: fresh.readings.length,
@@ -576,7 +604,7 @@ async function handleIngest(request, env) {
   } catch (err) {
     console.error('Ingest failed:', err);
     await writeStatus(env, { ok: false, source: 'ingest', error: err.message }).catch(() => {});
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
+    return corsResponse(JSON.stringify({ success: false, error: err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -606,14 +634,14 @@ async function handleFetch(env) {
     });
     await env.LEONCITO_DATA.put(STATUS_KEY, JSON.stringify(status));
     console.log(`Stored ${data.readings.length} readings (${fresh.readings.length} fresh) and ${data.events.length} events to KV`);
-    return new Response(JSON.stringify({ success: true, ...data }), {
+    return corsResponse(JSON.stringify({ success: true, ...data }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('Fetch failed:', err);
     Object.assign(status, { ok: false, error: err.message });
     await env.LEONCITO_DATA.put(STATUS_KEY, JSON.stringify(status)).catch(() => {});
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
+    return corsResponse(JSON.stringify({ success: false, error: err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -623,9 +651,9 @@ async function handleFetch(env) {
 async function handleGetData(env) {
   const stored = await env.LEONCITO_DATA.get(KV_KEY, 'json').catch(() => null);
   if (!stored) {
-    return new Response(JSON.stringify({ readings: [], events: [], error: 'No data yet' }, null, 2), {
+    return corsResponse(JSON.stringify({ readings: [], events: [], error: 'No data yet' }, null, 2), {
       status: 404,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
   // Normalize to GMT-3 on serve and persist the normalized copy so the store
@@ -642,8 +670,8 @@ async function handleGetData(env) {
   );
   await env.LEONCITO_DATA.put(KV_KEY, JSON.stringify(normalized, null, 2)).catch(() => {});
   // Pretty-printed (2-space indent) for human-friendly reads.
-  return new Response(JSON.stringify(normalized, null, 2), {
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  return corsResponse(JSON.stringify(normalized, null, 2), {
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -676,8 +704,8 @@ function sortShots(shots) {
 
 async function handleInsulinGet(env) {
   const store = await getInsulinStore(env);
-  return new Response(JSON.stringify({ shots: sortShots(store.shots) }), {
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  return corsResponse(JSON.stringify({ shots: sortShots(store.shots) }), {
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -686,9 +714,9 @@ async function handleInsulinPost(request, env) {
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid JSON body' }), {
+    return corsResponse(JSON.stringify({ error: 'invalid JSON body' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 
@@ -697,15 +725,15 @@ async function handleInsulinPost(request, env) {
   // (-03:00) input passes through untouched so re-saves stay byte-stable.
   const timestamp = toStoreTimestamp(body.timestamp || new Date());
   if (!timestamp) {
-    return new Response(JSON.stringify({ error: 'invalid timestamp' }), {
+    return corsResponse(JSON.stringify({ error: 'invalid timestamp' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
   if (body.note != null && typeof body.note !== 'string') {
-    return new Response(JSON.stringify({ error: 'note must be a string' }), {
+    return corsResponse(JSON.stringify({ error: 'note must be a string' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 
@@ -723,8 +751,8 @@ async function handleInsulinPost(request, env) {
   store.shots = sortShots(store.shots).slice(-2000);
   store.updated_at = shot.created_at;
   await env.LEONCITO_DATA.put(INSULIN_KEY, JSON.stringify(store, null, 2));
-  return new Response(JSON.stringify({ success: true, shot }), {
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  return corsResponse(JSON.stringify({ success: true, shot }), {
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -732,30 +760,35 @@ async function handleInsulinDelete(request, env) {
   const url = new URL(request.url);
   const id = url.searchParams.get('id');
   if (!id) {
-    return new Response(JSON.stringify({ error: 'missing ?id=' }), {
+    return corsResponse(JSON.stringify({ error: 'missing ?id=' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
   const store = await getInsulinStore(env);
   const before = store.shots.length;
   store.shots = sortShots(store.shots.filter((s) => s.id !== id));
   if (store.shots.length === before) {
-    return new Response(JSON.stringify({ error: 'shot not found', id }), {
+    return corsResponse(JSON.stringify({ error: 'shot not found', id }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
   store.updated_at = toArtIso(new Date());
   await env.LEONCITO_DATA.put(INSULIN_KEY, JSON.stringify(store, null, 2));
-  return new Response(JSON.stringify({ success: true, id }), {
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  return corsResponse(JSON.stringify({ success: true, id }), {
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // Handle CORS preflight requests
+    if (request.method === 'OPTIONS') {
+      return corsResponse('', { status: 204 });
+    }
 
     // API endpoint for dashboard to fetch data — Clerk-gated (NID-400)
     // Reuses the same vendored __session verifier as /api/insulin.
@@ -775,7 +808,7 @@ export default {
     // Home fetcher pushes fresh LibreLinkUp windows here (bearer-gated)
     if (url.pathname === '/api/ingest') {
       if (request.method !== 'POST') {
-        return new Response(JSON.stringify({ success: false, error: 'method not allowed' }), {
+        return corsResponse(JSON.stringify({ success: false, error: 'method not allowed' }), {
           status: 405,
           headers: { 'Content-Type': 'application/json', 'Allow': 'POST' },
         });
@@ -789,8 +822,8 @@ export default {
       const denied = await requireSession(request, env);
       if (denied) return denied;
       const status = await env.LEONCITO_DATA.get(STATUS_KEY, 'json').catch(() => null);
-      return new Response(JSON.stringify(status || { ok: null, error: 'no fetch recorded yet' }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      return corsResponse(JSON.stringify(status || { ok: null, error: 'no fetch recorded yet' }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -804,18 +837,18 @@ export default {
       if (request.method === 'GET') return handleInsulinGet(env);
       if (request.method === 'POST') return handleInsulinPost(request, env);
       if (request.method === 'DELETE') return handleInsulinDelete(request, env);
-      return new Response(JSON.stringify({ error: 'method not allowed' }), {
+      return corsResponse(JSON.stringify({ error: 'method not allowed' }), {
         status: 405,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', 'Allow': 'GET, POST, DELETE' },
       });
     }
 
     // Health check
     if (url.pathname === '/health') {
-      return new Response('OK', { headers: { 'Content-Type': 'text/plain' } });
+      return corsResponse('OK', { headers: { 'Content-Type': 'text/plain' } });
     }
 
-    return new Response('Not Found', { status: 404 });
+    return corsResponse('Not Found', { status: 404 });
   },
   // Cron trigger is scheduled (17 * * * *) but the handler is a no-op because
   // the LibreLinkUp fetch moved to the home-network fetcher (NID-403).
