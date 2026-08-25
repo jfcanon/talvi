@@ -174,8 +174,8 @@ function renderExercise(ex) {
   } else if (ex.type === "tf") {
     body =
       '<div class="choices choices--tf" data-kind="tf">' +
-      '<button type="button" class="choice" data-i="1">true</button>' +
-      '<button type="button" class="choice" data-i="0">false</button>' +
+      '<button type="button" class="choice" data-action="choose" data-i="1">true</button>' +
+      '<button type="button" class="choice" data-action="choose" data-i="0">false</button>' +
       "</div>";
   } else if (ex.type === "order") {
     body =
