@@ -81,6 +81,20 @@ function isStaticAsset(pathname) {
   return /\.(css|js|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i.test(pathname);
 }
 
+// Static asset path prefixes that should be proxied to Pages deployment
+// even when requested from root domain (without /leoncito/ prefix).
+const ASSET_PREFIXES = [
+  "/css/",
+  "/js/",
+  "/data/",
+  "/fonts/",
+  "/favicon",
+];
+
+function isAssetPath(pathname) {
+  return ASSET_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -92,16 +106,20 @@ export default {
       return Response.redirect(new URL(redirect, request.url).toString(), 302);
     }
 
-    // Bare /leoncito (no trailing slash): the HTML's relative asset URLs
-    // (css/…, js/…, data/…) resolve against the page path, so from /leoncito
-    // they'd land on /css, /js, /data — outside this prefix, onto the hub's
-    // /* fallback, which returns HTML and breaks strict MIME checks (the
-    // dashboard rendered all dashes). Normalize to the directory form, same
-    // as relay/chat/learn.
+    // Bare /leoncito (no trailing slash): normalize to directory form.
     if (url.pathname === "/leoncito") {
       return Response.redirect(new URL("/leoncito/", request.url), 302);
     }
-    const rest = url.pathname.replace(/^\/leoncito\/?/, "/") + url.search;
+
+    // Map root-level asset paths (/css/*, /js/*, etc.) to /leoncito/ prefix
+    // so they proxy correctly to the Pages deployment which serves assets at root.
+    let rest = url.pathname;
+    if (isAssetPath(url.pathname)) {
+      rest = "/leoncito" + url.pathname;
+    } else {
+      rest = url.pathname.replace(/^\/leoncito\/?/, "/");
+    }
+    rest = rest + url.search;
     return fetch("https://leoncito-dashboard.pages.dev" + rest, request);
   },
 };
