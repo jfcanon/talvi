@@ -487,6 +487,15 @@ function onGateSubmit(event, btn) {
         feedback.textContent = data.gained ? "gate passed — +" + data.gained + " XP" : "gate passed";
       }
       updateHud(data.player || {});
+      // Gates have no #next-btn in the DOM (the sequence map holds lesson ids
+      // only), so reveal the completion section — its "Back to Path" is the
+      // obvious next step after a passed verdict.
+      const complete = main?.querySelector(".complete");
+      if (complete) {
+        complete.hidden = false;
+        const pathBtn = complete.querySelector("#path-btn");
+        if (pathBtn) pathBtn.focus();
+      }
       const next = main?.querySelector("#next-btn");
       if (next) {
         next.hidden = false;

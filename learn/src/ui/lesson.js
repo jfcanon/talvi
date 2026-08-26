@@ -317,7 +317,7 @@ function gateForm(lesson) {
     '">' +
     '<label class="gate__label" for="verdict">your verdict</label>' +
     '<textarea id="verdict" name="verdict" rows="4" required></textarea>' +
-    '<button type="submit" class="btn">submit verdict</button>' +
+    '<button type="button" class="btn" data-action="gate-submit">submit verdict</button>' +
     "</form>" +
     "</section>"
   );
