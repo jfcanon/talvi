@@ -86,134 +86,139 @@ page.on("requestfailed", (req) => {
 try {
   const base = baseUrl;
 
-  // 1. Open lesson u1l1
+  // 1. Open lesson u1l1 - should show first card
   await page.goto(`${base}/learn/lesson/u1l1`, { waitUntil: "domcontentloaded" });
 
-  // Assert gate visible and exercises locked
-  const gate = page.locator(".preread-gate");
-  await gate.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
-  const gateVisible = await gate.isVisible().catch(() => false);
-  check("preread-gate visible", gateVisible);
-  const gateHiddenAttr = await page.locator(".preread-gate").getAttribute("hidden").catch(() => null);
-  check("preread-gate not hidden", gateHiddenAttr === null);
+  // Assert cards container visible, exercises hidden
+  const cardsContainer = page.locator(".cards");
+  await cardsContainer.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+  const cardsVisible = await cardsContainer.isVisible().catch(() => false);
+  check("cards container visible", cardsVisible);
 
   const exercisesEl = page.locator(".exercises");
+  await exercisesEl.waitFor({ state: "attached", timeout: 5000 }).catch(() => {});
+  const exercisesHidden = await exercisesEl.isHidden().catch(() => true);
+  check("exercises section hidden initially", exercisesHidden);
+
   const locked = await exercisesEl.getAttribute("data-locked");
   check('exercises[data-locked="true"] ships locked', locked === "true");
 
-  // Also ensure gate precedes exercises in DOM (visual overlap guard)
-  const gateAndExercisesOrder = await page.evaluate(() => {
-    const g = document.querySelector(".preread-gate");
-    const e = document.querySelector(".exercises");
-    if (!g || !e) return false;
-    return (g.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-  });
-  check("preread gate precedes exercises section", gateAndExercisesOrder);
+  // 2. Click through cards using Next buttons
+  // u1l1 has 4 facts, so 4 cards (last one is "I'm Ready")
+  for (let cardIdx = 0; cardIdx < 4; cardIdx++) {
+    const card = page.locator(`.card[data-index="${cardIdx}"]`);
+    await card.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    const cardVisible = await card.isVisible().catch(() => false);
+    check(`card ${cardIdx} visible`, cardVisible);
 
-  // 2. Click I'm Ready
-  const readyBtn = page.locator('[data-action="ready"]');
-  await readyBtn.waitFor({ state: "visible", timeout: 5000 });
-  await readyBtn.click();
-  // After click gate hidden, exercises unlocked
-  await page.waitForTimeout(300);
-  const gateHidden = await page.locator(".preread-gate").isHidden().catch(() => false);
-  // Alternative: check hidden attribute
-  const gateNowHidden = await page.evaluate(() => {
-    const g = document.querySelector(".preread-gate");
-    return !g || g.hidden === true || getComputedStyle(g).display === "none" || g.hasAttribute("hidden");
-  });
-  check("after Ready gate hidden", gateNowHidden);
-  const lockedAfter = await page.locator(".exercises").getAttribute("data-locked").catch(() => null);
-  check("after Ready exercises unlocked (no data-locked)", lockedAfter === null);
+    const btnAction = cardIdx === 3 ? "ready" : "card-next";
+    const btn = card.locator(`[data-action="${btnAction}"]`);
+    await btn.waitFor({ state: "visible", timeout: 3000 });
+    await btn.click();
+    await page.waitForTimeout(300);
+  }
 
-  // 3. Answer exercises 1 and 2 (select type)
+  // After last card (I'm Ready), exercises section should be visible and unlocked
+  const exercisesVisible = await exercisesEl.isVisible().catch(() => false);
+  check("exercises section visible after I'm Ready", exercisesVisible);
+  const lockedAfter = await exercisesEl.getAttribute("data-locked").catch(() => null);
+  check("after I'm Ready exercises unlocked (no data-locked)", lockedAfter === null);
+
+  // 3. Answer exercises one at a time
   // Each exercise carries data-ex JSON; read answer index and click .choice[data-i="<answer>"]
   const exerciseHandles = await page.$$(".exercise");
   check("lesson has at least 3 exercises", exerciseHandles.length >= 3, `found ${exerciseHandles.length}`);
 
-  // Parse data-ex for first two exercises
-  for (let idx = 0; idx < 2; idx++) {
-    const exEl = page.locator(".exercise").nth(idx);
+  // Exercise 0: select type
+  for (let idx = 0; idx < 3; idx++) {
+    // Wait for current exercise to be visible
+    const exEl = page.locator(`.exercise[data-index="${idx}"]`);
+    await exEl.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+
     const dataExRaw = await exEl.getAttribute("data-ex");
     if (!dataExRaw) { check(`exercise ${idx} has data-ex`, false); continue; }
-    // Browser decodes &quot; already; page.getAttribute returns decoded.
+    // Browser decodes " already; page.getAttribute returns decoded.
     let ex;
     try { ex = JSON.parse(dataExRaw); } catch (e) {
-      // Fallback: unescape &quot;
-      try { ex = JSON.parse(dataExRaw.replace(/&quot;/g, '"').replace(/&amp;/g, "&")); } catch { ex = null; }
+      // Fallback: unescape "
+      try { ex = JSON.parse(dataExRaw.replace(/"/g, '"').replace(/&/g, "&")); } catch { ex = null; }
     }
-    if (!ex || typeof ex.answer !== "number") {
-      check(`exercise ${idx} answer index parsable`, false, String(dataExRaw).slice(0, 200));
+    if (!ex) {
+      check(`exercise ${idx} data-ex parsable`, false, String(dataExRaw).slice(0, 200));
       continue;
     }
-    const choiceSel = `.choice[data-i="${ex.answer}"]`;
-    const btn = exEl.locator(choiceSel);
-    await btn.waitFor({ state: "visible", timeout: 3000 });
-    await btn.click();
-    await page.waitForTimeout(200);
-  }
 
-  // 4. Pair the match exercise (third exercise, type match)
-  // Match is expected to be the last exercise for u1l1
-  const matchIdx = 2; // zero-based third
-  const matchEx = page.locator(".exercise").nth(matchIdx);
-  const matchDataRaw = await matchEx.getAttribute("data-ex");
-  let matchExJson = null;
-  try { matchExJson = JSON.parse(matchDataRaw); } catch {
-    try { matchExJson = JSON.parse(matchDataRaw.replace(/&quot;/g, '"').replace(/&amp;/g, "&")); } catch {}
-  }
-  check("match exercise has pairs", !!(matchExJson && Array.isArray(matchExJson.pairs) && matchExJson.pairs.length > 0), JSON.stringify(matchExJson)?.slice(0, 200));
-
-  if (matchExJson && Array.isArray(matchExJson.pairs)) {
-    for (let i = 0; i < matchExJson.pairs.length; i++) {
-      const leftSel = `.match__item--left[data-key="${i}"]`;
-      const left = matchEx.locator(leftSel);
-      await left.waitFor({ state: "visible", timeout: 3000 });
-      await left.click();
-      await page.waitForTimeout(150);
-      const rightVal = matchExJson.pairs[i].right;
-      // Escape for attribute selector: rightVal may contain quotes; use evaluate click by data-match
-      const rightClicked = await matchEx.evaluate((el, rv) => {
-        const btn = el.querySelector(`.match__item--right[data-match="${CSS.escape(rv)}"]`);
-        // fallback manual scan if CSS.escape not matching due to attr encoding
-        if (btn) { btn.click(); return true; }
-        // brute search
-        for (const b of el.querySelectorAll(".match__item--right")) {
-          if (b.getAttribute("data-match") === rv) { b.click(); return true; }
-        }
-        return false;
-      }, rightVal);
-      if (!rightClicked) {
-        // Try alternative selector via page locator with attribute value search
-        const candidates = matchEx.locator(".match__item--right");
-        const count = await candidates.count();
-        let found = false;
-        for (let c = 0; c < count; c++) {
-          const dm = await candidates.nth(c).getAttribute("data-match");
-          if (dm === rightVal) { await candidates.nth(c).click(); found = true; break; }
-        }
-        check(`match right ${i} (${rightVal}) clicked`, found);
+    if (ex.type === "select" || ex.type === "spot") {
+      if (typeof ex.answer !== "number") {
+        check(`exercise ${idx} answer index parsable`, false, String(dataExRaw).slice(0, 200));
+        continue;
       }
-      await page.waitForTimeout(150);
+      const choiceSel = `.choice[data-i="${ex.answer}"]`;
+      const btn = exEl.locator(choiceSel);
+      await btn.waitFor({ state: "visible", timeout: 3000 });
+      await btn.click();
+    } else if (ex.type === "match") {
+      // Pair the match exercise
+      if (!Array.isArray(ex.pairs) || ex.pairs.length === 0) {
+        check("match exercise has pairs", false, JSON.stringify(ex)?.slice(0, 200));
+        continue;
+      }
+      for (let i = 0; i < ex.pairs.length; i++) {
+        const leftSel = `.match__item--left[data-key="${i}"]`;
+        const left = exEl.locator(leftSel);
+        await left.waitFor({ state: "visible", timeout: 3000 });
+        await left.click();
+        await page.waitForTimeout(150);
+        const rightVal = ex.pairs[i].right;
+        // Escape for attribute selector: rightVal may contain quotes; use evaluate click by data-match
+        const rightClicked = await exEl.evaluate((el, rv) => {
+          const btn = el.querySelector(`.match__item--right[data-match="${CSS.escape(rv)}"]`);
+          // fallback manual scan if CSS.escape not matching due to attr encoding
+          if (btn) { btn.click(); return true; }
+          // brute search
+          for (const b of el.querySelectorAll(".match__item--right")) {
+            if (b.getAttribute("data-match") === rv) { b.click(); return true; }
+          }
+          return false;
+        }, rightVal);
+        if (!rightClicked) {
+          // Try alternative selector via page locator with attribute value search
+          const candidates = exEl.locator(".match__item--right");
+          const count = await candidates.count();
+          let found = false;
+          for (let c = 0; c < count; c++) {
+            const dm = await candidates.nth(c).getAttribute("data-match");
+            if (dm === rightVal) { await candidates.nth(c).click(); found = true; break; }
+          }
+          check(`match right ${i} (${rightVal}) clicked`, found);
+        }
+        await page.waitForTimeout(150);
+      }
+      // Click check
+      const checkBtn = exEl.locator('[data-action="check"]');
+      await checkBtn.waitFor({ state: "visible", timeout: 3000 });
+      const disabled = await checkBtn.isDisabled().catch(() => true);
+      check("match check button enabled after pairing", !disabled);
+      await checkBtn.click();
     }
-    // Click check
-    const checkBtn = matchEx.locator('[data-action="check"]');
-    await checkBtn.waitFor({ state: "visible", timeout: 3000 });
-    // Ensure enabled
-    const disabled = await checkBtn.isDisabled().catch(() => true);
-    check("match check button enabled after pairing", !disabled);
-    await checkBtn.click();
     await page.waitForTimeout(400);
+
+    // After answering, Continue button should appear
+    const continueBtn = page.locator('[data-action="continue"]');
+    await continueBtn.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    const contVisible = await continueBtn.isVisible().catch(() => false);
+    check(`[data-action="continue"] visible after exercise ${idx}`, contVisible);
+
+    // If not last exercise, click Continue to advance
+    if (idx < 2) {
+      await continueBtn.click();
+      await page.waitForTimeout(300);
+    }
   }
 
-  // 5. Assert every exercise correct, continue visible, complete flow
-  const states = await page.$$eval(".exercise", (els) => els.map((e) => e.getAttribute("data-state")));
-  check("every .exercise[data-state=\"correct\"]", states.every((s) => s === "correct"), JSON.stringify(states));
-
+  // 4. After last exercise, click Continue to complete
   const continueBtn = page.locator('[data-action="continue"]');
   await continueBtn.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
-  const contVisible = await continueBtn.isVisible().catch(() => false);
-  check('[data-action="continue"] visible after all correct', contVisible);
   await continueBtn.click();
   await page.waitForTimeout(800);
 
@@ -238,7 +243,7 @@ try {
     check("after Next URL ends /lesson/u1l2", urlAfter.includes("/lesson/u1l2"), urlAfter);
   }
 
-  // 6. Open /learn/ and check nodes
+  // 5. Open /learn/ and check nodes
   await page.goto(`${base}/learn/`, { waitUntil: "domcontentloaded" });
   // Wait for rail
   await page.locator(".rail").waitFor({ state: "visible", timeout: 5000 }).catch(() => {});

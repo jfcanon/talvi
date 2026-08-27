@@ -13,44 +13,34 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
   const streak = typeof player.streakDays === "number" ? player.streakDays : 0;
   const isGate = lesson.kind === "gate" || !(lesson.exercises && lesson.exercises.length);
 
-  const exercises = (lesson.exercises || []).map(renderExercise).join("");
-  const facts = (lesson.facts || [])
-    .map(
-      (f) =>
-        '<article class="fact"><p>' +
-        richText(f.text || "") +
-        '</p><cite>' +
-        esc(formatCitation(f.cite)) +
-        "</cite></article>",
-    )
-    .join("");
+const exercises = (lesson.exercises || []).map((ex, i) => renderExercise(ex, i)).join("");
+  const facts = (lesson.facts || []).map((f, i) => renderCard(f, i, lesson.facts.length)).join("");
 
-  // Progress ring SVG (3 segments = 3 exercises)
+  // Progress ring SVG (segments = cards + exercises)
   // No inline styles — stroke-dasharray/dashoffset computed per segment count
+  const factCount = (lesson.facts || []).length;
   const exerciseCount = (lesson.exercises || []).length;
+  const totalSegments = factCount + exerciseCount;
   const circumference = 2 * Math.PI * 26; // ~163.4
-  const perSegment = circumference / exerciseCount;
-  const dash = perSegment * exerciseCount;
-  const progressRing = exerciseCount > 0
-    ? `<svg class="progress-ring" viewBox="0 0 60 60" aria-label="Lesson progress" data-segments="${exerciseCount}">
-         <circle class="progress-ring__bg" cx="30" cy="30" r="26" stroke-width="4" fill="none"/>
-         <circle class="progress-ring__fill" cx="30" cy="30" r="26" stroke-width="4" fill="none"
-           stroke-dasharray="${dash}" stroke-dashoffset="${dash}"/>
-       </svg>`
+  const perSegment = totalSegments > 0 ? circumference / totalSegments : 0;
+  const dash = perSegment * totalSegments;
+  const progressRing = totalSegments > 0
+    ? `<svg class="progress-ring" viewBox="0 0 60 60" aria-label="Lesson progress" data-segments="${totalSegments}" data-facts="${factCount}">
+          <circle class="progress-ring__bg" cx="30" cy="30" r="26" stroke-width="4" fill="none"/>
+          <circle class="progress-ring__fill" cx="30" cy="30" r="26" stroke-width="4" fill="none"
+            stroke-dasharray="${dash}" stroke-dashoffset="${dash}"/>
+        </svg>`
     : "";
 
   const body = isGate
     ? gateForm(lesson)
-    : // Pre-read gate: rendered OUTSIDE the exercises section (the section is
-      // locked with pointer-events:none until "I'm Ready", so the button must
-      // not live inside it) and visible without JS — client.js only unlocks.
-      '<div class="preread-gate">' +
-      '<p class="preread-gate__prompt">Read the fact above. Tap <strong>I\'m Ready</strong> when you understand it.</p>' +
-      '<button type="button" class="btn" data-action="ready">I\'m Ready</button>' +
+    : // Step-by-step flow: cards → I'm Ready → exercises one at a time
+      '<div class="cards" data-total="' + esc(String(factCount)) + '">' +
+      facts +
       '</div>' +
       '<section class="exercises" data-total="' +
       esc(String(exerciseCount)) +
-      '" data-gated="true" data-locked="true">' +
+      '" data-gated="true" data-locked="true" hidden>' +
       exercises +
       '<button type="button" class="btn continue-btn" data-action="continue" hidden>continue</button>' +
       "</section>";
@@ -85,10 +75,9 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
     (isGate ? "true" : "false") +
     '" data-next-lesson="' +
     escAttr(nextLessonId || "") +
-    '">' +
+    '" data-step="0">' +
     lessonHeading(lesson, position) +
     progressRing +
-    factsBlock(facts, isGate) +
     body +
     '<div class="feedback" role="status" aria-live="polite" hidden></div>' +
     '<section class="complete" hidden>' +
@@ -153,17 +142,31 @@ function lessonHeading(lesson, position) {
 // markdown-ish markers the curriculum uses (**bold**, `code`) to elements.
 // No raw HTML from content ever reaches the page.
 export function richText(text) {
-  return esc(text)
+  return esc(text || "")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
-function factsBlock(facts, isGate) {
-  if (isGate || !facts) return "";
-  return '<section class="lesson__facts">' + facts + "</section>";
+function renderCard(fact, index, total) {
+  const isLast = index === total - 1;
+  const buttonLabel = isLast ? "I'm Ready" : "Next";
+  const buttonAction = isLast ? "ready" : "card-next";
+  const hidden = index > 0 ? " hidden" : "";
+  return (
+    '<article class="card"' + hidden + ' data-index="' + esc(String(index)) + '">' +
+    '<p class="card__text">' +
+    richText(fact.text || "") +
+    '</p><cite class="card__cite">' +
+    esc(formatCitation(fact.cite)) +
+    "</cite>" +
+    '<button type="button" class="btn card__next" data-action="' + escAttr(buttonAction) + '">' +
+    esc(buttonLabel) +
+    "</button>" +
+    "</article>"
+  );
 }
 
-function renderExercise(ex) {
+function renderExercise(ex, index) {
   let body = "";
   if (ex.type === "select" || ex.type === "spot") {
     body =
@@ -210,8 +213,10 @@ function renderExercise(ex) {
       "<p class=\"complete-ex__hint\">tap words in order to fill the blanks</p>" +
       "</div>";
   }
+  // Exercises start hidden; client.js will show the first one after "I'm Ready"
+  const hidden = index > 0 ? " hidden" : "";
   return (
-    '<article class="exercise" data-ex="' +
+    '<article class="exercise"' + hidden + ' data-index="' + esc(String(index)) + '" data-ex="' +
     dataJson({ type: ex.type, prompt: ex.prompt, ...exerciseAnswer(ex) }) +
     '">' +
     '<h3 class="exercise__prompt">' +
