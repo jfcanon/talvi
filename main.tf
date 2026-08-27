@@ -40,6 +40,16 @@ variable "talvi_zone_id" {
   type = string
 }
 
+# Whisper STT tunnel (NID-515). Shared secret between Terraform and the
+# cloudflared connector on the owner's Mac — the connector must be given the
+# same value or it cannot register against the tunnel. Supplied by CI from a
+# GitHub Actions SECRET, never committed; the provider cannot read it back
+# (no_refresh), so it is write-only after creation.
+variable "whisper_stt_tunnel_secret" {
+  type      = string
+  sensitive = true
+}
+
 # Green release (2026-08-08): Clerk removed from the public Worker. Upload
 # protection is Cloudflare Access on /api/upload (email-PIN, below). The Clerk
 # variables/bindings lived here and were removed with the gate; the Clerk code
@@ -291,4 +301,58 @@ resource "cloudflare_zero_trust_access_policy" "talvi_owner_email" {
       email = "jangofett86@gmail.com"
     }
   }]
+}
+
+# --- Whisper STT tunnel (NID-515) --------------------------------------------
+#
+# Permanent Cloudflare Tunnel for the local Whisper STT server on the owner's
+# Mac (http://localhost:8787). The quick tunnel it replaces regenerated its
+# hostname on every restart; a named tunnel keeps stt.ygdcbtmc4u.uk stable so
+# the Apollo worker can point LOCAL_STT_URL at it without a redeploy each time
+# the Mac reboots.
+#
+# config_src = "cloudflare" stores the ingress rules in the Cloudflare API
+# (managed by cloudflare_zero_trust_tunnel_cloudflared_config below), so the
+# connector on the Mac has nothing to configure locally beyond the tunnel
+# token. `ignore_changes = all` matches the cf.zero.terra pattern: the API
+# never returns tunnel_secret (no_refresh), so without it every plan would
+# show a perpetual change on this resource.
+resource "cloudflare_zero_trust_tunnel_cloudflared" "whisper_stt" {
+  account_id    = var.cloudflare_account_id
+  name          = "whisper-stt"
+  config_src    = "cloudflare"
+  tunnel_secret = var.whisper_stt_tunnel_secret
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+resource "cloudflare_zero_trust_tunnel_cloudflared_config" "whisper_stt" {
+  account_id = var.cloudflare_account_id
+  tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.whisper_stt.id
+
+  config = {
+    ingress = [
+      {
+        hostname = "stt.ygdcbtmc4u.uk"
+        service  = "http://localhost:8787"
+      },
+      {
+        # Catch-all so the tunnel never serves an unconfigured hostname.
+        service = "http_status:404"
+      },
+    ]
+  }
+}
+
+# CNAME to the tunnel's *.cfargotunnel.com address. Provider v5 removed the
+# tunnel resource's computed `cname` attribute, so the value is built by hand:
+# <tunnel-uuid>.cfargotunnel.com. proxied so requests route through Cloudflare.
+resource "cloudflare_dns_record" "whisper_stt" {
+  zone_id = var.talvi_zone_id
+  name    = "stt.ygdcbtmc4u.uk"
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.whisper_stt.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
 }
