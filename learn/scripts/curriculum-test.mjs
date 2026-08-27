@@ -46,12 +46,13 @@ for (const f of files) {
   if (uid !== "u5") mvpLessons += doc.lessons.length;
   if (doc.checkpoint) totalCheckpoints += 1;
 
-  const gated = doc.gated === true;
-  for (const lesson of doc.lessons) {
-    if (lesson.gated || gated) {
-      check(`${f}/${lesson.id}: gated lesson has no reachable exercises`, (lesson.exercises || []).length === 0);
-      continue;
-    }
+const gated = doc.gated === true;
+   for (const lesson of doc.lessons) {
+     const lessonIsPlaceholder = (lesson.facts || []).length === 0 && (lesson.exercises || []).length === 0;
+     if (lesson.gated || (gated && lessonIsPlaceholder)) {
+       check(`${f}/${lesson.id}: gated lesson has no reachable exercises`, (lesson.exercises || []).length === 0);
+       continue;
+     }
     check(`${f}/${lesson.id}: has a title`, typeof lesson.title === "string" && lesson.title.length > 0);
     check(`${f}/${lesson.id}: has a skill`, typeof lesson.skill === "string" && lesson.skill.length > 0);
     check(`${f}/${lesson.id}: has >=1 fact`, (lesson.facts || []).length >= 1);

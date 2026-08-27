@@ -15,14 +15,55 @@
   "lessons": [
     {
       "id": "u5l1",
-      "title": "Cost counter & win-rate-per-dollar (GATED)",
-      "skill": "gated",
-      "xp": 0,
-      "gated": true,
-      "gated_reason": "blocked by verified cost figures",
+      "title": "Cost counter & win-rate-per-dollar",
+      "skill": "cost-analysis",
+      "xp": 50,
+      "gated": false,
+      "gated_reason": "",
       "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11",
-      "facts": [],
-      "exercises": []
+      "facts": [
+        {
+          "id": "fc1",
+          "statement": "The tribunal cost counter is implemented as a read-only feature in the Cinto Cloud console",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+        },
+        {
+          "id": "fc2",
+          "statement": "Cost data is derived from published tribunal snapshots at read time, never hard-coded",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+        },
+        {
+          "id": "fc3",
+          "statement": "The cost counter API endpoint follows the pattern `/cloud/api/cost` for JSON data access",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+        }
+      ],
+      "exercises": [
+        {
+          "id": "xe1",
+          "prompt": "What type of data source does the tribunal cost counter use?",
+          "options": ["Live database queries", "Published snapshot files", "Hard-coded values", "User input"],
+          "answer": 1,
+          "type": "select",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+        },
+        {
+          "id": "xe2",
+          "prompt": "Is the tribunal cost counter in Cinto Cloud mutable or read-only?",
+          "options": ["Mutable", "Read-only", "Write-only", "Access-controlled"],
+          "answer": 1,
+          "type": "select",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+        },
+        {
+          "id": "xe3",
+          "prompt": "Which API endpoint provides access to tribunal cost data in Cinto Cloud?",
+          "options": ["/cloud/api/resources", "/cloud/api/cost", "/cloud/api/monitor", "/cloud/api/activity"],
+          "answer": 1,
+          "type": "select",
+          "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11"
+        }
+      ]
     },
     {
       "id": "u5l2",
