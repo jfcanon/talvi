@@ -48,6 +48,27 @@ document.addEventListener("click", (event) => {
   if (action === "onboard-start") return onOnboardStart(btn);
   if (action === "ready") return onReady(btn);
   if (action === "begin-lesson") return onBeginLesson(btn);
+  if (action === "card-next") return onCardNext(btn);
+});
+
+// Enter key advances the step
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const main = document.querySelector("main[data-lesson]");
+  if (!main) return;
+  const step = parseInt(main.dataset.step, 10) || 0;
+  if (step === 0) {
+    // On cards: find the visible card's Next/I'm Ready button
+    const card = document.querySelector(".card:not([hidden])");
+    if (card) {
+      const btn = card.querySelector("[data-action='card-next'], [data-action='ready']");
+      if (btn) btn.click();
+    }
+  } else if (step === 1) {
+    // On exercises: find Continue button if visible
+    const cont = document.querySelector(".exercises [data-action='continue']:not([hidden])");
+    if (cont) cont.click();
+  }
 });
 
 // Initialize onboarding features
@@ -129,14 +150,68 @@ function onBeginLesson(btn) {
   onOnboardStart(btn);
 }
 
+// Move to next card, or to exercises if on last card
+function onCardNext(btn) {
+  const main = btn.closest("main[data-lesson]");
+  if (!main) return;
+
+  const cardsContainer = document.querySelector(".cards");
+  if (!cardsContainer) return;
+
+  const cards = [...cardsContainer.querySelectorAll(".card")];
+  const currentIndex = cards.findIndex((c) => !c.hidden);
+  if (currentIndex === -1) return;
+
+  const nextIndex = currentIndex + 1;
+  if (nextIndex < cards.length) {
+    // Hide current, show next
+    cards[currentIndex].hidden = true;
+    cards[nextIndex].hidden = false;
+    cards[nextIndex].querySelector("[data-action='card-next'], [data-action='ready']").focus();
+    updateProgressRing(nextIndex);
+  } else {
+    // Last card was "I'm Ready" - transition to exercises
+    cardsContainer.hidden = true;
+    const exercisesSection = document.querySelector(".exercises[data-gated='true']");
+    if (exercisesSection) {
+      exercisesSection.removeAttribute("data-locked");
+      exercisesSection.hidden = false;
+    }
+    main.dataset.step = "1";
+    // Show first exercise
+    const firstExercise = exercisesSection?.querySelector(".exercise[data-index='0']");
+    if (firstExercise) {
+      firstExercise.hidden = false;
+      firstExercise.querySelector(".choice, .chip, .match__item")?.focus();
+    }
+    updateProgressRing(cards.length);
+  }
+}
+
+// Called when user clicks "I'm Ready" on the last card
 function onReady(btn) {
-  const prereadGate = btn.closest(".preread-gate");
+  const main = btn.closest("main[data-lesson]");
+  if (!main) return;
+
+  const cardsContainer = document.querySelector(".cards");
+  if (cardsContainer) cardsContainer.hidden = true;
+
   const exercisesSection = document.querySelector(".exercises[data-gated='true']");
-  if (prereadGate) prereadGate.hidden = true;
-  if (exercisesSection) exercisesSection.removeAttribute("data-locked");
-  // Focus first exercise
-  const firstChoice = document.querySelector(".exercise .choice, .exercise .chip, .exercise .match__item");
-  if (firstChoice) firstChoice.focus();
+  if (exercisesSection) {
+    exercisesSection.removeAttribute("data-locked");
+    exercisesSection.hidden = false;
+  }
+  main.dataset.step = "1";
+
+  // Show first exercise
+  const firstExercise = exercisesSection?.querySelector(".exercise[data-index='0']");
+  if (firstExercise) {
+    firstExercise.hidden = false;
+    firstExercise.querySelector(".choice, .chip, .match__item")?.focus();
+  }
+  // Progress: completed all cards
+  const totalCards = parseInt(cardsContainer?.dataset.total, 10) || 0;
+  updateProgressRing(totalCards);
 }
 
 function positionTooltip(target, tooltip) {
@@ -151,7 +226,7 @@ function updateProgressRing(completedCount) {
   const ring = document.querySelector(".progress-ring__fill");
   const svg = document.querySelector(".progress-ring");
   if (!ring || !svg) return;
-  const segments = parseInt(svg.dataset.segments) || 3;
+  const segments = parseInt(svg.dataset.segments, 10) || 3;
   const circumference = 2 * Math.PI * 26; // ~163.4
   const perSegment = circumference / segments;
   const offset = circumference - (completedCount * perSegment);
@@ -362,21 +437,22 @@ function settle(exercise, res, ok) {
   if (!ok) revealAnswer(exercise);
 
   // Update progress ring
+  const main = document.querySelector("main[data-lesson]");
+  const cardsContainer = document.querySelector(".cards");
+  const totalCards = parseInt(cardsContainer?.dataset.total, 10) || 0;
   const section = exercise.closest(".exercises");
   if (section) {
     const all = [...section.querySelectorAll(".exercise")];
     const answered = all.filter((e) => e.dataset.state).length;
-    updateProgressRing(answered);
+    updateProgressRing(totalCards + answered);
 
-    // Advance when every exercise has been answered (correct OR wrong — a wrong
+    // Advance when this exercise has been answered (correct OR wrong — a wrong
     // answer costs a heart and the lesson still completes; the streak/XP come
     // from the server). This is the Duolingo model: you finish the lesson, not
     // every answer perfectly.
-    const allAnswered = all.every((e) => e.dataset.state);
-    if (allAnswered) {
-      const cont = section.querySelector("[data-action='continue']");
-      if (cont) cont.hidden = false;
-    }
+    // Show Continue button to advance to next exercise or complete
+    const cont = section.querySelector("[data-action='continue']");
+    if (cont) cont.hidden = false;
   }
 }
 
@@ -393,10 +469,29 @@ function revealAnswer(exercise) {
   }
 }
 
-// ---- Continue: after the last correct exercise, complete the lesson ----
+// ---- Continue: advance to next exercise or complete the lesson ----
 function onContinue(btn) {
   const main = btn.closest("main[data-lesson]");
-  if (main) completeLesson(main);
+  if (!main) return;
+
+  const section = document.querySelector(".exercises");
+  if (!section) return;
+
+  const exercises = [...section.querySelectorAll(".exercise")];
+  const currentIndex = exercises.findIndex((e) => !e.hidden);
+  if (currentIndex === -1) return;
+
+  const nextIndex = currentIndex + 1;
+  if (nextIndex < exercises.length) {
+    // Hide current, show next
+    exercises[currentIndex].hidden = true;
+    exercises[nextIndex].hidden = false;
+    exercises[nextIndex].querySelector(".choice, .chip, .match__item")?.focus();
+    btn.hidden = true;
+  } else {
+    // Last exercise completed - complete the lesson
+    completeLesson(main);
+  }
 }
 
 // Complete the lesson: POST /learn/api/complete (server evaluates; response

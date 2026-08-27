@@ -496,6 +496,39 @@ body {
   transition: stroke-dashoffset var(--speed);
 }
 
+/* Cards: fact cards shown one at a time with Next button */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.card {
+  border: 1px solid var(--hud-line-soft);
+  background: var(--hud-fill);
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.card__text {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-hi);
+  font-size: 1.05rem;
+}
+.card__cite {
+  margin: 0;
+  color: var(--text-lo);
+  font-size: 0.75rem;
+  font-family: var(--font-console);
+}
+.card__next {
+  align-self: flex-start;
+}
+.card[hidden] {
+  display: none;
+}
+
 /* Pre-read gate: sits between the fact and the exercises, outside the locked
    section so the button stays clickable. */
 .preread-gate {
@@ -519,6 +552,9 @@ body {
   flex-direction: column;
   gap: 1.1rem;
 }
+.exercises[hidden] {
+  display: none;
+}
 .exercises[data-locked="true"] {
   opacity: 0.4;
   pointer-events: none;
@@ -540,6 +576,9 @@ body {
 .exercise[data-state="wrong"] {
   border-color: var(--accent-heart);
   background: var(--fill-wrong);
+}
+.exercise[hidden] {
+  display: none;
 }
 
 .exercise__prompt {

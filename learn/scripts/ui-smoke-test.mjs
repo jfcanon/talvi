@@ -79,17 +79,17 @@ check("favicon is svg", (fav.headers.get("content-type") || "").includes("image/
 
 // ---- deny-by-default ----
 const unauthPage = await worker.fetch(req(BASE + "/learn/"), env);
-check("unauth /learn/ → 302", unauthPage.status === 302, String(unauthPage.status));
+check("unauth /learn/ \u2192 302", unauthPage.status === 302, String(unauthPage.status));
 check("redirect to hub sign-in", (unauthPage.headers.get("location") || "").includes("/sign-in"), unauthPage.headers.get("location"));
 const unauthLesson = await worker.fetch(req(BASE + "/learn/lesson/u1l1"), env);
-check("unauth /lesson/ → 302", unauthLesson.status === 302, String(unauthLesson.status));
+check("unauth /lesson/ \u2192 302", unauthLesson.status === 302, String(unauthLesson.status));
 const unauthState = await worker.fetch(req(BASE + "/learn/api/state"), env);
-check("unauth api/state → 401", unauthState.status === 401, String(unauthState.status));
+check("unauth api/state \u2192 401", unauthState.status === 401, String(unauthState.status));
 
 // ---- path page ----
 const path = await worker.fetch(req(BASE + "/learn/", { auth: true }), env);
 const pathBody = await path.text();
-check("auth /learn/ → 200", path.status === 200, String(path.status));
+check("auth /learn/ \u2192 200", path.status === 200, String(path.status));
 check("path carries strict CSP", (path.headers.get("content-security-policy") || "").includes("default-src 'none'"), path.headers.get("content-security-policy"));
 check("path shows the rail", pathBody.includes('class="rail"'), "");
 check("path shows unit banner", pathBody.includes("UNIT"), "");
@@ -104,31 +104,35 @@ check("path has no inline handler", !/onclick=/i.test(pathBody), "");
 // ---- lesson player ----
 const lesson = await worker.fetch(req(BASE + "/learn/lesson/u1l1", { auth: true }), env);
 const lessonBody = await lesson.text();
-check("auth /lesson/u1l1 → 200", lesson.status === 200, String(lesson.status));
+check("auth /lesson/u1l1 \u2192 200", lesson.status === 200, String(lesson.status));
 check("lesson carries strict CSP", (lesson.headers.get("content-security-policy") || "").includes("default-src 'none'"), lesson.headers.get("content-security-policy"));
-check("lesson renders facts", lessonBody.includes('class="fact"'), "");
+check("lesson renders cards", lessonBody.includes('class="card"'), "");
 check("lesson renders exercises", lessonBody.includes('class="exercise"'), "");
 check("lesson has data-ex answers", lessonBody.includes("data-ex="), "");
 check("lesson has HUD pills", lessonBody.includes("pill--xp") && lessonBody.includes("pill--streak"), "");
 check("lesson loads versioned css", lessonBody.includes("/learn/s.css?v="), "");
 check("lesson has no inline style", !/style="/.test(lessonBody), "");
-// Pre-read gate regression (NID-100 "I'm Ready unclickable"): the gate must
-// sit OUTSIDE the locked exercises section, the section must ship locked, and
-// the fact text must be readable (bold markers rendered, not raw asterisks).
-const gateIdx = lessonBody.indexOf('class="preread-gate"');
+// New step-by-step flow: cards \u2192 I'm Ready \u2192 exercises one at a time
+// Cards container should be visible, exercises section should be hidden initially
+const cardsIdx = lessonBody.indexOf('class="cards"');
 const exIdx = lessonBody.indexOf('class="exercises"');
-check("preread gate rendered visible (no hidden attr)", gateIdx > 0 && !/class="preread-gate" hidden/.test(lessonBody), "");
-check("preread gate precedes the exercises section", gateIdx > 0 && exIdx > gateIdx, gateIdx + " vs " + exIdx);
-check("exercises section ships locked", /class="exercises"[^>]*data-locked="true"/.test(lessonBody), "");
+check("cards container rendered", cardsIdx > 0, "");
+check("cards container precedes exercises section", cardsIdx > 0 && exIdx > cardsIdx, cardsIdx + " vs " + exIdx);
+check("exercises section ships locked and hidden", /class="exercises"[^>]*data-locked="true"[^>]*hidden/.test(lessonBody), "");
+check("first card visible (no hidden attr)", /class="card"[^>]*data-index="0"[^>]*>/.test(lessonBody), "");
 check("fact renders **bold** as <strong>", lessonBody.includes("<strong>the Living Tribunal</strong>"), "");
-check("fact does not leak raw ** markers", !/class="fact"><p>[^<]*\*\*/.test(lessonBody), "");
+check("fact does not leak raw ** markers", !/class="card__text">[^<]*\*\*/.test(lessonBody), "");
 const cssText = await (await worker.fetch(req(BASE + "/learn/s.css?v=abc"), env)).text();
 check("css sizes the progress ring", /\.progress-ring\s*\{[^}]*width:/.test(cssText), "");
 check("css locks exercises via data-locked", cssText.includes('.exercises[data-locked="true"]'), "");
 // Select exercises must ship their options in data-ex: client grade() reads
 // ex.options[ex.answer]; without it every select click threw (NID-100).
 const selectEx = [...lessonBody.matchAll(/data-ex="([^"]+)"/g)]
-  .map((m) => JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&")))
+  .map((m) => {
+    // data-ex is HTML-attribute-escaped: " for ", & for &
+    const decoded = m[1].replace(/&quot;/g, '"').replace(/&/g, "&");
+    return JSON.parse(decoded);
+  })
   .filter((e) => e.type === "select" || e.type === "spot");
 check("select exercises present in u1l1", selectEx.length > 0, "");
 check("select data-ex carries options array", selectEx.every((e) => Array.isArray(e.options) && e.options.length > 0), JSON.stringify(selectEx[0]));
@@ -136,7 +140,7 @@ check("lesson has no inline script", !/<script>/.test(lessonBody), "");
 
 // ---- locked lesson redirects to the path ----
 const locked = await worker.fetch(req(BASE + "/learn/lesson/u1l5", { auth: true }), env);
-check("locked u1l5 → 302 to path", locked.status === 302 && (locked.headers.get("location") || "").includes("/learn/"), locked.status + " " + (locked.headers.get("location") || ""));
+check("locked u1l5 \u2192 302 to path", locked.status === 302 && (locked.headers.get("location") || "").includes("/learn/"), locked.status + " " + (locked.headers.get("location") || ""));
 
 // ---- unknown lesson is the uniform 404 ----
 const unknown = await worker.fetch(req(BASE + "/learn/lesson/zzz", { auth: true }), env);
@@ -144,7 +148,7 @@ check("unknown lesson 404", unknown.status === 404, String(unknown.status));
 
 // ---- gate page (unit 1 gate is locked until all u1 lessons done) ----
 const lockedGate = await worker.fetch(req(BASE + "/learn/gate/c1", { auth: true }), env);
-check("locked gate c1 → 302 to path", lockedGate.status === 302 && (lockedGate.headers.get("location") || "").includes("/learn/"), lockedGate.status + " " + (lockedGate.headers.get("location") || ""));
+check("locked gate c1 \u2192 302 to path", lockedGate.status === 302 && (lockedGate.headers.get("location") || "").includes("/learn/"), lockedGate.status + " " + (lockedGate.headers.get("location") || ""));
 
 // ---- complete through the API then re-check the path ----
 async function complete(lessonId, skill, auth = true) {
