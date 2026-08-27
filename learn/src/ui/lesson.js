@@ -18,7 +18,7 @@ export function lessonPage({ lesson, player, heartsEnabled, position }) {
     .map(
       (f) =>
         '<article class="fact"><p>' +
-        richText(f.text) +
+        richText(f.text || "") +
         '</p><cite>' +
         esc(formatCitation(f.cite)) +
         "</cite></article>",
