@@ -31,9 +31,10 @@ import { lessonPage } from "./ui/lesson.js";
 
 const ROBOTS_TAG = "noindex, nofollow";
 
-// Hearts are optional-off (locked decision 6). This flag mirrors the client
-// (src/ui/client.js) — it decides whether the server renders the hearts pill.
-const HEARTS_ENABLED = true;
+// Hearts are optional-off (locked decision 6) and are currently OFF. This flag
+// mirrors the client (src/ui/client.js) — it decides whether the server renders
+// the hearts pill. The D1 `hearts` column is retained (no migration drops it).
+const HEARTS_ENABLED = false;
 
 // Same header set the hub uses. The CSP has no inline allowances — which is
 // WHY css/js are files at /learn/s.css and /learn/s.js, never inlined.

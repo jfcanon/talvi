@@ -21,10 +21,10 @@
 // grading). Grading below is pure: grade(ex, answer) → { ok, correct }.
 const PREFIX = "/learn";
 
-// Hearts are optional-off (locked decision 6). One flag — flip to false to drop
-// the hearts HUD and the wrong-answer penalty. Must match index.js's
-// HEARTS_ENABLED used for server-side rendering of the pill.
-const HEARTS_ENABLED = true;
+// Hearts are optional-off (locked decision 6) and are currently OFF. One flag —
+// flip to false to drop the hearts HUD and the wrong-answer penalty. Must match
+// index.js's HEARTS_ENABLED used for server-side rendering of the pill.
+const HEARTS_ENABLED = false;
 
 // Per-session hearts, seeded from the server's player.hearts (readState). Not
 // persisted: the PR4 API surface has no hearts write endpoint (see PR body).
@@ -495,6 +495,7 @@ function updateHud(player) {
 }
 
 function updateHearts() {
+  if (!HEARTS_ENABLED) return;
   const el = document.querySelector(".pill--hearts strong");
   if (el && HEARTS_ENABLED) el.textContent = String(hearts);
 }
@@ -502,6 +503,7 @@ function updateHearts() {
 // Seed the per-session hearts from the server's player.hearts. Best-effort;
 // the HUD already rendered server-side, so a failure leaves the rendered value.
 function seedHearts() {
+  if (!HEARTS_ENABLED) return;
   const main = document.querySelector("main[data-lesson]");
   const pill = document.querySelector(".pill--hearts strong");
   if (!main || !pill) return;
