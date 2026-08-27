@@ -29,6 +29,7 @@ const curriculumDir = join(root, "curriculum");
 
 // Allowed cite roots (blueprint decision 4). Any other <file> is a violation.
 const ALLOWED_FILE_PREFIXES = [
+  "cinto-cloud-console/",
   "secondbrain/docs/HUB-BLUEPRINT.md",
   "sidequests/",
 ];
