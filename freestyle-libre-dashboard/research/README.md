@@ -12,6 +12,7 @@ dashboard features are genuinely possible.
 | `libre_raw_parser.py` | Reference `LibreRawParser` — production-grade Python decoder for raw NFC/BLE byte streams (spec STEP 2). `python3 libre_raw_parser.py --self-test` prints the full payload. |
 | `parser_output_schema.json` | Standardized output payload — example scan (spec STEP 3) |
 | `feasibility-matrix.md` | Feature feasibility matrix, delivery-gap assessment, and $0 dashboard feature proposals with JSON contracts |
+| `pn5180-libre2-custom-commands.md` | NID-420 — PN5180 + ESP32-S3 can run the Libre 2 ISO 15693 sequence (patchInfo, enable streaming); library patch, wiring, bench decision table |
 
 ## Headline findings
 
