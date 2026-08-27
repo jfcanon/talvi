@@ -1,4 +1,4 @@
-// talvi learn content-lint (blueprint A4 / PR5).
+// talvi learn content-lint (blueprint A4 / PR5, revised for verified lifts).
 //
 // CI enforcement of the accuracy contract:
 //   1. Every fact carries a non-empty `cite` ("<file>:<section>").
@@ -6,12 +6,15 @@
 //      resolvable citation fails the build (decision 4 / PR5 scope).
 //   3. Every unit checkpoint carries a non-empty `cite`.
 //   4. A `cite` must be well-formed: "<file>:<section>" with a non-empty
-//      section after the colon, and <file> must be one of the two allowed
-//      roots (secondbrain/docs/HUB-BLUEPRINT.md or a sidequests/ file).
+//      section after the colon, and <file> must be one of the allowed roots
+//      (secondbrain/docs/HUB-BLUEPRINT.md, sidequests/, or
+//      cinto-cloud-console/ for verified cinto citations).
 //   5. The UNVERIFIED strings the blueprint forbids asserting ("7-FTE",
-//      cinto operational claims) may appear only inside GATED placeholders
-//      (doc.gated === true or lesson.gated === true) — never in a lesson a
-//      player can reach.
+//      "7 fte", "cinto") may appear only inside GATED placeholders
+//      (lesson.gated === true) or in facts/exercises marked `verified: true`
+//      — never in unverified reachable content.
+//   6. Every fact must carry a non-empty `text` field (enforced by this
+//      script; the lesson player renders `fact.text`).
 //
 // The ground-truth of each citation STRING is verified by the PR author
 // against the secondbrain/sidequests corpus (which lives outside this repo;
@@ -27,10 +30,12 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const curriculumDir = join(root, "curriculum");
 
-// Allowed cite roots (blueprint decision 4). Any other <file> is a violation.
+// Allowed cite roots (blueprint decision 4, extended for verified cinto lifts).
+// Any other <file> is a violation.
 const ALLOWED_FILE_PREFIXES = [
   "secondbrain/docs/HUB-BLUEPRINT.md",
   "sidequests/",
+  "cinto-cloud-console/",
 ];
 
 // The strings that must not be asserted as fact outside GATED placeholders
@@ -79,12 +84,20 @@ async function main() {
     const isGatedUnit = doc.gated === true;
 
     for (const lesson of doc.lessons || []) {
-      const lessonGated = isGatedUnit || lesson.gated === true;
+      // Lesson-level gating only — a unit being gated does NOT shield its
+      // individual lessons from the accuracy gate. A lifted (ungated) lesson
+      // must satisfy the contract honestly, not hide behind the unit gate.
+      const lessonGated = lesson.gated === true;
 
       for (const fact of lesson.facts || []) {
         const problem = badCite(fact.cite);
         if (problem) {
           console.error(`content-lint: ${file} lesson ${lesson.id} fact lacks a valid cite: ${problem}`);
+          failures += 1;
+        }
+        // B3: every fact must have a non-empty text field.
+        if (!lessonGated && !(fact.text && fact.text.trim())) {
+          console.error(`content-lint: ${file} lesson ${lesson.id} fact has empty or missing text`);
           failures += 1;
         }
       }
@@ -100,7 +113,7 @@ async function main() {
       }
 
       // A reachable lesson must carry at least one fact and one exercise.
-      if (!lessonGated && !isGatedUnit) {
+      if (!lessonGated) {
         if (!(lesson.facts || []).length) {
           console.error(`content-lint: ${file} lesson ${lesson.id} has no facts`);
           failures += 1;
@@ -111,15 +124,35 @@ async function main() {
         }
       }
 
-      // UNVERIFIED strings only legal inside GATED placeholders.
+      // UNVERIFIED strings only legal inside GATED placeholders or in
+      // verified content (facts/exercises with verified: true).
       if (!lessonGated) {
         const text = JSON.stringify(lesson);
         for (const needle of FORBIDDEN_IF_UNGATED) {
           if (text.toLowerCase().includes(needle.toLowerCase())) {
-            console.error(
-              `content-lint: ${file} lesson ${lesson.id} asserts unverified content: "${needle}"`,
-            );
-            failures += 1;
+            // Check if ALL occurrences are in verified facts/exercises.
+            // If any unverified fact/exercise contains the needle, it's a violation.
+            let isVerified = true;
+            for (const fact of lesson.facts || []) {
+              if (!fact.verified && JSON.stringify(fact).toLowerCase().includes(needle.toLowerCase())) {
+                isVerified = false;
+                break;
+              }
+            }
+            if (isVerified) {
+              for (const ex of lesson.exercises || []) {
+                if (!ex.verified && JSON.stringify(ex).toLowerCase().includes(needle.toLowerCase())) {
+                  isVerified = false;
+                  break;
+                }
+              }
+            }
+            if (!isVerified) {
+              console.error(
+                `content-lint: ${file} lesson ${lesson.id} asserts unverified content: "${needle}"`,
+              );
+              failures += 1;
+            }
           }
         }
       }

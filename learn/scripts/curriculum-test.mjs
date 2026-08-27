@@ -48,7 +48,10 @@ for (const f of files) {
 
   const gated = doc.gated === true;
   for (const lesson of doc.lessons) {
-    if (lesson.gated || gated) {
+    // Lesson-level gating only — a unit being gated does NOT shield its
+    // individual lessons. A lifted (ungated) lesson in a gated unit must
+    // satisfy the full contract (facts, exercises, types, etc.).
+    if (lesson.gated) {
       check(`${f}/${lesson.id}: gated lesson has no reachable exercises`, (lesson.exercises || []).length === 0);
       continue;
     }
@@ -80,6 +83,10 @@ for (const f of files) {
       if (ex.type === "complete") {
         check(`${f}/${lesson.id}: complete has bank + answer`, Array.isArray(ex.bank) && Array.isArray(ex.answer));
       }
+    }
+    // B3: every fact must have a non-empty text field.
+    for (const fact of lesson.facts || []) {
+      check(`${f}/${lesson.id}: fact has text`, typeof fact.text === "string" && fact.text.trim().length > 0);
     }
   }
 

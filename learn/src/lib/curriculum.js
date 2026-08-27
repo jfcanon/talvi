@@ -92,6 +92,16 @@ function isLegendary(lessons, id) {
 //   { kind: "gate",     id, title, prompt, unitId, gated, status }
 // status ∈ locked | active | mastered | legendary. Exactly one node may be
 // 'active' (the frontier); the rest before it are done, after it locked.
+//
+// Gating model (revised for verified-lesson lifts):
+//   - Unit accessibility depends on previous unit's checkpoint completion
+//     (prevUnitUnlocked), NOT on whether the unit itself is gated.
+//   - A unit being "gated" means its content is unverified; the banner shows
+//     "GATED" but individual lessons can be lifted (ungated) once verified.
+//   - A lesson with gated:false inside a gated unit is playable if the unit
+//     is accessible (prevUnitUnlocked).
+//   - The checkpoint unlocks when all reachable (non-gated) lessons are done
+//     AND the unit is accessible.
 export function buildRail(lessons) {
   const nodes = [];
   let prevUnitUnlocked = true;
@@ -99,7 +109,9 @@ export function buildRail(lessons) {
   for (const unit of CURRICULUM) {
     const uid = unit.unit.id;
     const unitGated = unit.gated === true;
-    const unitUnlocked = prevUnitUnlocked && !unitGated;
+    // Unit accessibility: depends only on previous unit's checkpoint completion.
+    // A gated unit can still have reachable (lifted) lessons.
+    const unitAccessible = prevUnitUnlocked;
 
     nodes.push({
       kind: "banner",
@@ -108,10 +120,10 @@ export function buildRail(lessons) {
       gated: unitGated,
     });
 
-    if (!unitGated && !unitUnlocked) {
-      // Locked unit: every node locked (nothing completed inside a locked unit).
+    if (!unitAccessible) {
+      // Locked unit: previous checkpoint not done — nothing reachable.
       for (const lesson of unit.lessons || []) {
-        nodes.push({ kind: "lesson", id: lesson.id, title: lesson.title, skill: lesson.skill, unitId: uid, gated: false, status: "locked" });
+        nodes.push({ kind: "lesson", id: lesson.id, title: lesson.title, skill: lesson.skill, unitId: uid, gated: lesson.gated === true, status: "locked" });
       }
       if (unit.checkpoint) {
         nodes.push({ kind: "gate", id: unit.checkpoint.id, title: unit.checkpoint.title, prompt: unit.checkpoint.prompt, unitId: uid, gated: false, status: "locked" });
@@ -119,7 +131,8 @@ export function buildRail(lessons) {
       continue;
     }
 
-    // Unlocked unit: lessons unlock sequentially, then the checkpoint.
+    // Accessible unit: lessons unlock sequentially, then the checkpoint.
+    // Gated lessons are always locked; ungated lessons unlock sequentially.
     let prevLessonDone = true;
     for (const lesson of unit.lessons || []) {
       const gated = lesson.gated === true;
@@ -136,9 +149,10 @@ export function buildRail(lessons) {
     }
 
     if (unit.checkpoint) {
-      const allLessonsDone = (unit.lessons || []).every((l) => l.gated === true || isDone(lessons, l.id));
+      // Checkpoint unlocks when all reachable (non-gated) lessons are done.
+      const allReachableDone = (unit.lessons || []).every((l) => l.gated === true || isDone(lessons, l.id));
       const done = isDone(lessons, unit.checkpoint.id);
-      const unlocked = unitUnlocked && allLessonsDone;
+      const unlocked = allReachableDone;
       let status;
       if (done && isLegendary(lessons, unit.checkpoint.id)) status = "legendary";
       else if (done && isMastered(lessons, unit.checkpoint.id)) status = "mastered";
@@ -147,7 +161,7 @@ export function buildRail(lessons) {
       nodes.push({ kind: "gate", id: unit.checkpoint.id, title: unit.checkpoint.title, prompt: unit.checkpoint.prompt, unitId: uid, gated: false, status });
       prevUnitUnlocked = done;
     } else {
-      prevUnitUnlocked = unitUnlocked;
+      prevUnitUnlocked = unitAccessible;
     }
   }
 

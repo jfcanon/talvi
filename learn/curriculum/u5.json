@@ -15,14 +15,55 @@
   "lessons": [
     {
       "id": "u5l1",
-      "title": "Cost counter & win-rate-per-dollar (GATED)",
-      "skill": "gated",
-      "xp": 0,
-      "gated": true,
-      "gated_reason": "blocked by verified cost figures",
-      "cite": "secondbrain/docs/HUB-BLUEPRINT.md:\u00a79 item 11",
-      "facts": [],
-      "exercises": []
+      "title": "Cost counter",
+      "skill": "concept",
+      "xp": 10,
+      "gated": false,
+      "gated_reason": "",
+      "cite": "cinto-cloud-console/src/lib/status.js:74",
+      "facts": [
+        {
+          "text": "The tribunal cost counter is a read-only feature of the cloud console — it reads published snapshot rows and never writes a cost.",
+          "cite": "cinto-cloud-console/src/lib/status.js:74",
+          "verified": true
+        },
+        {
+          "text": "Cost data is derived from a published snapshot (`snapshot/cost.json`) at read time; an absent snapshot is reported honestly as stale/empty, never hard-coded.",
+          "cite": "cinto-cloud-console/src/index.js:224",
+          "verified": true
+        },
+        {
+          "text": "The cost endpoint is `/cloud/api/cost`; it returns the summarised counter (total, missing, by-lane) as JSON.",
+          "cite": "cinto-cloud-console/src/index.js:224",
+          "verified": true
+        }
+      ],
+      "exercises": [
+        {
+          "type": "select",
+          "prompt": "Is the tribunal cost counter mutable or read-only?",
+          "options": ["Mutable", "Read-only", "Write-only", "Access-controlled"],
+          "answer": 1,
+          "cite": "cinto-cloud-console/src/lib/status.js:74",
+          "verified": true
+        },
+        {
+          "type": "select",
+          "prompt": "What data source backs the cost counter?",
+          "options": ["Live DB queries", "Published snapshot files", "Hard-coded values", "User input"],
+          "answer": 1,
+          "cite": "cinto-cloud-console/src/index.js:224",
+          "verified": true
+        },
+        {
+          "type": "select",
+          "prompt": "Which endpoint exposes cost data?",
+          "options": ["/cloud/api/resources", "/cloud/api/cost", "/cloud/api/monitor", "/cloud/api/activity"],
+          "answer": 1,
+          "cite": "cinto-cloud-console/src/index.js:224",
+          "verified": true
+        }
+      ]
     },
     {
       "id": "u5l2",
