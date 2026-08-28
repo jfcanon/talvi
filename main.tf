@@ -324,7 +324,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "whisper_stt" {
   config_src    = "cloudflare"
   tunnel_secret = var.whisper_stt_tunnel_secret
   lifecycle {
-    ignore_changes = all
+    ignore_changes = [tunnel_secret]
   }
 }
 
