@@ -75,16 +75,29 @@ jobs:
             echo "No existing tunnel whisper-stt found"
           fi
           
-          # Delete any existing CNAME record for 'stt' to avoid conflict
+          # Delete any existing CNAME record for 'stt' (relative name) to avoid conflict
           RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=stt&type=CNAME" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
           if [ -n "$RECORD_ID" ]; then
-            echo "Deleting existing DNS record $RECORD_ID"
+            echo "Deleting existing DNS record $RECORD_ID (name=stt)"
             curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               -H "Content-Type: application/json"
           else
-            echo "No existing DNS record for stt found"
+            echo "No existing DNS record for stt (relative) found"
+          fi
+          
+          # Also check for FQDN name 'stt.ygdcbtmc4u.uk' which might have been created by previous runs
+          RECORD_ID_FQDN=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=stt.ygdcbtmc4u.uk&type=CNAME" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          if [ -n "$RECORD_ID_FQDN" ]; then
+            echo "Deleting existing DNS record $RECORD_ID_FQDN (name=stt.ygdcbtmc4u.uk)"
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID_FQDN" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json"
+          else
+            echo "No existing DNS record for stt.ygdcbtmc4u.uk (FQDN) found"
           fi
       - run: terraform apply -auto-approve -no-color
