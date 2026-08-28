@@ -56,11 +56,25 @@ jobs:
           terraform state rm cloudflare_zero_trust_tunnel_cloudflared.whisper_stt || true
           terraform state rm cloudflare_zero_trust_tunnel_cloudflared_config.whisper_stt || true
           terraform state rm cloudflare_dns_record.whisper_stt || true
-      - name: Clean up stale DNS record for stt
+      - name: Clean up stale Cloudflare resources
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           ZONE_ID: ${{ vars.TALVI_ZONE_ID }}
         run: |
+          # Delete any existing tunnel named 'whisper-stt'
+          TUNNEL_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/cfd_tunnel?name=whisper-stt" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          if [ -n "$TUNNEL_ID" ]; then
+            echo "Deleting existing tunnel $TUNNEL_ID"
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/cfd_tunnel/$TUNNEL_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json"
+          else
+            echo "No existing tunnel whisper-stt found"
+          fi
+          
           # Delete any existing CNAME record for 'stt' to avoid conflict
           RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=stt&type=CNAME" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
