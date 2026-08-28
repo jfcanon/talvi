@@ -351,10 +351,9 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "whisper_stt" {
 # <tunnel-uuid>.cfargotunnel.com. proxied so requests route through Cloudflare.
 resource "cloudflare_dns_record" "whisper_stt" {
   zone_id = var.talvi_zone_id
-  name    = "stt.ygdcbtmc4u.uk"
+  name    = "stt"
   type    = "CNAME"
   content = "${cloudflare_zero_trust_tunnel_cloudflared.whisper_stt.id}.cfargotunnel.com"
   proxied = true
   ttl     = 1
 }
-# trigger
