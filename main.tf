@@ -357,4 +357,3 @@ resource "cloudflare_dns_record" "whisper_stt" {
   proxied = true
   ttl     = 1
 }
-# trigger
