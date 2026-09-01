@@ -24,6 +24,7 @@ env:
   TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   TF_VAR_talvi_zone_id: ${{ vars.TALVI_ZONE_ID }}
   TF_VAR_whisper_stt_tunnel_secret: ${{ secrets.WHISPER_STT_TUNNEL_SECRET }}
+  TF_VAR_tts_tunnel_secret: ${{ secrets.TTS_TUNNEL_SECRET }}
   AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
@@ -56,6 +57,9 @@ jobs:
           terraform state rm cloudflare_zero_trust_tunnel_cloudflared.whisper_stt || true
           terraform state rm cloudflare_zero_trust_tunnel_cloudflared_config.whisper_stt || true
           terraform state rm cloudflare_dns_record.whisper_stt || true
+          terraform state rm cloudflare_zero_trust_tunnel_cloudflared.tts || true
+          terraform state rm cloudflare_zero_trust_tunnel_cloudflared_config.tts || true
+          terraform state rm cloudflare_dns_record.tts || true
       - name: Clean up stale Cloudflare resources
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -99,5 +103,49 @@ jobs:
               -H "Content-Type: application/json"
           else
             echo "No existing DNS record for stt.ygdcbtmc4u.uk (FQDN) found"
+          fi
+      - name: Clean up stale TTS tunnel resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          ZONE_ID: ${{ vars.TALVI_ZONE_ID }}
+        run: |
+          # Delete any existing tunnel named 'tts'
+          TUNNEL_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/cfd_tunnel?name=tts" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          if [ -n "$TUNNEL_ID" ]; then
+            echo "Deleting existing tunnel $TUNNEL_ID"
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/cfd_tunnel/$TUNNEL_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json"
+          else
+            echo "No existing tunnel tts found"
+          fi
+          
+          # Delete any existing CNAME record for 'tts' (relative name) to avoid conflict
+          RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=tts&type=CNAME" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          if [ -n "$RECORD_ID" ]; then
+            echo "Deleting existing DNS record $RECORD_ID (name=tts)"
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json"
+          else
+            echo "No existing DNS record for tts (relative) found"
+          fi
+          
+          # Also check for FQDN name 'tts.ygdcbtmc4u.uk' which might have been created by previous runs
+          RECORD_ID_FQDN=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=tts.ygdcbtmc4u.uk&type=CNAME" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          if [ -n "$RECORD_ID_FQDN" ]; then
+            echo "Deleting existing DNS record $RECORD_ID_FQDN (name=tts.ygdcbtmc4u.uk)"
+            curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID_FQDN" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json"
+          else
+            echo "No existing DNS record for tts.ygdcbtmc4u.uk (FQDN) found"
           fi
       - run: terraform apply -auto-approve -no-color
