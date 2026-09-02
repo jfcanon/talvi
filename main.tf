@@ -51,6 +51,14 @@ variable "whisper_stt_tunnel_secret" {
   sensitive = true
 }
 
+# TTS tunnel (NID-534). Permanent tunnel for local Kokoro TTS on the Mac
+# (http://localhost:8788) — same pattern as STT. Secret supplied via
+# GitHub Actions SECRET TTS_TUNNEL_SECRET (Bitwarden), write-only.
+variable "tts_tunnel_secret" {
+  type      = string
+  sensitive = true
+}
+
 # Green release (2026-08-08): Clerk removed from the public Worker. Upload
 # protection is Cloudflare Access on /api/upload (email-PIN, below). The Clerk
 # variables/bindings lived here and were removed with the gate; the Clerk code
@@ -354,6 +362,48 @@ resource "cloudflare_dns_record" "whisper_stt" {
   name    = "stt"
   type    = "CNAME"
   content = "${cloudflare_zero_trust_tunnel_cloudflared.whisper_stt.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+}
+
+# --- TTS tunnel (NID-534) ----------------------------------------------------
+#
+# Permanent Cloudflare Tunnel for the local Kokoro TTS server on the owner's
+# Mac (http://localhost:8788). Named tunnel keeps tts.ygdcbtmc4u.uk stable so
+# Apollo can point LOCAL_TTS_URL at it. Created via IaC (not by hand) per
+# NID-534 deliverable #2; merge before apollo #16.
+resource "cloudflare_zero_trust_tunnel_cloudflared" "tts" {
+  account_id    = var.cloudflare_account_id
+  name          = "tts"
+  config_src    = "cloudflare"
+  tunnel_secret = var.tts_tunnel_secret
+  lifecycle {
+    ignore_changes = [tunnel_secret]
+  }
+}
+
+resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tts" {
+  account_id = var.cloudflare_account_id
+  tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.tts.id
+
+  config = {
+    ingress = [
+      {
+        hostname = "tts.ygdcbtmc4u.uk"
+        service  = "http://localhost:8788"
+      },
+      {
+        service = "http_status:404"
+      },
+    ]
+  }
+}
+
+resource "cloudflare_dns_record" "tts" {
+  zone_id = var.talvi_zone_id
+  name    = "tts"
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.tts.id}.cfargotunnel.com"
   proxied = true
   ttl     = 1
 }
